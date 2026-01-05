@@ -1,0 +1,506 @@
+[
+  {
+    "number": 808,
+    "title": "Errors are not propagated from job execution",
+    "state": "closed",
+    "created_at": "2019-03-21T09:56:33Z",
+    "updated_at": "2025-11-05T11:27:59Z",
+    "author": "spring-projects-issues",
+    "url": "https://github.com/spring-projects/spring-batch/issues/808",
+    "body": "**[Paolo](https://jira.spring.io/secure/ViewProfile.jspa?name=pdv_)** opened **[BATCH-2800](https://jira.spring.io/browse/BATCH-2800?redirect=false)** and commented\n\nThe piece of code below in the AbstractJob class is catching Throwable, thus preventing the JVM to crash on any Error like it should.\r\nIs there a good reason for this ? If so, shouldn't this be documented somewhere ?\r\nIt can be really surprising and upsetting when you find this out in a production environment.\r\nSee details in the linked StackOverflow thread.\n\n```java\n@Override\r\npublic final void execute(JobExecution execution) {\r\n    [...]\r\n    try {\r\n            [...]\r\n    } catch (Throwable t) {\r\n            logger.error(\"Encountered fatal error executing job\", t);\r\n            execution.setExitStatus(getDefaultExitStatusForFailure(t, execution));\r\n            execution.setStatus(BatchStatus.FAILED);\r\n            execution.addFailureException(t);\r\n    }\r\n```\n\n\n\n---\n\n**Affects:** 4.1.1\n\n**Reference URL:** https://stackoverflow.com/questions/54811702/spring-batch-doesnt-propagate-errors\n",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [
+      {
+        "author": "Agniswar123",
+        "created_at": "2025-10-28T09:50:50Z",
+        "body": "Quick qes. If a heapdump is needed can't visualVM be used? A project can have multiple job, so maybe some alert by execution listener will help, but stopping entire application, is it ideal?"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b251512ee40f9104e1f64daf9d390f956dd3838e",
+        "7f375c662769f0a680cd03badd2fc2ac30d5163b"
+      ]
+    }
+  },
+  {
+    "number": 3797,
+    "title": "Cannot deserialize TopicPartition from JobRepository",
+    "state": "closed",
+    "created_at": "2020-11-02T05:46:06Z",
+    "updated_at": "2025-11-03T23:38:00Z",
+    "author": "MinJunKweon",
+    "url": "https://github.com/spring-projects/spring-batch/issues/3797",
+    "body": "Hi.\r\n\r\nI use MySQL for JobRepository. It serialize ExecutionContext as String by JacksonObjectMapper.\r\nIt seems to forcing to `Map`'s key type must be `String`. (`Map<String, Object>`)\r\nYou can see [this](https://github.com/spring-projects/spring-batch/blob/master/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/Jackson2ExecutionContextStringSerializer.java#L130).\r\n\r\nFor Example, `SHORT_CONTEXT` in `BATCH_STEP_EXECUTION_CONTEXT`:\r\n```\r\n{\"batch.taskletType\":\"org.springframework.batch.core.step.item.ChunkOrientedTasklet\",\"topic.partition.offsets\":[\"java.util.HashMap\",{\"test-topic\":[\"java.lang.Long\",42]}],\"batch.stepType\":\"org.springframework.batch.core.step.tasklet.TaskletStep\"}\r\n```\r\n\r\nHowever, `KafkaItemReader` uses `TopicPartition` as key. So It has problem in deserializing `ExecutionContext`. You can see [this](https://github.com/spring-projects/spring-batch/blob/master/spring-batch-infrastructure/src/main/java/org/springframework/batch/item/kafka/KafkaItemReader.java#L168).\r\n\r\n```java\r\n        @Override\r\n\tpublic void open(ExecutionContext executionContext) {\r\n\t\t...\r\n\t\tif (this.saveState && executionContext.containsKey(TOPIC_PARTITION_OFFSETS)) {\r\n\t\t\tMap<TopicPartition, Long> offsets = (Map<TopicPartition, Long>) executionContext.get(TOPIC_PARTITION_OFFSETS);\r\n\t\t\tfor (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {\r\n\t\t\t\tthis.partitionOffsets.put(entry.getKey(), entry.getValue() == 0 ? 0 : entry.getValue() + 1);\r\n\t\t\t}\r\n\t\t}\r\n                ...\r\n\t}\r\n```\r\n\r\n```\r\n2020-11-02 14:30:50 [main] ERROR o.s.batch.core.step.AbstractStep - Encountered an error executing step testStep in job testJob\r\njava.lang.ClassCastException: java.lang.String incompatible with org.apache.kafka.common.TopicPartition\r\n\tat org.springframework.batch.item.kafka.KafkaItemReader$$Lambda$911/00000000EF270020.accept(Unknown Source)\r\n\tat java.base/java.util.LinkedHashMap.forEach(LinkedHashMap.java:684)\r\n\tat org.springframework.batch.item.kafka.KafkaItemReader.open(KafkaItemReader.java:174)\r\n\tat org.springframework.batch.item.kafka.KafkaItemReader$$FastClassBySpringCGLIB$$9111feb4.invoke(<generated>)\r\n\tat org.springframework.cglib.proxy.MethodProxy.invoke(MethodProxy.java:218)\r\n\tat org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.invokeJoinpoint(CglibAopProxy.java:769)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)\r\n\tat org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:747)\r\n\tat org.springframework.aop.support.DelegatingIntroductionInterceptor.doProceed(DelegatingIntroductionInterceptor.java:136)\r\n\tat org.springframework.aop.support.DelegatingIntroductionInterceptor.invoke(DelegatingIntroductionInterceptor.java:124)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:186)\r\n\tat org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:747)\r\n\tat org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:689)\r\n\tat org.springframework.batch.item.kafka.KafkaItemReader$$EnhancerBySpringCGLIB$$314cf4f9.open(<generated>)\r\n\tat org.springframework.batch.item.support.CompositeItemStream.open(CompositeItemStream.java:104)\r\n\tat org.springframework.batch.core.step.tasklet.TaskletStep.open(TaskletStep.java:311)\r\n\tat org.springframework.batch.core.step.AbstractStep.execute(AbstractStep.java:205)\r\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\r\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)\r\n\tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\r\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:566)\r\n\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:344)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:198)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)\r\n\tat org.springframework.aop.support.DelegatingIntroductionInterceptor.doProceed(DelegatingIntroductionInterceptor.java:136)\r\n\tat org.springframework.aop.support.DelegatingIntroductionInterceptor.invoke(DelegatingIntroductionInterceptor.java:124)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:186)\r\n\tat org.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:212)\r\n\tat com.sun.proxy.$Proxy92.execute(Unknown Source)\r\n\tat org.springframework.batch.core.job.SimpleStepHandler.handleStep(SimpleStepHandler.java:148)\r\n\tat org.springframework.batch.core.job.AbstractJob.handleStep(AbstractJob.java:410)\r\n\tat org.springframework.batch.core.job.SimpleJob.doExecute(SimpleJob.java:136)\r\n\tat org.springframework.batch.core.job.AbstractJob.execute(AbstractJob.java:319)\r\n\tat org.springframework.batch.core.launch.support.SimpleJobLauncher$1.run(SimpleJobLauncher.java:147)\r\n\tat org.springframework.core.task.SyncTaskExecutor.execute(SyncTaskExecutor.java:50)\r\n\tat org.springframework.batch.core.launch.support.SimpleJobLauncher.run(SimpleJobLauncher.java:140)\r\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\r\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)\r\n\tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\r\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:566)\r\n\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:344)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:198)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)\r\n\tat org.springframework.batch.core.configuration.annotation.SimpleBatchConfiguration$PassthruAdvice.invoke(SimpleBatchConfiguration.java:127)\r\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:186)\r\n\tat org.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:212)\r\n\tat com.sun.proxy.$Proxy129.run(Unknown Source)\r\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherCommandLineRunner.execute(JobLauncherCommandLineRunner.java:192)\r\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherCommandLineRunner.executeLocalJobs(JobLauncherCommandLineRunner.java:166)\r\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherCommandLineRunner.launchJobFromProperties(JobLauncherCommandLineRunner.java:153)\r\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherCommandLineRunner.run(JobLauncherCommandLineRunner.java:148)\r\n\tat org.springframework.boot.SpringApplication.callRunner(SpringApplication.java:784)\r\n\tat org.springframework.boot.SpringApplication.callRunners(SpringApplication.java:768)\r\n\tat org.springframework.boot.SpringApplication.run(SpringApplication.java:322)\r\n\tat org.springframework.boot.SpringApplication.run(SpringApplication.java:1226)\r\n\tat org.springframework.boot.SpringApplication.run(SpringApplication.java:1215)\r\n        ...\r\n```\r\n\r\nI think It should be deserialize by String first.\r\nAnd then, convert `String` to `TopicPartition` in `KafkaItemReader`.\r\n\r\nLike this,\r\n```java\r\nMap<String, Long> offsets = (Map<String, Long>) executionContext.get(TOPIC_PARTITION_OFFSETS);\r\nfor (Map.Entry<String, Long> entry : offsets.entrySet()) {\r\n        TopicPartition topicPartition = getTopicPartitionFromString(entry.getKey());\r\n\tthis.partitionOffsets.put(topicPartition, entry.getValue() == 0 ? 0 : entry.getValue() + 1);\r\n}\r\n```",
+    "labels": [
+      "in: infrastructure",
+      "type: bug",
+      "has: votes",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [
+      {
+        "author": "langzime",
+        "created_at": "2021-08-13T06:45:27Z",
+        "body": "same question"
+      },
+      {
+        "author": "noojung",
+        "created_at": "2024-12-23T04:50:56Z",
+        "body": "same question too"
+      },
+      {
+        "author": "noojung",
+        "created_at": "2025-06-02T17:31:34Z",
+        "body": "Jackson2ExecutionContextStringSerializer always forces all map keys to be String.\nSo we can't use Map<TopicPartition, Long> directly. \n\nInstead, I think we can store only the partition number (as a String) in update(),nd then reconstruct the full TopicPartition in open() by using the topic name provided to the constructor.\n\nFor example:\n\n```\n\t@Override\n\tpublic void update(ExecutionContext executionContext) {\n\t\tif (this.saveState) {\n\t\t\tMap<String, Long> offsets = new HashMap<>();\n\t\t\tfor (Map.Entry<TopicPartition, Long> entry : this.partitionOffsets.entrySet()) {\n\t\t\t\toffsets.put(String.valueOf(entry.getKey().partition()), entry.getValue());\n\t\t\t}\n\t\t\texecutionContext.put(TOPIC_PARTITION_OFFSETS, offsets);\n\t\t}\n\t\tthis.kafkaConsumer.commitSync();\n\t}\n\n```\n\n```\n\t@Override\n\tpublic void open(ExecutionContext executionContext) {\n\t\tthis.kafkaConsumer = new KafkaConsumer<>(this.consumerProperties);\n\t\tif (this.partitionOffsets == null) {\n\t\t\tthis.partitionOffsets = new HashMap<>();\n\t\t\tfor (TopicPartition topicPartition : this.topicPartitions) {\n\t\t\t\tthis.partitionOffsets.put(topicPartition, 0L);\n\t\t\t}\n\t\t}\n\t\tif (this.saveState && executionContext.containsKey(TOPIC_PARTITION_OFFSETS)) {\n\t\t\tMap<String, Long> offsets = (Map<String, Long>) executionContext.get(TOPIC_PARTITION_OFFSETS);\n\t\t\tfor (Map.Entry<String, Long> entry : offsets.entrySet()) {\n\t\t\t\tString topicName = this.topicPartitions.get(0).topic();\n\t\t\t\tthis.partitionOffsets.put(new TopicPartition(topicName, Integer.parseInt(entry.getKey())), entry.getValue() == 0 ? 0 : entry.getValue() + 1);\n\t\t\t}\n\t\t}\n\t\tthis.kafkaConsumer.assign(this.topicPartitions);\n\t\tthis.partitionOffsets.forEach(this.kafkaConsumer::seek);\n\t}\n```\n\n"
+      },
+      {
+        "author": "noojung",
+        "created_at": "2025-06-04T11:37:28Z",
+        "body": "Could I work on this issue?"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-09-17T15:21:45Z",
+        "body": "@MinJunKweon Thank you for reporting this! I wonder if this will be the same case with Jackson 3 coming in v6, see #4842.\n\n@noojung Thank you for the PR! I was planning to back port this to v5.2.3 but I am not sure the fix will be the same for Jackson 2 and Jackson 3 (as I did not start working on #4842 yet).\n\nIf the fix is the same for both Jackson versions, I will back port it as is to v5.2.x. Otherwise, I will still fix the issues in both branches even differently.\n\nEDIT: I would be grateful if someone can provide an integration test that illustrates this issue, we have MySQL and Kafka-based integration tests for inspiration in `MySQLJobRepositoryIntegrationTests` and `KafkaItemReaderIntegrationTests`."
+      },
+      {
+        "author": "noojung",
+        "created_at": "2025-09-19T10:42:53Z",
+        "body": "@fmbenhassine Here is a sample test case on my branch: https://github.com/noojung/spring-batch/commit/aa1c358cc508e7c558a09431cb5213428feee570\n\nLet me know if you have any feedback on this."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-03T23:38:00Z",
+        "body": "Resolved with #4863"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bab03c1d7317c2ac27c6938c0b4cbf577542963a",
+        "a5e43a02b0708a707d41f4c1b3e5436e67845ddd"
+      ]
+    }
+  },
+  {
+    "number": 4362,
+    "title": "Incorrect Step status in StepExecutionListener#afterStep",
+    "state": "closed",
+    "created_at": "2023-05-01T22:09:31Z",
+    "updated_at": "2025-11-03T16:07:52Z",
+    "author": "cezarykluczynski",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4362",
+    "body": "I'm looking for a way to execute a callback when step is completed. `StepExecutionListener` does not work, because in `afterStep`, step is not acutally completed yet, because it's exit status can still be changed, and status in the DB table is not COMPLETED, but STARTED. \r\n\r\nI'm looking for a way to do it, because after every step, I want to fire an automatic backup of a completed step. For that, it is required that all steps are completed, because if state is later recreated from this backup, Spring Batch would not process further.\r\n\r\nI haven't found any way to do it in a clean manner. There is no listener that will execute after one step is completed, but next step is not yet started. If there is one, please point me out, and otherwise, would you consider adding a listener like that? I could probably try and make the PR if this feature is accepted.\r\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2023-06-15T14:53:57Z",
+        "body": "Thank you for opening this issue.\r\n\r\n> `StepExecutionListener` does not work, because in `afterStep`, step is not acutally completed yet, because it's exit status can still be changed, and status in the DB table is not COMPLETED, but STARTED.\r\n\r\nThe issue is with the current implementation of that callback listener in Spring Batch, which is incorrect. According to the contract of that method which states that that method is `Called after execution of the step's processing logic (whether successful or failed)`, the status (both in memory and in the DB) should not be `STARTED` at that point, but rather a non-running status. The end time should be set at that point as well (as reported in #3846). So I believe this is a bug and not a feature that should be requested.\r\n\r\nOnce this is fixed, I think you can implement your requirement with a `StepExecutionListener`. Do you agree?"
+      },
+      {
+        "author": "cezarykluczynski",
+        "created_at": "2023-06-22T18:52:38Z",
+        "body": "@fmbenhassine Yes, if status was non-running in both memory and DB, that would solve my problem. However, the `afterStep` method returns `an {@link ExitStatus} to combine with the normal value`, which gives the chance to overwrite the original exit status. Therefore, if non-null status is returned, one more save in the `AbstractStep` around line 268 is needed (hopefully it's that simple). I'm also not sure if that would not break some assumptions other people are making about how Spring Batch works here, even if they rely on a bug."
+      },
+      {
+        "author": "gdupontf",
+        "created_at": "2023-08-16T00:46:41Z",
+        "body": "Forgive me if I'm wrong, but isn't the same problem present at the job level?\nI had the same behaviour using `JobExecutionListener`s."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-03T16:05:38Z",
+        "body": "> Yes, if status was non-running in both memory and DB, that would solve my problem\n\n@cezarykluczynski the step execution status is now persisted before calling listeners, so it should be seen as a non-running status in both memory and job repository (even though I believe one should not query the job repository at that point, but only use the reference to the step execution that the listener provides).\n\nThat said, in hindsight, I don't understand why `afterStep` returns an `ExitStatus`.. The javadoc mentions to \"give a listener a chance to modify the exit status from a step\"  but I don't see any use case for that (I might be missing something). I personally never used that \"feature\". Moreover, this is not consistent with `JobExecutionListener#afterJob` which returns `void` and not an `ExitStatus`. Why is one able to change the step's execution status in `StepExecutionListener#afterStep`, but is not able to change the job's execution status in `JobExecutionListener#afterJob` ?\n\nUnless there is a good reason / use case for that, I believe that that method should be deprecated and replaced with one that returns `void`. I opened #5074 to discuss this and gather feedback, so please share your thoughts there. Many thanks upfront.\n\n@gdupontf \n\n> Forgive me if I'm wrong, but isn't the same problem present at the job level? I had the same behaviour using JobExecutionListeners.\n\nYou are right, I fixed that for job listeners as well, 36068b5db84ff242032e9b00515454a84e0745d2.\n"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "db6ef7b067e0daeee59c1baea03a0acfed4f5cfc",
+        "36068b5db84ff242032e9b00515454a84e0745d2"
+      ]
+    }
+  },
+  {
+    "number": 4755,
+    "title": "Incorrect restart behaviour with no identifying job parameters",
+    "state": "closed",
+    "created_at": "2025-01-31T11:27:49Z",
+    "updated_at": "2025-11-04T11:50:45Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4755",
+    "body": "\n### Discussed in https://github.com/spring-projects/spring-batch/discussions/4694\n\n<div type='discussions-op-text'>\n\n<sup>Originally posted by **ELMORABITYounes** October 28, 2024</sup>\nRight now even if a job was completed successfuly, spring batch allow It to be restarted if It contains non identifying params as shown here:\n\n```\t\t\t\t\nif (!identifyingJobParameters.isEmpty()                                                        \n\t\t&& (status == BatchStatus.COMPLETED || status == BatchStatus.ABANDONED)) {            \n\tthrow new JobInstanceAlreadyCompleteException(                                             \n\t\t\t\"A job instance already exists and is complete for identifying parameters=\"       \n\t\t\t\t\t+ identifyingJobParameters + \".  If you want to run this job again, \"    \n\t\t\t\t\t+ \"change the parameters.\");                                             \n}                                                                                              \n```\n\nI am wondering why is that done like this? I mean if the job already completed why It does not throw JobInstanceAlreadyCompleteException? Shouldn't the second job instance without parameters  considered the same and hence not allow It to be restarted if already succeeded?\n</div>",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "has: minimal-example"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-01-31T11:31:15Z",
+        "body": "Thank you for reporting this issue! I was able to isolate the case in this example:\n\n```java\npackage org.springframework.batch.samples.helloworld;\n\nimport org.springframework.batch.core.Job;\nimport org.springframework.batch.core.JobParameters;\nimport org.springframework.batch.core.JobParametersBuilder;\nimport org.springframework.batch.core.Step;\nimport org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;\nimport org.springframework.batch.core.job.builder.JobBuilder;\nimport org.springframework.batch.core.launch.JobLauncher;\nimport org.springframework.batch.core.repository.JobRepository;\nimport org.springframework.batch.core.step.builder.StepBuilder;\nimport org.springframework.batch.repeat.RepeatStatus;\nimport org.springframework.context.ApplicationContext;\nimport org.springframework.context.annotation.AnnotationConfigApplicationContext;\nimport org.springframework.context.annotation.Bean;\nimport org.springframework.context.annotation.Configuration;\nimport org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;\nimport org.springframework.jdbc.support.JdbcTransactionManager;\n\nimport javax.sql.DataSource;\n\n@Configuration\n@EnableBatchProcessing\npublic class HelloWorldJobConfiguration {\n\n\tpublic static void main(String[] args) throws Exception {\n\t\tApplicationContext context = new AnnotationConfigApplicationContext(HelloWorldJobConfiguration.class);\n\t\tJobLauncher jobLauncher = (JobLauncher) context.getBean(\"jobLauncher\");\n\t\tJob job = (Job) context.getBean(\"job\");\n\t\tJobParameters jobParameters1 = new JobParametersBuilder().addString(\"name\", \"foo\", false).toJobParameters();\n\t\tJobParameters jobParameters2 = new JobParametersBuilder().addString(\"name\", \"bar\", false).toJobParameters();\n\t\tjobLauncher.run(job, jobParameters1);\n\t\tjobLauncher.run(job, jobParameters2); // expected: JobInstanceAlreadyCompleteException\n\t}\n\n\t@Bean\n\tpublic Job job(JobRepository jobRepository, Step step) {\n\t\treturn new JobBuilder(\"job\", jobRepository).start(step).build();\n\t}\n\n\t@Bean\n\tpublic Step step(JobRepository jobRepository, JdbcTransactionManager transactionManager) {\n\t\treturn new StepBuilder(\"step\", jobRepository).tasklet((contribution, chunkContext) -> {\n\t\t\tSystem.out.println(\"Hello world!\");\n\t\t\treturn RepeatStatus.FINISHED;\n\t\t}, transactionManager).build();\n\t}\n\n\t// infra beans\n\n\t@Bean\n\tpublic DataSource dataSource() {\n\t\treturn new EmbeddedDatabaseBuilder()\n\t\t\t\t.addScript(\"/org/springframework/batch/core/schema-hsqldb.sql\")\n\t\t\t\t.build();\n\t}\n\n\t@Bean\n\tpublic JdbcTransactionManager transactionManager(DataSource dataSource) {\n\t\treturn new JdbcTransactionManager(dataSource);\n\t}\n\n}\n```\n\nwhile the default job key generator works as expected (it gives the same hash for the same input, ie an empty identifying job parameters set), spring batch still considers this as a different job instance and runs it, which should not be the case.\n\n---\n\nJust FTR,  the default job key generator is working as expected (the following tests pass with 5.2.1):\n\n```java\n// to add in org.springframework.batch.core.DefaultJobKeyGeneratorTests\n\n\t@Test\n\tpublic void testCreateJobKeyForEmptyParameters() {\n\t\tJobParameters jobParameters1 = new JobParameters();\n\t\tJobParameters jobParameters2 = new JobParameters();\n\t\tString key1 = jobKeyGenerator.generateKey(jobParameters1);\n\t\tString key2 = jobKeyGenerator.generateKey(jobParameters2);\n\t\tassertEquals(key1, key2);\n\t}\n\n\t@Test\n\tpublic void testCreateJobKeyForEmptyParametersAndNonIdentifying() {\n\t\tJobParameters jobParameters1 = new JobParameters();\n\t\tJobParameters jobParameters2 = new JobParametersBuilder()\n\t\t\t\t.addString(\"name\", \"foo\", false)\n\t\t\t\t.toJobParameters();\n\t\tString key1 = jobKeyGenerator.generateKey(jobParameters1);\n\t\tString key2 = jobKeyGenerator.generateKey(jobParameters2);\n\t\tassertEquals(key1, key2);\n\t}\n```"
+      },
+      {
+        "author": "baezzys",
+        "created_at": "2025-04-29T11:45:52Z",
+        "body": "Hi @fmbenhassine Can I work on this?"
+      },
+      {
+        "author": "isanghaessi",
+        "created_at": "2025-08-15T14:23:02Z",
+        "body": "Hi @fmbenhassine 👋\nI opened PR for this issue #4946!\nPlease review and I will check ASAP💨"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f888ebb43f70d925c028721db0b3d71306089038",
+        "1c28daccf0958e2cdcfd1a784e3f7110e73881e4",
+        "5225249585fec7e479bf4b3194974d96a848c3c0",
+        "250bfff1b6e8f2cf4e9219564c3f1d2719f0d17d",
+        "0564ce6293e5178b12aa95b7bce5a461a38e4eb0"
+      ]
+    }
+  },
+  {
+    "number": 4818,
+    "title": "Use contextual lambdas to configure batch artefacts",
+    "state": "closed",
+    "created_at": "2025-04-28T13:18:04Z",
+    "updated_at": "2025-11-04T15:46:49Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4818",
+    "body": "This request is about improving the builders of item readers and writers to use Lambdas for configuration options:\n\nCurrent API:\n\n```java\nvar reader = new FlatFileItemReaderBuilder()\n .resource(...)\n .delimited()\n .delimiter(\",\")\n .quoteCharacter('\"')\n ...\n .build();\n```\n\nProposal:\n\n```java\nvar reader = new FlatFileItemReaderBuilder()\n .resource(...)\n .delimited ( config -> config.delimiter(',').quoteCharcter( '\"' ))\n ...\n .build();\n```\n\ncc @joshlong\n\n",
+    "labels": [
+      "in: infrastructure",
+      "type: feature",
+      "related-to: item-readers-writers"
+    ],
+    "comments": [
+      {
+        "author": "kwondh5217",
+        "created_at": "2025-04-29T12:31:52Z",
+        "body": "Hi @fmbenhassine,\n\nThis looks like a great improvement!\nI would love to work on this issue. Could you please assign it to me if that's fine?"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-05-06T06:54:52Z",
+        "body": "@kwondh5217 Sure! Thank you for your offer to help!\n\nI believe Spring Security pioneered this configuration approach in the portfolio, so you can take a look there for inspiration."
+      },
+      {
+        "author": "kwondh5217",
+        "created_at": "2025-05-06T12:01:08Z",
+        "body": "Hi @fmbenhassine, thank you for your guidance earlier!\n\nI’d like to clarify the intended direction of the enhancement.\n\nFrom what I understand, the idea is not just to support lambda-based configuration in FlatFileItemReaderBuilder, but to establish a general DSL-style configuration approach across all ItemReader and ItemWriter builders.\n\nWould you recommend introducing a shared abstraction (e.g. a ConfigurerAwareBuilder base class similar to AbstractConfiguredSecurityBuilder in Spring Security) to support this pattern?\n\nAlso, in terms of behavior:\n\nShould we throw an exception when both chaining and lambda styles are used?\n\nOr should we allow overriding?\n\nOr should we allow both and apply in order?\n\nI want to align with the broader design direction before proceeding. Thank you again for your support."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-05-08T12:03:00Z",
+        "body": "I don't think we need new builders. My initial thinking was about adding new methods to existing builders that accept `Consumer<Spec>`, similar to the one in SF here: https://github.com/spring-projects/spring-framework/blob/main/spring-beans/src/main/java/org/springframework/beans/factory/BeanRegistry.java#L96\n\nHere is also the original issue in Spring Security: https://github.com/spring-projects/spring-security/issues/5557\n\nSo we can imagine new configuration specifications like `DelimitedSpec`, `FixedLengthSpec`, etc and use them in current builders."
+      },
+      {
+        "author": "kwondh5217",
+        "created_at": "2025-05-08T13:07:25Z",
+        "body": "Thanks for the detailed guidance @fmbenhassine !\nThe direction is clear now. I’ll proceed with adding Consumer<Spec>-based configuration methods to the existing builders using DelimitedSpec and FixedLengthSpec style objects as discussed.\n\nI’ll share a draft PR soon for feedback. Appreciate your support!"
+      },
+      {
+        "author": "kwondh5217",
+        "created_at": "2025-05-12T22:50:35Z",
+        "body": "Hi @fmbenhassine,\nI’ve submitted a pull request that addresses this issue.\nCould you take a look? 🙇‍♂️\nThank you !"
+      },
+      {
+        "author": "kwondh5217",
+        "created_at": "2025-10-31T20:15:16Z",
+        "body": "Hi @fmbenhassine,\nI’ve submitted a new pull request.\nCould you take a look? 🙇‍♂️\nThank you !"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "24a464fab859008ec54e7de34915f29d71763b3b"
+      ]
+    }
+  },
+  {
+    "number": 5047,
+    "title": "JsonObjectReader fails to read JSON array format due to Jackson 3.0 FAIL_ON_TRAILING_TOKENS default change",
+    "state": "closed",
+    "created_at": "2025-10-24T10:12:05Z",
+    "updated_at": "2025-11-05T20:34:19Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5047",
+    "body": "Hi Spring Batch team!\nFirst of all, thank you for your amazing work on Spring Batch 6.0\n\nI've encountered an issue when reading JSON array files with JsonItemReader in Spring Batch 6.0 with Spring Boot 4(use jackson 3.0), and I wanted to report it in case it affects other users migrating to this version.\n\n\n\n\n**Bug description**\n`JacksonJsonObjectReader`(used by JsonItemReader) cannot read JSON array format `[{...}, {...}]` when using the default constructor in Spring Batch 6.0 with Jackson 3.0. \n\nThis appears to be caused by Jackson 3.0's change where `DeserializationFeature.FAIL_ON_TRAILING_TOKENS` default was changed from `false` to `true` ([Jackson JSTEP-2](https://github.com/FasterXML/jackson-future-ideas/wiki/JSTEP-2#deserializationfeature)).\n\nWhen reading a JSON array, after parsing the first object, the second object's start token `{` is detected as a \"trailing token\", causing a `MismatchedInputException`.\n\n**Environment**\n- Spring Boot: 4.0.0-SNAPSHOT / spring-boot-starter-json 4.0.0-SNAPSHOT\n- Spring Batch: 6.0.0-RC1\n- Jackson: 3.0.1\n- Java: 21\n\n**Steps to reproduce**\n1. Create a JSON array file:\n```bash\necho '[\n{\"command\": \"destroy\", \"cpu\": 99, \"status\": \"memory overflow\"},\n{\"command\": \"explode\", \"cpu\": 100, \"status\": \"cpu meltdown\"},\n{\"command\": \"collapse\", \"cpu\": 95, \"status\": \"disk burnout\"}\n]' > system_death.json\n```\n\n2. Configure `JsonItemReader` with default `JacksonJsonObjectReader`:\n```java\n@Bean\n@StepScope\npublic JsonItemReader systemFailureItemReader(\n        @Value(\"#{jobParameters['inputFile']}\") String inputFile) {\n    return new JsonItemReaderBuilder()\n            .name(\"systemFailureItemReader\")\n            .jsonObjectReader(new JacksonJsonObjectReader<>(SystemFailure.class))\n            .resource(new FileSystemResource(inputFile))\n            .build();\n}\n\npublic record SystemFailure(String command, int cpu, String status) {}\n```\n\n3. Run the job with the JSON array file\n\n\n\n**Expected behavior**\n\n`JsonItemReader` should successfully read all objects from the JSON array `[{...}, {...}, {...}]` without requiring manual Jackson configuration, as JSON arrays are a common input format for batch processing.\n\n**Actual behavior**\n\nJob fails with:\n```\ntools.jackson.databind.exc.MismatchedInputException: Trailing token (JsonToken.START_OBJECT) found after value (bound as SystemFailure): not allowed as per DeserializationFeature.FAIL_ON_TRAILING_TOKENS\n```\n\n**Minimal Complete Reproducible example**\n\nHere's the complete configuration that reproduces the issue:\n```java\n@Bean\npublic Job systemFailureJob(Step systemFailureStep) {\n    return new JobBuilder(\"systemFailureJob\", jobRepository)\n            .start(systemFailureStep)\n            .build();\n}\n\n@Bean\npublic Step systemFailureStep(JsonItemReader systemFailureItemReader) {\n    return new StepBuilder(\"systemFailureStep\", jobRepository)\n            .chunk(10)\n            .reader(systemFailureItemReader)\n            .writer(items -> items.forEach(item -> log.info(\"{}\", item)))\n            .build();\n}\n\n@Bean\n@StepScope\npublic JsonItemReader systemFailureItemReader(\n        @Value(\"#{jobParameters['inputFile']}\") String inputFile) {\n    return new JsonItemReaderBuilder()\n            .name(\"systemFailureItemReader\")\n            .jsonObjectReader(new JacksonJsonObjectReader<>(SystemFailure.class))\n            .resource(new FileSystemResource(inputFile))\n            .build();\n}\n\npublic record SystemFailure(String command, int cpu, String status) {}\n```\n\n**Current Workaround**\n\nmanually creating a `JsonMapper` with `FAIL_ON_TRAILING_TOKENS` disabled resolves the issue:\n```java\n@Bean\n@StepScope\npublic JsonItemReader systemFailureItemReader(\n        @Value(\"#{jobParameters['inputFile']}\") String inputFile) {\n    \n    JsonMapper jsonMapper = JsonMapper.builder()\n            .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)\n            .build();\n    \n    JacksonJsonObjectReader jsonReader =\n            new JacksonJsonObjectReader<>(jsonMapper, SystemFailure.class);\n    \n    return new JsonItemReaderBuilder()\n            .name(\"systemFailureItemReader\")\n            .jsonObjectReader(jsonReader)\n            .resource(new FileSystemResource(inputFile))\n            .build();\n}\n```\n\n**Suggested Solutions**\n\nI'd like to humbly suggest two possible approaches:\n\n1. **Update `JacksonJsonObjectReader` default constructor** to create a `JsonMapper` with `FAIL_ON_TRAILING_TOKENS` disabled by default, since JSON array reading is a fundamental use case for `JsonItemReader`\n\n2. **Update the documentation** to clearly guide users that manual `JsonMapper` configuration with `FAIL_ON_TRAILING_TOKENS` disabled is required when reading JSON arrays in Spring Batch 6.0+\n\n\nThank you again for maintaining Spring Batch! Please let me know if you need any additional information or clarification.\n",
+    "labels": [
+      "in: infrastructure",
+      "type: bug",
+      "related-to: item-readers-writers"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-10-28T19:05:23Z",
+        "body": "Thank you for raising this issue! Indeed, it was expected that the user disables `FAIL_ON_TRAILING_TOKENS` before passing the Jackson mapper to `JacksonJsonItemReader` (see [here](https://github.com/spring-projects/spring-batch/blob/main/spring-batch-infrastructure/src/test/java/org/springframework/batch/infrastructure/item/json/JacksonJsonItemReaderFunctionalTests.java#L34)), but you are right, it's better to make that the default since the `JsonItemReader` is expected to correctly read json files having the `[{...}, {...}, {...}]` format.\n\nI will plan that change for the upcoming 6.0.0-RC2."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c534e6c367ad705163a825d3d9ebee73f4f87e4c"
+      ]
+    }
+  },
+  {
+    "number": 5048,
+    "title": "ChunkOrientedStep: Unnecessary ItemReader.read() calls when chunk size exceeds item count",
+    "state": "closed",
+    "created_at": "2025-10-24T16:34:46Z",
+    "updated_at": "2025-10-28T19:16:34Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5048",
+    "body": "Hi Spring Batch team! \nFirst of all, thank you for the amazing work on Spring Batch 6 and New ChunkOrientedStep. I really appreciate this improvements.\n\nI discovered what appears to be a bug in the chunk reading logic. \n\n\n## Bug description\nWhen the chunk size is larger than the number of available items, `ItemReader.read()` and `ItemReadListener.beforeRead()` continue to be called for the remaining chunk size even after `read()` returns `null`. This results in unnecessary method invocations and potential side effects.\n\n**Example:**\n- Chunk size: 10\n- Available items: 5\n- Expected `read()` calls: 6 (5 items + 1 null)\n- **Actual `read()` calls: 10** (5 items + 5 nulls)\n\n## Environment\n- **Spring Batch version:** 6.0.0-RC1\n\n## Steps to reproduce\n1. Configure a chunk-oriented step with chunk size larger than available items\n2. Use any ItemReader that returns null when exhausted\n3. Add an ItemReadListener to track method calls\n4. Run the job and observe the logs\n\n## Expected behavior\nOnce `ItemReader.read()` returns `null`, the chunk reading loop should terminate immediately:\n- `beforeRead()` should be called: **6 times** (5 items + 1 null check)\n- `read()` should be called: **6 times** (5 items + 1 null)\n- Loop should break after first `null` return\n\n## Actual behavior\nThe loop continues for the entire chunk size:\n- `beforeRead()` is called: **10 times** (5 items + 5 unnecessary null checks)\n- `read()` is called: **10 times** (5 items + 5 unnecessary null returns)\n- Unnecessary method invocations waste resources and may trigger unintended side effects\n\n\n## Root cause\nIn `ChunkOrientedStep.readChunk()` method (line 478-487), the for loop continues for the entire chunk size without breaking when `item` is `null`:\n```java\nprivate Chunk readChunk(StepContribution contribution) throws Exception {\n    Chunk chunk = new Chunk<>();\n    for (int i = 0; i < chunkSize; i++) {\n        I item = readItem(contribution);\n        if (item != null) {\n            chunk.add(item);\n        }\n        // Missing break when item is null!\n    }\n    return chunk;\n}\n```\n\n## Impact\n1. **Performance degradation**: Especially severe when chunk size is large\n   - Chunk size 1000, Items 10 → 990 unnecessary calls\n2. **ItemReadListener miscounts**: `beforeRead()` called more times than actual reads\n3. **Potential side effects**: If `read()` implementation has side effects (logging, metrics, connection checks, API calls), they execute unnecessarily\n4. **Resource waste**: Unnecessary method invocations and stack operations\n\n\n\n## Minimal Complete Reproducible example\n@Slf4j\n@Configuration\npublic class ChunkSizeIssueReproductionJobConfiguration {\n    \n    @Bean\n    public Job reproductionJob(JobRepository jobRepository, Step reproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(reproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step reproductionStep(\n            JobRepository jobRepository,\n            CountingListItemReader countingListItemReader) {\n        return new StepBuilder(jobRepository)\n                .chunk(10)  // Chunk size: 10\n                .reader(countingListItemReader)\n                .writer(chunk -> {\n                    log.info(\"=== Writer: Processing {} items ===\", chunk.size());\n                    chunk.forEach(item -> log.info(\"Writing item: {}\", item));\n                })\n                .listener(new ReadCountListener())\n                .build();\n    }\n\n    @Bean\n    public CountingListItemReader countingListItemReader() {\n        // Only 5 items (less than chunk size of 10)\n        return new CountingListItemReader(List.of(\n                \"Item-1\",\n                \"Item-2\",\n                \"Item-3\",\n                \"Item-4\",\n                \"Item-5\"\n        ));\n    }\n\n    @Slf4j\n    static class CountingListItemReader extends ListItemReader {\n        private int readCallCount = 0;\n\n        public CountingListItemReader(List list) {\n            super(list);\n        }\n\n        @Override\n        public String read() {\n            readCallCount++;\n            String item = super.read();\n\n            if (item == null) {\n                log.warn(\">>> read() #{}: Returned NULL <<>> read() #{}: {}\", readCallCount, item);\n            }\n\n            return item;\n        }\n    }\n\n    @Slf4j\n    static class ReadCountListener implements ItemReadListener {\n        private int beforeReadCount = 0;\n        private int afterReadCount = 0;\n\n        @Override\n        public void beforeRead() {\n            beforeReadCount++;\n            log.info(\">>> beforeRead() #{} called\", beforeReadCount);\n        }\n\n        @Override\n        public void afterRead(String item) {\n            afterReadCount++;\n            log.info(\">>> afterRead() #{} called for: {}\", afterReadCount, item);\n        }\n    }\n}\n\n**Console output:**\n```\n>>> beforeRead() #1 called\n>>> read() #1: Item-1\n>>> afterRead() #1 called for: Item-1\n>>> beforeRead() #2 called\n>>> read() #2: Item-2\n>>> afterRead() #2 called for: Item-2\n>>> beforeRead() #3 called\n>>> read() #3: Item-3\n>>> afterRead() #3 called for: Item-3\n>>> beforeRead() #4 called\n>>> read() #4: Item-4\n>>> afterRead() #4 called for: Item-4\n>>> beforeRead() #5 called\n>>> read() #5: Item-5\n>>> afterRead() #5 called for: Item-5\n>>> beforeRead() #6 called\n>>> read() #6: Returned NULL <\n>>> beforeRead() #7 called        ← Unnecessary\n>>> read() #7: Returned NULL <<<  ← Unnecessary\n>>> beforeRead() #8 called        ← Unnecessary\n>>> read() #8: Returned NULL <<<  ← Unnecessary\n>>> beforeRead() #9 called        ← Unnecessary\n>>> read() #9: Returned NULL <<<  ← Unnecessary\n>>> beforeRead() #10 called       ← Unnecessary\n>>> read() #10: Returned NULL <<< ← Unnecessary\n=== Writer: Processing 5 items ===\nWriting item: Item-1\nWriting item: Item-2\nWriting item: Item-3\nWriting item: Item-4\nWriting item: Item-5\n```\n\n## Proposed fix\nAdd a `break` statement when `item` is `null`:\n```java\nprivate Chunk readChunk(StepContribution contribution) throws Exception {\n    Chunk chunk = new Chunk<>();\n    for (int i = 0; i < chunkSize; i++) {\n        I item = readItem(contribution);\n        if (item != null) {\n            chunk.add(item);\n        } else {\n            break;  // Stop reading when null is returned\n        }\n    }\n    return chunk;\n}\n```\n\nLet me know if you need any additional information or if I should submit a PR for this fix. Thanks again for your great work on Spring Batch!\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-10-28T18:11:00Z",
+        "body": "Thank you for your early feedback on 6.0 RC1!\n\nThis is indeed a bug, I planned the fix for the upcoming RC2."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "706add77b8259f51ae8cf7f9d6dfec6dcdb424b2"
+      ]
+    }
+  },
+  {
+    "number": 5049,
+    "title": "JobParameter constructor validates wrong parameter (value instead of name)",
+    "state": "closed",
+    "created_at": "2025-10-24T17:04:46Z",
+    "updated_at": "2025-10-28T18:07:22Z",
+    "author": "KMGeon",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5049",
+    "body": "## Issue Description\n\n### Summary\nThe `JobParameter` record's compact constructor has a bug in parameter validation. It validates the `value` parameter twice instead of validating both `name` and `value` parameters.\n\n---\n\n## Current Behavior\n\n```java\npublic record JobParameter<T>(String name, T value, Class<T> type, boolean identifying) implements Serializable {\n    public JobParameter {\n        Assert.notNull(value, \"name must not be null\");  // ❌ Bug: validates 'value' but message says 'name'\n        Assert.notNull(value, \"value must not be null\"); // ❌ Bug: validates 'value' twice\n        Assert.notNull(type, \"type must not be null\");\n    }\n}\n```\n\n---\n\n## Expected Behavior\n\n```java\npublic record JobParameter<T>(String name, T value, Class<T> type, boolean identifying) implements Serializable {\n    public JobParameter {\n        Assert.notNull(name, \"name must not be null\");   // ✅ Correct: validates 'name'\n        Assert.notNull(value, \"value must not be null\"); // ✅ Correct: validates 'value'\n        Assert.notNull(type, \"type must not be null\");\n    }\n}\n```\n\n---\n\n\n## Steps to Reproduce\n\n### 1. Create Test Case\n\n```java\n@Test\nvoid testNameParameterIsNull() {\n    JobParameter<String> jobParameter = new JobParameter<>(null, \"test\", String.class, true);\n    assertEquals(\"param\", jobParameter.name());\n    assertEquals(\"test\", jobParameter.value());\n    assertEquals(String.class, jobParameter.type());\n    assertTrue(jobParameter.identifying());\n}\n```\n\n### 2. Test Result\n\nThe test demonstrates that a `JobParameter` can be created with a `null` name, which should not be allowed:\n\n```\n[ERROR] Failures: \n[ERROR]   JobParameterTests.testNameParameterIsNull:37 expected: <param> but was: <null>\n[INFO] \n[ERROR] Tests run: 7, Failures: 1, Errors: 0, Skipped: 0\n[INFO] \n[INFO] ------------------------------------------------------------------------\n[INFO] BUILD FAILURE\n[INFO] ------------------------------------------------------------------------\n[INFO] Total time:  5.049 s\n[INFO] Finished at: 2025-10-25T01:43:01+09:00\n[INFO] ------------------------------------------------------------------------\n[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.3:test (default-test) on project spring-batch-core: There are test failures.\n```\n\n### 3. Analysis\n\nThe test fails because:\n1. **No exception is thrown** when `name` is `null` during object construction (due to the validation bug)\n2. The object is created successfully with `name = null`\n3. The assertion `assertEquals(\"param\", jobParameter.name())` fails because the actual value is `null`\n\nThis proves that the validation is not working correctly.\n\n---\n\n## Environment\n\n- **Spring Batch Version:** 6.0.0-SNAPSHOT\n- **Java Version:** 21\n- **File:** `org.springframework.batch.core.job.parameters.JobParameter`\n\n---\n\n## Proposed Fix\n\n### Change Required\n\n**Line 41** - Change from:\n```java\nAssert.notNull(value, \"name must not be null\");\n```\n\n**To:**\n```java\nAssert.notNull(name, \"name must not be null\");\n```\n\n### Complete Fixed Constructor\n\n```java\npublic JobParameter {\n    Assert.notNull(name, \"name must not be null\");   // ✅ Fixed: validates 'name' correctly\n    Assert.notNull(value, \"value must not be null\");\n    Assert.notNull(type, \"type must not be null\");\n}\n```",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b5c10c2301a5f58805c3a670261b07321fd0ac7d"
+      ]
+    }
+  },
+  {
+    "number": 5051,
+    "title": "Incorrect error message in JobOperatorTestUtils constructor",
+    "state": "closed",
+    "created_at": "2025-10-26T06:57:10Z",
+    "updated_at": "2025-10-28T18:02:38Z",
+    "author": "KMGeon",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5051",
+    "body": "## Issue Description\n\n- The constructor of `JobOperatorTestUtils` has an incorrect error message for the `jobOperator` parameter validation.\n\n\n## Current Behavior\n\n```java\npublic JobOperatorTestUtils(JobOperator jobOperator, JobRepository jobRepository) {\n\tAssert.notNull(jobOperator, \"JobRepository must not be null\");\n\tAssert.notNull(jobRepository, \"JobRepository must not be null\");\n\tthis.jobOperator = jobOperator;\n\tthis.jobRepository = jobRepository;\n}\n```\n\n## Expected Behavior\n\n```java\npublic JobOperatorTestUtils(JobOperator jobOperator, JobRepository jobRepository) {\n\tAssert.notNull(jobOperator, \"JobOperator must not be null\");\n\tAssert.notNull(jobRepository, \"JobRepository must not be null\");\n\tthis.jobOperator = jobOperator;\n\tthis.jobRepository = jobRepository;\n}\n```\n\n## File\n\n`spring-batch-test/src/main/java/org/springframework/batch/test/JobOperatorTestUtils.java`",
+    "labels": [
+      "in: test",
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8a598dc8300873fee55421b9dac5bc7cc0c9a8d3",
+        "b848638e5798a19d847798891b586908426487b0"
+      ]
+    }
+  },
+  {
+    "number": 5055,
+    "title": "Change configuration log level to debug",
+    "state": "closed",
+    "created_at": "2025-10-28T12:58:02Z",
+    "updated_at": "2025-10-28T13:07:51Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5055",
+    "body": "Currently, the log level for batch infrastructure configuration is set to `INFO`, which makes the output quite verbose for no real added value. Configuration details should be logged at `DEBUG` level.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c1ec7cc9d8de3633718d99526d2dcade056c3aad",
+        "136bc8a81a4329054c776ae6614f8d1b9bd40b65"
+      ]
+    }
+  },
+  {
+    "number": 5060,
+    "title": "Add support for delete operations in MongoDB DAOs",
+    "state": "closed",
+    "created_at": "2025-10-29T10:07:55Z",
+    "updated_at": "2025-11-05T08:47:22Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5060",
+    "body": "As of v5.2.4, 6.0.0-RC1, the following methods are not implemented in MongoDB DAOs:\n\n- `org.springframework.batch.core.repository.dao.JobInstanceDao#deleteJobInstance`\n- `org.springframework.batch.core.repository.dao.JobExecutionDao#deleteJobExecution`\n- `org.springframework.batch.core.repository.dao.JobExecutionDao#deleteJobExecutionParameters`\n- `org.springframework.batch.core.repository.dao.StepExecutionDao#deleteStepExecution`\n- `org.springframework.batch.core.repository.dao.ExecutionContextDao#deleteExecutionContext(JobExecution)`\n- `org.springframework.batch.core.repository.dao.ExecutionContextDao#deleteExecutionContext(StepExecution)`\n",
+    "labels": [
+      "type: feature",
+      "in: core",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "3079925af8bb2c58563afb57a2c4e455327ac4bc"
+      ]
+    }
+  },
+  {
+    "number": 5061,
+    "title": "Optimize step executions counting in MongoStepExecutionDao",
+    "state": "closed",
+    "created_at": "2025-10-29T10:31:05Z",
+    "updated_at": "2025-11-05T08:54:14Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5061",
+    "body": "As of v5.2.4 / v6.0.0-RC1, the method `MongoStepExecutionDao#countStepExecutions` is not optimized, it uses nested loops to count step executions.\n\nThis method should be optimized to perform a count query using a `MongoOperations#count` operation.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "related-to: performance",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-05T08:54:13Z",
+        "body": "Resolved in ddbb6174c522999fc697a1603ac4e2c69a676a49, many thanks to @quaff !"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5062,
+    "title": "Incorrect ordering when retrieving job executions with JobExecutionDao",
+    "state": "closed",
+    "created_at": "2025-10-29T10:47:55Z",
+    "updated_at": "2025-11-05T09:18:05Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5062",
+    "body": "`JobExecutionDao#findJobExecutions` states that the returned job executions should be sorted backwards by creation order (the first element is the most recent).\n\nAs of v5.2.4 / v6.0.0-RC1, this is not the case both in the JDBC and MongoDB implementations.",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "related-to: job-repository",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "0125b19af19c64c67c5961ca36fa321713ad3c94"
+      ]
+    }
+  },
+  {
+    "number": 5063,
+    "title": "MongoJobExecutionDao doesn't handle temporal job parameter types correctly",
+    "state": "closed",
+    "created_at": "2025-10-30T01:22:30Z",
+    "updated_at": "2025-11-05T08:56:30Z",
+    "author": "quaff",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5063",
+    "body": "`JobExecution` retrieved from MongoDB contains incorrect temporal job parameter:\n\n```java\nLocalDate localDateParameter = LocalDate.now();\nJobParameters jobParameters = new JobParametersBuilder().addLocalDate(\"localDate\", localDateParameter).toJobParameters();\nJobExecution execution = dao.createJobExecution(jobInstance, jobParameters);\nJobParameters persistedParameters = dao.getJobExecution(execution.getId()).getJobParameters();\nSystem.out.println(persistedParameters.getLocalDate(\"localDate\").getClass()); // -> java.util.Date instead of expected java.time.LocalDate\n```",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-05T08:56:17Z",
+        "body": "Resolved in f1cf52963e949f7bc59964859bcc115824cc62ae, many thanks @quaff for reporting the issue and contributing a fix!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5068,
+    "title": "ChunkOrientedStepBuilder throws IllegalArgumentException when retry() is used(configured) without retryLimit()",
+    "state": "closed",
+    "created_at": "2025-10-31T13:47:13Z",
+    "updated_at": "2025-11-04T23:39:06Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5068",
+    "body": "Hello Spring Batch team,\n\nThank you for your continued work on Spring Batch. I believe I've found a bug or documentational enhencement in the `ChunkOrientedStepBuilder` related to retry configuration.\n\n\n**Bug description**\nWhen using ChunkOrientedStepBuilder.retry() to specify retryable exceptions without calling retryLimit(), the step builder fails with an IllegalArgumentException during the build phase. This occurs because retryLimit defaults to -1, which is rejected by RetryPolicy.Builder.maxAttempts().\n\n\n**Environment**\nSpring Batch version: 6.0.0-RC1\nSpring Framework version: 7.0.0-RC2\n\n**Steps to reproduce**\nCreate a chunk-oriented step using StepBuilder\nCall .retry(SomeException.class) without calling .retryLimit()\nAttempt to build the step\n\n**Expected behavior**\nThe step should build successfully without throwing an exception.\n\n**Actual behavior**\nException thrown:\n```\nCaused by: java.lang.IllegalArgumentException: Invalid maxAttempts (-1): must be positive or zero for no retry.\n\tat org.springframework.util.Assert.isTrue(Assert.java:136)\n\tat org.springframework.core.retry.RetryPolicy.assertMaxAttemptsIsNotNegative(RetryPolicy.java:105)\n\tat org.springframework.core.retry.RetryPolicy$Builder.maxAttempts(RetryPolicy.java:200)\n\tat org.springframework.batch.core.step.builder.ChunkOrientedStepBuilder.build(ChunkOrientedStepBuilder.java:404)\n```\n\n\n**Minimal Complete Reproducible example**\n```java\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(JobRepository jobRepository) {\n        AtomicInteger counter = new AtomicInteger(0);\n\n        return new StepBuilder(jobRepository)\n                .<String, String>chunk(5)\n                .reader(() -> {\n                    int count = counter.incrementAndGet();\n                    if (count <= 5) {\n                        return \"kill-\" + count;\n                    }\n                    return null;\n                })\n                .writer(items -> items.forEach(item ->\n                        System.out.println(\"💀 Terminated: \" + item)\n                ))\n                .faultTolerant()\n                .retry(IOException.class)\n                //.retryLimit(1)  // ← This must be added for proper operation\n                .build();  // ← IllegalArgumentException thrown here\n    }\n}\n```\n\n## Root cause analysis\n\nIn `ChunkOrientedStepBuilder`:\n```java\nprivate long retryLimit = -1;  // Default value\n\npublic ChunkOrientedStep build() {\n    // ...\n    if (this.retryPolicy == null) {\n        // This condition uses OR, so it's true when only retryableExceptions is set\n        if (!this.retryableExceptions.isEmpty() || this.retryLimit > 0) {\n            this.retryPolicy = RetryPolicy.builder()\n                .maxAttempts(this.retryLimit)  // ← Passes -1 here\n                .includes(this.retryableExceptions)\n                .build();  // ← Fails here\n        }\n        else {\n            this.retryPolicy = throwable -> false;\n        }\n    }\n    // ...\n}\n```\n\nIn `RetryPolicy.Builder`:\n```java\npublic Builder maxAttempts(long maxAttempts) {\n    assertMaxAttemptsIsNotNegative(maxAttempts);  // ← Rejects -1\n    this.maxAttempts = maxAttempts;\n    return this;\n}\nprivate static void assertMaxAttemptsIsNotNegative(long maxAttempts) {\n    Assert.isTrue(maxAttempts >= 0,\n        () -> \"Invalid maxAttempts (%d): must be positive or zero for no retry.\"\n              .formatted(maxAttempts));\n}\n```\n\n\n## Suggested fixes\n### Option 1: Change default value\nprivate long retryLimit = 0;  // Change from -1 to 0\n\n### Option 2: Add documentation\nAdd JavaDoc to `retry()`  method stating that `retryLimit()`  must be called with a positive value (greater than 0) respectively.\n\n\nThank you for reviewing this issue. Please let me know if you need any additional information or clarification.\n\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-04T23:30:54Z",
+        "body": "Thank you for reporting this valid issue! Similar to #5069, I will change the default value of retry limit as it was in v5 (which is 0)."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "6fdc22521564234630f4e6ae021b466a22cc29be"
+      ]
+    }
+  },
+  {
+    "number": 5069,
+    "title": "ChunkOrientedStepBuilder throws IllegalArgumentException when skip() is used(configured) without skipLimit()",
+    "state": "closed",
+    "created_at": "2025-10-31T14:09:14Z",
+    "updated_at": "2025-11-04T23:27:55Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5069",
+    "body": "Hello Spring Batch team\n\n**Bug description**\nWhen using `ChunkOrientedStepBuilder.skip()` to specify skippable exceptions without calling `skipLimit()`, the step builder fails with an `IllegalArgumentException` during the build phase. This occurs because `skipLimit` defaults to `-1`, which is rejected by `LimitCheckingExceptionHierarchySkipPolicy` constructor.\n\nThis is the same root cause as the retry configuration issue (https://github.com/spring-projects/spring-batch/issues/5068), where the default value is `-1` and the validation logic rejects it.\n\n\n**Environment**\n- Spring Batch version: 6.0.0-RC1\n- Spring Framework version: 7.0.0-RC2\n\n**Steps to reproduce**\n1. Create a chunk-oriented step using `StepBuilder`\n2. Call `.skip(SomeException.class)` without calling `.skipLimit()`\n3. Attempt to build the step\n4. \n**Expected behavior**\nThe step should build successfully without throwing an exception.\n\n\n**Actual behavior**\nException thrown:\n```\nCaused by: java.lang.IllegalArgumentException: The skipLimit must be greater than zero\n\tat org.springframework.util.Assert.isTrue(Assert.java:117)\n\tat org.springframework.batch.core.step.skip.LimitCheckingExceptionHierarchySkipPolicy.<init>(LimitCheckingExceptionHierarchySkipPolicy.java:45)\n\tat org.springframework.batch.core.step.builder.ChunkOrientedStepBuilder.build(ChunkOrientedStepBuilder.java:415)\n```\n\n**Minimal Complete Reproducible example**\n```java\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    \n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(JobRepository jobRepository) {\n        AtomicInteger counter = new AtomicInteger(0);\n\n        return new StepBuilder(jobRepository)\n                .chunk(5)\n                .reader(() -> {\n                    int count = counter.incrementAndGet();\n                    if (count <= 5) {\n                        return \"kill-\" + count;\n                    }\n                    return null;\n                })\n                .writer(items -> items.forEach(item ->\n                        System.out.println(\"💀 Terminated: \" + item)\n                ))\n                .faultTolerant()\n                .skip(IOException.class)\n                //.skipLimit(1)  // ← This must be added for proper operation\n                .build();  // ← IllegalArgumentException thrown here\n    }\n}\n```\n\n## Root cause analysis\nIn `ChunkOrientedStepBuilder`:\n```java\nprivate long skipLimit = -1;  // Default value\n\npublic ChunkOrientedStep build() {\n    // ...\n    if (this.skipPolicy == null) {\n        // This condition uses OR, so it's true when only skippableExceptions is set\n        if (!this.skippableExceptions.isEmpty() || this.skipLimit > 0) {\n            this.skipPolicy = new LimitCheckingExceptionHierarchySkipPolicy(\n                this.skippableExceptions,\n                this.skipLimit  // ← Passes -1 here\n            );  // ← Fails here\n        }\n        else {\n            this.skipPolicy = new AlwaysSkipItemSkipPolicy();\n        }\n    }\n    // ...\n}\n```\nIn `LimitCheckingExceptionHierarchySkipPolicy`:\n```java\npublic LimitCheckingExceptionHierarchySkipPolicy(\n        Set<Class> skippableExceptions,\n        long skipLimit) {\n    Assert.notEmpty(skippableExceptions, \"The skippableExceptions must not be empty\");\n    Assert.isTrue(skipLimit > 0, \"The skipLimit must be greater than zero\");  // ← Rejects -1\n    this.skippableExceptions = skippableExceptions;\n    this.skipLimit = skipLimit;\n}\n```\n\n\n## Suggested fixes\n### Option 1: Change default value\n```java\nprivate long skipLimit = 0;  // Change from -1 to 0\n```\n\n### Option 2: Add documentation\nAdd JavaDoc to `skip()` method stating that `skipLimit()` must be called with a positive value (greater than 0).\n```java\n/**\n * Configure exceptions that should be skipped.\n * Note: {@link #skipLimit(long)} must be called with a positive value \n * before building the step when using this method.\n * @param skippableExceptions exceptions to skip\n * @return this for fluent chaining\n */\n@SafeVarargs\npublic final ChunkOrientedStepBuilder skip(Class... skippableExceptions)\n```\n\n---\nThank you for reviewing this issue. Please let me know if you need any additional information or clarification.\n\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-04T23:06:13Z",
+        "body": "Thank you for reporting this! Indeed, the step configuration fails when the skip limit is omitted. The default value in the previous implementation [was set to 10](https://github.com/spring-projects/spring-batch/blob/82bd3a2bad3d43771d0df5cdd190c1ebd2a8e5f7/spring-batch-core/src/main/java/org/springframework/batch/core/step/builder/FaultTolerantStepBuilder.java#L133), so I will change the new implementation with similar default values to facilitate the migration to v6."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "3df1f34b7363954d1718737c8386afad85eb82af"
+      ]
+    }
+  }
+]

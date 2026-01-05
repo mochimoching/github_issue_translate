@@ -1,0 +1,92 @@
+[
+  {
+    "number": 27837,
+    "title": "StrictHttpFirewall rejects request when HtmlUnit WebClient is called with encoded URL",
+    "state": "closed",
+    "created_at": "2021-12-18T18:09:44Z",
+    "updated_at": "2022-01-11T14:54:38Z",
+    "author": "thuri",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27837",
+    "body": "**Affects:** 5.3.13\r\n\r\n---\r\n\r\nI'm trying to run a unit test on my spring boot project using the HtmlUnit Webclient. \r\nThe test does a POST Request submitting form data to the Controller which will create a database entry and send a redirect to the client. The response will contain a URL in the Location header which will be encoded if necessary.\r\n\r\nEverything works fine until the HtmlUnit Webclient tries to follow the redirect and the `org.springframework.security.web.firewall.StrictHttpFirewall.getFirewalledRequest(HttpServletRequest)` method is called which prevents the request from being processed. It complains about the % in the URL (see stack trace).\r\n\r\nBut when running the application and using an actual browser the problem does not occur. Searching the web I found #16067 which first looked familiar.\r\n\r\nSo I wrote a small [project](https://github.com/thuri/encoded-uri-test) to reproduce the issue, and I think that the problem with HtmlUnit WebClient is a little bit different. \r\n\r\nWhen running the `webClientTestStringWithEncoding` test method and debugging into `org.springframework.security.web.firewall.StrictHttpFirewall#rejectedBlocklistedUrls(HttpServletRequest)`, one can see that `request.getServletPath()` still contains the encoded path while the called method `decodedUrlContains` seems to expect that it has been decoded.\r\n\r\nIf you run the `mockMvcTestURI` test method and debug the same line you can see that `request.getServletPath()` is empty but `request.getPathInfo()` contains an decoded path. `request.getRequestURI()` contains the encoded path in both cases.\r\n\r\nIn case you're wondering why the first test uses the webclient and the other one the mockMvc: I didn't find a way to pass either the encoded URL or the unencoded version (with spaces and an Umlaut) to the HtmlUnit Webclient (as you can see by the other test methods)\r\n\r\nPerhaps the problem lies in the `org.springframework.test.web.servlet.htmlunit.HtmlUnitRequestBuilder.buildRequest(ServletContext)` where the `servletPath` is set on the request and should be decoded. \r\n\r\nI think I can work around that issue in my test but would be happy if you could have a look at this. \r\n\r\nThanks in advance,\r\nMichael\r\n\r\n```stacktrace\r\njava.io.IOException: org.springframework.security.web.firewall.RequestRejectedException: The request was rejected because the URL contained a potentially malicious String \"%\"\r\n\tat org.springframework.test.web.servlet.htmlunit.MockMvcWebConnection.getResponse(MockMvcWebConnection.java:152)\r\n\tat org.springframework.test.web.servlet.htmlunit.MockMvcWebConnection.getResponse(MockMvcWebConnection.java:134)\r\n\tat org.springframework.test.web.servlet.htmlunit.DelegatingWebConnection.getResponse(DelegatingWebConnection.java:79)\r\n\tat com.gargoylesoftware.htmlunit.WebClient.loadWebResponseFromWebConnection(WebClient.java:1596)\r\n\tat com.gargoylesoftware.htmlunit.WebClient.loadWebResponse(WebClient.java:1518)\r\n\tat com.gargoylesoftware.htmlunit.WebClient.getPage(WebClient.java:493)\r\n\tat com.gargoylesoftware.htmlunit.WebClient.getPage(WebClient.java:413)\r\n\tat com.gargoylesoftware.htmlunit.WebClient.getPage(WebClient.java:548)\r\n\tat com.gargoylesoftware.htmlunit.WebClient.getPage(WebClient.java:529)\r\n\tat io.gitlab.thuri.spring.htmlunit.TestWithEncodedUriIssue.webClientTestStringWithEncoding(TestWithEncodedUriIssue.java:63)\r\n\t// cut junit and eclipse stacktrace entries\r\nCaused by: org.springframework.security.web.firewall.RequestRejectedException: The request was rejected because the URL contained a potentially malicious String \"%\"\r\n\tat org.springframework.security.web.firewall.StrictHttpFirewall.rejectedBlocklistedUrls(StrictHttpFirewall.java:463)\r\n\tat org.springframework.security.web.firewall.StrictHttpFirewall.getFirewalledRequest(StrictHttpFirewall.java:429)\r\n\tat org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:196)\r\n\tat org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:183)\r\n\tat org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:358)\r\n\tat org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:271)\r\n\tat org.springframework.mock.web.MockFilterChain.doFilter(MockFilterChain.java:134)\r\n\tat org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)\r\n\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:119)\r\n\tat org.springframework.mock.web.MockFilterChain.doFilter(MockFilterChain.java:134)\r\n\tat org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)\r\n\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:119)\r\n\tat org.springframework.mock.web.MockFilterChain.doFilter(MockFilterChain.java:134)\r\n\tat org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201)\r\n\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:119)\r\n\tat org.springframework.mock.web.MockFilterChain.doFilter(MockFilterChain.java:134)\r\n\tat org.springframework.test.web.servlet.MockMvc.perform(MockMvc.java:199)\r\n\tat org.springframework.test.web.servlet.htmlunit.MockMvcWebConnection.getResponse(MockMvcWebConnection.java:149)\r\n\t... 78 more\r\n```",
+    "labels": [
+      "in: test",
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-01-05T14:54:38Z",
+        "body": "`HtmlUnitRequestBuilder` does not seem to support well URLs with encoded paths, including paths that are not encoded but become encoded when HtmlUnit's `WebClient` prepares a `java.net.URL`. The problem, as you pointed out, is that the servletPath is supposed to be decoded, but `HtmlUnitRequestBuilder` essentially [uses the full path](https://github.com/spring-projects/spring-framework/blob/338f8907ac752718b9432ca268d9e6de25cba705/spring-test/src/main/java/org/springframework/test/web/servlet/htmlunit/HtmlUnitRequestBuilder.java#L411) minus any contextPath, and without further decoding.\r\n\r\nOne reason this might not have failed as much is that Boot apps have alwaysUseFullPath set by default so effectively the servletPath is not used for mapping purposes, so only Spring Security's firewall is affected.\r\n\r\nI think this can be corrected. I don't see another alternative, and hopefully it shouldn't cause issues since the servletPath is not often used for mapping purposes and in any case it should be decoded."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9346c89f5c215456167799159ca5a8150762855d",
+        "3477ec0a35c5d19d55431f756cc9c6056ee788da"
+      ]
+    }
+  },
+  {
+    "number": 27878,
+    "title": "Upgrade to Kotlin Coroutines 1.6.0",
+    "state": "closed",
+    "created_at": "2022-01-03T14:31:46Z",
+    "updated_at": "2022-01-03T15:13:20Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27878",
+    "body": "",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a410f4c0f2f9ce10eefd1f7141739d362730cd61"
+      ]
+    }
+  },
+  {
+    "number": 27879,
+    "title": "Upgrade to Kotlin serialization 1.3.2",
+    "state": "closed",
+    "created_at": "2022-01-03T14:48:02Z",
+    "updated_at": "2022-01-03T15:13:37Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27879",
+    "body": "",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "0b8c815c6f9da128ed472b3bb40b5fe4eff18d21"
+      ]
+    }
+  },
+  {
+    "number": 27903,
+    "title": "Stop defining a TaskScheduler bean in WebSocketConfigurationSupport",
+    "state": "closed",
+    "created_at": "2022-01-07T16:53:58Z",
+    "updated_at": "2022-01-11T10:17:20Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27903",
+    "body": "**Affects:** 5.3.x\r\n\r\n`WebSocketConfigurationSupport` defines a `TaskScheduler` bean which causes [problems in Boot](https://github.com/spring-projects/spring-boot/issues/28449) as using `@EnableWebSocket` causes auto-configuration of a `ThreadPoolTaskScheduler` to back off, for example. My feeling is that this a very general contract for something that's more specific and largely an implementation detail. It would be helpful to Boot if Framework's WebSocket support could avoid defining a bean at all for its task scheduler or could use a different, WebSocket-specific type to do so.\r\n\r\nWhile this affects 5.3.x, [we think](https://github.com/spring-projects/spring-boot/issues/28449#issuecomment-952632352) it may be a change that can't be made till 6.0.",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "29fe1094403264c4f9583619fdd9e904fc463e8c",
+        "368201975a0b9e65b051a71d0894783bcbc4c593"
+      ]
+    }
+  }
+]

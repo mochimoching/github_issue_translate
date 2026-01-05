@@ -1,0 +1,1352 @@
+[
+  {
+    "number": 14023,
+    "title": "Introduce removeApplicationListener in ConfigurableApplicationContext",
+    "state": "closed",
+    "created_at": "2012-05-08T15:49:26Z",
+    "updated_at": "2022-07-12T17:49:45Z",
+    "author": "spring-projects-issues",
+    "url": "https://github.com/spring-projects/spring-framework/issues/14023",
+    "body": "**[Archie Cobbs](https://jira.spring.io/secure/ViewProfile.jspa?name=archie172)** opened **[SPR-9387](https://jira.spring.io/browse/SPR-9387?redirect=false)** and commented\n\nI have some object which need to receive some `ApplicationEvents` that are sent around in my application.\n\nHowever, these objects have a lifecycle that does not match with the lifecycle of normal beans in the application context (their lifecycle is shorter).\n\nTherefore, I have these beans marked `@Configurable`, and they are `ApplicationContextAware` so they can get a reference to the application context (which is assumed to be a `ConfigurableApplicationContext`.\n\nThen, when they \"start\" they register as listeners for application events via `ConfigurableApplicationContext.addApplicationListener()`. However, when they \"stop\" there is no way for them to unregister themselves as listeners, because there is no corresponding method `ConfigurableApplicationContext.removeApplicationListener()`.\n\nSo this request is simply to add `ConfigurableApplicationContext.removeApplicationListener()`.\n\nIf there is some more elegant way to do what I'm trying to do please let me know. But just from the face of it, it seems weirdly asymmetrical to have a public `addFooListener()` method without a corresponding `removeFooListener()` method.\n\nThanks.\n\n---\n\n**Affects:** 3.1.1\n\n**Issue Links:**\n- #14027 Support DisposableBean on prototype and `@Configurable` beans using weak references\n\n1 votes, 4 watchers\n",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "spring-projects-issues",
+        "created_at": "2012-05-09T07:53:45Z",
+        "body": "**[Archie Cobbs](https://jira.spring.io/secure/ViewProfile.jspa?name=archie172)** commented\n\nAdditional info: even though these `@Configurable` beans implement `ApplicationListener`, they are not automatically registered with the event multicaster, instead triggering this warning in `AbstractApplicationContext.java`:\n\n```\nBoolean flag = this.singletonNames.get(beanName);\nif (Boolean.TRUE.equals(flag)) {\n    // singleton bean (top-level or inner): register on the fly\n    addApplicationListener((ApplicationListener<?>) bean);\n}\nelse if (flag == null) {\n    if (logger.isWarnEnabled() && !containsBean(beanName)) {\n        // inner bean with other scope - can't reliably process events\n        logger.warn(\"Inner bean '\" + beanName + \"' implements ApplicationListener interface \" +\n                \"but is not reachable for event multicasting by its containing ApplicationContext \" +\n                \"because it does not have singleton scope. Only top-level listener beans are allowed \" +\n                \"to be of non-singleton scope.\");\n    }\n    this.singletonNames.put(beanName, Boolean.FALSE);\n}\n```\n\nThat is why they have to be manually registered as listeners.\n\nSo this is kind-of a Catch-22 situation.\n\nBy the way, this issue relates to #9922, which is marked Resolved, but is it really? It seems like the code above means that it's not really resolved.\n\nAlso: I accidentally set the Component to SpringAOP instead of SpringCore, but don't have permission to edit it... sorry.\n"
+      },
+      {
+        "author": "spring-projects-issues",
+        "created_at": "2012-05-31T15:15:32Z",
+        "body": "**[Archie Cobbs](https://jira.spring.io/secure/ViewProfile.jspa?name=archie172)** commented\n\nRelated to this. There is an opportunity for a little API cleanup:\n* Why not let `ConfigurableApplicationContext` extend `ApplicationEventMulticaster`? Right now there are two separate interfaces declaring an `addApplicationListener()` method.\n* `ApplicationEventMulticaster` still needs some genericization, i.e., methods should take parameters of type `ApplicationListener<?>` instead of `ApplicationListener`\n* We have both `ApplicationEventPublisher.publishEvent()` and `ApplicationEventMulticaster.multicastEvent()`, both doing the same thing. Seems like these methods should have the same name, and `ApplicationEventMulticaster` should just extend `ApplicationEventPublisher`.\n\n"
+      },
+      {
+        "author": "spring-projects-issues",
+        "created_at": "2019-01-12T03:48:32Z",
+        "body": "Bulk closing outdated, unresolved issues. Please, reopen if still relevant."
+      },
+      {
+        "author": "archiecobbs",
+        "created_at": "2019-01-15T03:06:30Z",
+        "body": "> Bulk closing outdated, unresolved issues. Please, reopen if still relevant.\r\n\r\n... except Github won't let me reopen it..."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2021-02-10T12:31:28Z",
+        "body": "This feature was also considered in conjunction with the initial implementation for #25616."
+      },
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-03-29T09:29:26Z",
+        "body": "Scheduling for 6.0 with a chance to explore a backport to 5.3.x."
+      },
+      {
+        "author": "archiecobbs",
+        "created_at": "2022-05-06T14:30:45Z",
+        "body": "Woo-hoo! Just in time for it's 10th birthday on Sunday :)\r\n\r\nSeriously, this is why I love Spring - most projects would never bother to fix a 10 year old minor feature request."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f8c4071f7302a7d6f7e02e877d3c815ad6d81e4f"
+      ]
+    }
+  },
+  {
+    "number": 27506,
+    "title": "AntPathMatcher matches path with trailing slash differently if '**' is present in the pattern",
+    "state": "closed",
+    "created_at": "2021-10-01T14:16:09Z",
+    "updated_at": "2022-04-04T16:55:17Z",
+    "author": "aomader",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27506",
+    "body": "I'm curious why `AntPathMatcher` matches a path with a trailing slash differently if the pattern contains a `**` pattern. See the following example:\r\n\r\n```\r\nAntPathMatcher matcher = new AntPathMatcher();\r\n\r\nmatcher.match(\"/en\", \"/en/\") == false // does not match\r\nmatcher.match(\"/*/en\", \"/en/foo/\") == false // does not match\r\nmatcher.match(\"/**/foo\", \"/en/foo/\") == true // does match\r\n```\r\n\r\nCould someone enlighten me why `AntPathMatcher` behaves this way?",
+    "labels": [
+      "in: web",
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "bclozel",
+        "created_at": "2021-10-01T18:51:22Z",
+        "body": "Is there a typo in your code snippet?\r\n\r\n```\r\n// does not match because the pattern doesn't have a trailing slash and the path has one\r\nmatcher.match(\"/en\", \"/en/\")\r\n// does not match because the pattern ends with \"/en\" and the path ends with \"/foo/\"\r\nmatcher.match(\"/*/en\", \"/en/foo/\")\r\n// this is problematic\r\nmatcher.match(\"/**/foo\", \"/en/foo/\") == true // does match\r\n```\r\n\r\nI've tested the following combinations and it looks like there is an inconsistency between `*` and `**` when it comes to matching trailing slashes.\r\n\r\n```\r\nassertThat(pathMatcher.match(\"/*/foo\", \"/en/foo\")).isTrue();\r\nassertThat(pathMatcher.match(\"/*/foo\", \"/en/foo/\")).isFalse();\r\nassertThat(pathMatcher.match(\"/**/foo\", \"/en/foo\")).isTrue();\r\nassertThat(pathMatcher.match(\"/**/foo\", \"/en/foo/\")).isFalse(); // fails\r\n```\r\n\r\nI've found a fix for this issue that doesn't break any test in our test suite, but `AntPathMatcher` has a long history of subtle behavior and lots of people relying on it.\r\n\r\nUsing `**` within patterns and trailing slashes are very likely in web applications using `AntPathMatcher`. There is a trailing slash matching option in Spring MVC but applications might still rely on this behavior, so I'm not tempted to fix this in the 5.3.x branch.\r\n\r\nOn the other hand, I think that using `AntPathMatcher` as a matcher for request patterns in Spring MVC might be retired in Spring Framework 6.0. In the 6.0.x timeline we can consider several options for `AntPathMatcher`:\r\n\r\n1. keeping it around as it is and fixing small issues like this one\r\n2. reworking it to only target file patterns use cases (and not URL path patterns which is now `PathPatternParser`'s job)\r\n3. or retiring it completely\r\n\r\nIn any case, this needs to be discussed within the Spring Framework team.\r\n\r\nDid you notice this issue in a Spring MVC application while debugging the problem, or `AntPathMatcher` for some other use case?"
+      },
+      {
+        "author": "aomader",
+        "created_at": "2021-10-05T06:46:51Z",
+        "body": "Regarding your first question, no, I cannot see a typo. The last case is obviously the problematic one and the reason I created this issue.\r\n\r\nExactly, I came across this \"subtle behavior\" when working with Spring MVC and Spring Security. The latter I find somewhat problematic with regards to \"sublte behavior\"..."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "705bf7810406358aa42e091f029e7bfa60cbf3d5"
+      ]
+    }
+  },
+  {
+    "number": 27633,
+    "title": "Automatically clean up multipart temp files",
+    "state": "closed",
+    "created_at": "2021-11-02T14:33:11Z",
+    "updated_at": "2022-04-06T15:04:10Z",
+    "author": "poutsma",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27633",
+    "body": "The `DefaultPartHttpMessageReader` creates temp files that are never deleted. There should be an option to delete these files after the corresponding request was handled.\r\n\r\nRelated to #27613, the resolution of which introduced a `Part::delete` method to explicitly remove the temp file. This issue  focusses on automatically removing these temp files.\r\n\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "vovaspk",
+        "created_at": "2021-11-03T13:46:07Z",
+        "body": "@poutsma hi, do you know if it is possible to disable creating temp file? when for example i know i will be receiving files around 10mb, and i want to save them right to the storage from memory, without creating temp file and then copying"
+      },
+      {
+        "author": "poutsma",
+        "created_at": "2021-11-03T13:50:49Z",
+        "body": "@vovaspk You will need to change the `maxInMemorySize` for the `DefaultPartHttpMessageReader` by using the `ServerCodecConfigurer`, see https://docs.spring.io/spring-framework/docs/current/reference/html/web-reactive.html#webflux-config-message-codecs"
+      },
+      {
+        "author": "vovaspk",
+        "created_at": "2021-11-03T14:51:23Z",
+        "body": "Thank you very much!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "192f2becf616642de23b43e03ffb3cdf5c5f4493"
+      ]
+    }
+  },
+  {
+    "number": 27955,
+    "title": "Support AOT registration of Spring Factories",
+    "state": "closed",
+    "created_at": "2022-01-19T17:04:19Z",
+    "updated_at": "2022-05-11T09:40:43Z",
+    "author": "bclozel",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27955",
+    "body": "As seen in #27753, `SpringFactoriesLoader` is currently supported in Spring Native through subtitutions and complex AOT processors.\r\n\r\nWe'd like to improve `SpringFactoriesLoader` and allow static registration of Spring Factories, something our AOT processing could leverage and call early during application startup. Once a Factory type is registered with entries, `SpringFactoriesLoader` should use this entry as a pre-warmed cache and never look for additional entries in `spring.factories` files, skipping all the resource loading and reflection operations.\r\n\r\nInstead of registering String instances as entries, this new contract might take `Supplier` instances instead, maybe mirroring the new contract to be added in #27954",
+    "labels": [
+      "in: core",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2961426d8ad256983ffe1445acd4cbfaab4fd5db",
+        "267b91486efd409a4f095be4a87db2c45fee1322",
+        "6a67b4a2aa22da5a252b4fe5e9d5fd5fe494e1c1",
+        "e6c0152916806905dcdf106798de0b475391f830"
+      ]
+    }
+  },
+  {
+    "number": 28006,
+    "title": "Introduce token-based consumption of  multipart requests in WebFlux",
+    "state": "closed",
+    "created_at": "2022-02-04T10:23:21Z",
+    "updated_at": "2022-05-10T11:20:58Z",
+    "author": "poutsma",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28006",
+    "body": "In version 5.3, Spring Framework introduced the `DefaultPartHttpMessageReader` as a fully reactive way to handle multipart upload requests. One of the features of this message reader is [streaming mode](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/http/codec/multipart/DefaultPartHttpMessageReader.html#setStreaming-boolean-), where the contents of the uploaded parts is not stored in memory or on disk, but directly passed on to the subscriber (in the form of [DataBuffers](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/http/codec/multipart/Part.html#content--) ). This feature is particularly useful for server proxies, where the controller passes on the data buffers to another service, for instance by using `WebClient`.\r\n\r\nHowever, there is a problem in the way streaming mode deals with back pressure. In streams produces by other `HttpMessageReader`s and codecs, there is a clear relationship between the requests made by the subscriber and the request made against the incoming buffer stream (for instance, the `ByteBufferDecoder` creates one `ByteBuffer` for each incoming `DataBuffer`). When `DefaultPartHttpMessageReader` is used in streaming mode, there is no such relationship, because each `Part` produced can consists of multiple databuffers. Effectively, there are two kinds of back pressure in streaming mode:\r\n\r\n1. the back pressure of the `Part` elements, i.e. the 'outer' flux\r\n2. the back pressure of the `DataBuffer` contents of each part, i.e. the 'inner' flux.\r\n \r\nThere are several scenarios to consider:\r\n\r\n* What should happen when a request for a second part comes in, while the contents of the first has not been consumed yet?\r\n* What should happen when the inner flux is canceled, while the outer flux is not?\r\n* What should happen when `flatMap` is used on the `Part` stream? \r\n* How should [prefetch be used](https://github.com/spring-projects/spring-framework/issues/27743)?\r\n* etc. etc.\r\n\r\nThough I am sure we can come up with answers to these questions, the fact remains that in streaming scenarios, representing multipart data as `Flux<Part>` where each part contains a `Flux<DataBuffer>` has inherent difficulties with back pressure. Instead, we should introduce an alternative way to consume multipart data, a better fit for streaming scenarios. \r\n\r\n### Part tokens\r\n\r\nInstead `Part` elements, the multipart upload is represented by a stream of part tokens. Each part in the multipart request is represented by a **header** token that contains the part headers, followed by one or more **body** tokens with data buffers containing the part body. Subsequent parts will result in another header token, followed by more body tokens, and so on.\r\n\r\nFor instance, a multipart message with a form field and a file will produce the following tokens:\r\n\r\n1. header token containing the headers of the form field part\r\n2. a body token containing the form field value\r\n3. header token containing the headers of the file part\r\n4. multiple body tokens containing buffers with the contents of the file\r\n\r\nUsing part tokens, there is a direct relationship between back pressure of the the token subscriber and that of the buffer input. In the case of body tokens, this even is a 1-on-1 relationship.\r\n\r\nFor instance, here is a typical controller method that splits the tokens into multiples fluxes that start with a header token, so that each inner flux contains the tokens of one part. The headers from said token can then be used if necessary, and the remaining body tokens can be used as well.\r\n\r\n```java\r\n@PostMapping(\"/tokens\")\r\nFlux<String> tokens(@RequestBody Flux<PartToken> tokens) {\r\n\treturn tokens\r\n\t\t\t.windowUntil(token -> token instanceof PartToken.Headers, true)  // Flux<Flux<PartToken>>\r\n\t\t\t.concatMap(t -> t.switchOnFirst((signal, partTokens) -> {\r\n\t\t\t\tif (signal.hasValue()) {\r\n\t\t\t\t\tPartToken.Headers headersToken = (PartToken.Headers) signal.get();\r\n\t\t\t\t\tHttpHeaders headers = headersToken.headers();\r\n\t\t\t\t\t// Use info in headers if necessary\r\n\t\t\t\t\tFlux<DataBuffer> bodyBuffers = partTokens\r\n\t\t\t\t\t\t\t.filter(token -> token instanceof PartToken.Body)\r\n\t\t\t\t\t\t\t.cast(PartToken.Body.class)\r\n\t\t\t\t\t\t\t.map(PartToken.Body::buffer);\r\n\t\t\t\t\t// Send body buffers to other service\r\n\t\t\t\t\treturn Mono.empty();\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\treturn releaseBody(partTokens)\r\n\t\t\t\t\t\t\t.then(Mono.empty());\r\n\t\t\t\t}\r\n\t\t\t}));\r\n\r\n}\r\n```\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "poutsma",
+        "created_at": "2022-02-04T13:50:49Z",
+        "body": "As part of this effort, we would also deprecate the current streaming support in `DefaultPartHttpMessageReader`."
+      },
+      {
+        "author": "poutsma",
+        "created_at": "2022-02-09T13:13:33Z",
+        "body": "After considering the way (Reactor) Netty deals with multipart streaming, we have come up with an alternative to the token-based approach described above, so that headers and body contents are merged into one `PartData` object.\r\n\r\n### Part Data objects\r\n\r\nIn this design, each part in a multipart HTTP message produces at least one `PartData` object containing both headers and a `DataBuffer` with data of the part. If the part is large enough to be split across multiple buffers (i.e. a file upload), the first `PartData` will be followed by subsequent objects. The final `PartData` for a particular part will have its\r\n`isLast` property set to true.\r\n\r\nFor instance, a multipart message with a form field and a file will produce the following tokens:\r\n\r\n1. a data object containing the headers and data of the form field part. `isLast` is true.\r\n2. a data object containing header token containing headers and first buffer of data of the file part. `isLast` is false.\r\n3. multiple data object tokens containing headers and buffers with the subsequent contents of the file\r\n4. a data object containing header token containing headers and final buffer of data of the file part. `isLast` is true."
+      },
+      {
+        "author": "djouvin",
+        "created_at": "2022-02-12T13:07:06Z",
+        "body": "The second approach with a unified `PartData` (we could call it alternatively `PartFragment`) seems indeed more appealing and polyvalent. And it is simpler in design, thus probably more robust.\r\n\r\nHowever, I think there is a way to still have a composite approach with an outer `Flux<Part>` (producing a `Flux<DataBuffer>` for each part's content), while still maintaining a correct relationship between the demand and the incoming data buffers, at least for the inner flux (part content).\r\nFor the outer flux, quantitative demand is not really useful anyway since parts may have completely different sizes. The `Flux<Part>` should work with `concatMap` but also with `flatMap` : the difference is that with `concatMap` the next part consumption would wait the whole previous part content pipeline to complete, whereas with `flatMap`, it is sufficient that the part content is fully produced to the next operator, but the content can be \"in transit / in processing\" in the content processing pipeline while the second part is produced (thus parallelizing a bit more the processing).\r\n\r\nThe conditions for this composite approach to work is to maintain the following predicates true:\r\n- part demand and part content demand must not be mixed and must be processed differently\r\n- a part content flux has to be subscribed *before* any other part is processed\r\n  - the corollary is that the next part must not be delivered by the producer without the consumer having fully consumed, or explicitly cancelled the previous part's content flux : the part should thus expose an explicit `cancel` or `dispose` method (for example, by implementing the `Disposable` interface). We are bending here a little the reactive streams contract semantics (part content are in a way \"pre-subscribed\"), but there is no other way to ensure parts are not skipped unintentionally by a prefetching operator\r\n  - prefetch should not be used for part consumption on the outer flux, as it will never be honored by the producer, but it can be used for part content consumption on the inner flux (which behaves as a regular `Flux<DataBuffer>`)\r\n  - the next part should be delivered to the outer flux consumer :\r\n    - when the previous part's content delivery is complete,\r\n    - or when all subscriptions to this part content are cancelled,\r\n    - or when the part itself is cancelled or disposed,\r\n  - and of course part demand is still there and the outer flux itself is not cancelled\r\n- part content delivery should honore content demand as any data buffer flux would, until of course the end of the part is encountered (then the content flux is completed and the potentially remaining prefetched data buffer are retained by the producer)\r\n\r\nI agree that the composite approach implementation is more complex, and I am not sure it is always interesting to have an outer `Flux<Part>`, because most of the time an HTTP stream has only one, or just a few, parts (so viewing parts as a `Flux` is not a must). It does however fit well with `flatMap` and `concatMap` operators.\r\nAnd, it can be build on the `PartData` approach too (as it is now with the `PartToken` generator) : consumers would have the choice to consume either directly a `Flux<PartData>` or a `Flux<Part>` wrapping that `Flux<PartData>`."
+      },
+      {
+        "author": "jomach",
+        "created_at": "2022-03-15T06:34:39Z",
+        "body": "this is related with https://github.com/spring-projects/spring-framework/issues/27743 right ?"
+      },
+      {
+        "author": "poutsma",
+        "created_at": "2022-04-20T09:30:46Z",
+        "body": "This feature is now in `main`, will be in Spring Framework 6.0 M4 when it comes out on May 11th. I would really appreciate feedback before 6.0 RC is released.\r\n\r\nThere is no reference documentation as of yet, it will be written when the RC approaches, but for now there is a substantial amount of Javadoc on the main type: `PartEvent`, see [here](https://docs.spring.io/spring-framework/docs/6.0.0-SNAPSHOT/javadoc-api/org/springframework/http/codec/multipart/PartEvent.html).\r\n\r\nNote that I changed the name of this type from `PartData` to `PartEvent`, as I think that more clearly describes the intent of the type."
+      },
+      {
+        "author": "poutsma",
+        "created_at": "2022-04-20T09:53:35Z",
+        "body": "@djouvin \r\n\r\n> The conditions for this composite approach to work is to maintain the following predicates true:\r\n> \r\n> * part demand and part content demand must not be mixed and must be processed differently\r\n> * a part content flux has to be subscribed _before_ any other part is processed\r\n>   \r\n>   * the corollary is that the next part must not be delivered by the producer without the consumer having fully consumed, or explicitly cancelled the previous part's content flux : the part should thus expose an explicit `cancel` or `dispose` method (for example, by implementing the `Disposable` interface). We are bending here a little the reactive streams contract semantics (part content are in a way \"pre-subscribed\"), but there is no other way to ensure parts are not skipped unintentionally by a prefetching operator\r\n>   * prefetch should not be used for part consumption on the outer flux, as it will never be honored by the producer, but it can be used for part content consumption on the inner flux (which behaves as a regular `Flux<DataBuffer>`)\r\n>   * the next part should be delivered to the outer flux consumer :\r\n>     \r\n>     * when the previous part's content delivery is complete,\r\n>     * or when all subscriptions to this part content are cancelled,\r\n>     * or when the part itself is cancelled or disposed,\r\n>   * and of course part demand is still there and the outer flux itself is not cancelled\r\n> * part content delivery should honore content demand as any data buffer flux would, until of course the end of the part is encountered (then the content flux is completed and the potentially remaining prefetched data buffer are retained by the producer)\r\n\r\nWhile the user might be able to limit their usage of operators on the `Flux<Part>` we provide, it is impossible to make the same guarantee when that flux is passed on to another library or framework. As a consequence, things can unexpectedly break when they worked perfectly fine before. \r\n\r\n> I agree that the composite approach implementation is more complex, and I am not sure it is always interesting to have an outer `Flux<Part>`, because most of the time an HTTP stream has only one, or just a few, parts (so viewing parts as a `Flux` is not a must). It does however fit well with `flatMap` and `concatMap` operators. And, it can be build on the `PartData` approach too (as it is now with the `PartToken` generator) : consumers would have the choice to consume either directly a `Flux<PartData>` or a `Flux<Part>` wrapping that `Flux<PartData>`.\r\n\r\nI will try to refactor the `PartGenerator` to use the functionality for this issue, and will let you know how that proceeds.\r\n\r\n"
+      },
+      {
+        "author": "jomach",
+        "created_at": "2022-04-20T17:19:06Z",
+        "body": "Would be great if you could provide a working example of this :) thx and great work !"
+      },
+      {
+        "author": "poutsma",
+        "created_at": "2022-05-10T11:20:58Z",
+        "body": "> Would be great if you could provide a working example of this :) thx and great work !\r\n\r\nThere is some sample code available on the [PartEvent Javadoc](https://docs.spring.io/spring-framework/docs/6.0.0-SNAPSHOT/javadoc-api/org/springframework/http/codec/multipart/PartEvent.html)."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "be7fa3aaa879cfb44fc976be7331caf5479a943f",
+        "e29bc3db7c943cf75bd1b25c661c53f372304f7f",
+        "639c047f2f8e9c99b7b6f7dbe53462c33c269225"
+      ]
+    }
+  },
+  {
+    "number": 28024,
+    "title": "MediaType parameters in the \"consumes\" condition of `@RequestMapping` are not considered for matching",
+    "state": "closed",
+    "created_at": "2022-02-10T07:13:18Z",
+    "updated_at": "2022-05-11T16:56:15Z",
+    "author": "thake",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28024",
+    "body": "This issue was opened based on the discussion in #27999.\r\n\r\nGiven the following controller:\r\n```kotlin\r\n@RestController\r\n@RequestMapping(\"/hal-documents\")\r\nclass MyController {\r\n    @PostMapping(\r\n        consumes = [\"\"\"application/hal+json;profile=\"my-resource-v1\"\"\"\"],\r\n        produces = [\"\"\"application/hal+json;profile=\"my-resource-v1\"\"\"\"]\r\n    )\r\n    fun postVersion1(@RequestBody request : String) = \"version-1\"\r\n\r\n    @PostMapping(\r\n        consumes = [\"\"\"application/hal+json;profile=\"my-resource-v2\"\"\"\"],\r\n        produces = [\"\"\"application/hal+json;profile=\"my-resource-v2\"\"\"\"]\r\n    )\r\n    fun postVersion2(@RequestBody request : String) = \"version-2\";\r\n}\r\n```\r\nA request that provides a request body with the content type `application/hal+json;profile=\"my-resource-v2\"` is being routed to `postVersion1` but should be routed to `postVersion2`.\r\n\r\nEven worse, if the `consumes` media type only differs in media type parameters and the handler methods can't be ranked by `produces` an `Ambiguous handler methods mapped for ...` error will be thrown leading to a 500er. \r\n\r\n<details><summary>Example</summary>\r\n<p>\r\nController:\r\n\r\n```kotlin\r\n@RestController\r\n@RequestMapping(\"/hal-documents\")\r\nclass MyController {\r\n    @PostMapping(\r\n        consumes = [\"\"\"application/hal+json;profile=\"my-resource-v1\"\"\"\"]\r\n    )\r\n    fun postVersion1(@RequestBody request : String) = \"version-1\"\r\n\r\n    @PostMapping(\r\n        consumes = [\"\"\"application/hal+json;profile=\"my-resource-v2\"\"\"\"]\r\n    )\r\n    fun postVersion2(@RequestBody request : String) = \"version-2\";\r\n}\r\n```\r\nRequest:\r\n```http\r\nPOST http://localhost:8080/hal-documents\r\nContent-Type: application/hal+json;profile=\"my-resource-v2\"\r\n\r\n{\r\n  \"my content\" : \"blub\"\r\n}\r\n```\r\nResponse:\r\n```http\r\nHTTP/1.1 500 \r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nDate: Thu, 10 Feb 2022 06:51:58 GMT\r\nConnection: close\r\n\r\n{\r\n  \"timestamp\": \"2022-02-10T06:51:58.921+00:00\",\r\n  \"status\": 500,\r\n  \"error\": \"Internal Server Error\",\r\n  \"trace\": \"java.lang.IllegalStateException: Ambiguous handler methods mapped for '/hal-documents': {...}\",\r\n  \"path\": \"/hal-documents\"\r\n}\r\n```\r\n</p>\r\n</details>\r\n\r\nLooking into the code, it seems like `consumes` and `produces` are treated differently in `ProducesRequestCondition` and `ConsumesRequestCondition` when it comes to media type parameters.\r\n\r\n**Affects:** 5.3.15\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-02-14T11:56:24Z",
+        "body": "We can align `consumes` with the `produces` condition, along the lines of 8dc535c15c15a71ce29bc21a45e9daeb064dd35e, such that if a media type parameter is explicitly declared in the mapping **and** the same parameter is also present in the `Content-Type` header, then the two must match. "
+      },
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-05-11T16:56:14Z",
+        "body": "Fixed in f0e23b66f32055b6ad9515955d9dd2902d38366e but commit message references a different issue by accident."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 28036,
+    "title": "Upgrade to Kotlin 1.6.20",
+    "state": "closed",
+    "created_at": "2022-02-11T10:42:07Z",
+    "updated_at": "2022-04-04T13:21:00Z",
+    "author": "bclozel",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28036",
+    "body": "As a follow-up of #27814.",
+    "labels": [
+      "type: dependency-upgrade",
+      "theme: kotlin"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "e0090545f5029dc1cba2c984ce86e428dbee5991"
+      ]
+    }
+  },
+  {
+    "number": 28080,
+    "title": "Remove TYPE_HIERARCHY_AND_ENCLOSING_CLASSES search strategy for MergedAnnotations",
+    "state": "closed",
+    "created_at": "2022-02-19T15:34:31Z",
+    "updated_at": "2022-03-24T15:35:59Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28080",
+    "body": "## Overview\r\n\r\nSince #28207 has introduced support for providing a `Predicate<Class<?>>` that allows for complete control over the \"enclosing classes\" aspect of the search algorithm in `MergedAnnotations`, the deprecated `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` search strategy can now be completely removed.\r\n\r\n## Related Issues\r\n\r\n- #28079\r\n- #28207 ",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-21T16:44:45Z",
+        "body": "Blocked until #28207 is implemented"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "1e1256aad55b2277d7346f5783fa4fae59302802",
+        "4dfead3ab868351aaa351e02332721deca7646f8",
+        "42a61b966b7d38f073f65b1c1cacbd92ac0b9c2c",
+        "133dd1a41810f782b111273471eaf6b429f1be8c",
+        "c23edf7da6c403eeedb862e02b9a7293cfba38a1",
+        "3a6828f61340ae3d75b706c8e1c721109a05d808",
+        "819d4256b7984fdec58840a56b82e411bc53c9c9",
+        "b70b6e79164748df8c73876e55b656f22ff6e3e4",
+        "fc8f31ccfbecd2179d7ce216a5a3521f13397c05",
+        "317c98939d7079467947b02cf8a1d70ed2ba51da",
+        "ae51ca9bca396a7ab459c33cde91aff787643805"
+      ]
+    }
+  },
+  {
+    "number": 28142,
+    "title": "Ability to differentiate different causes for WebInputException",
+    "state": "closed",
+    "created_at": "2022-03-07T11:38:23Z",
+    "updated_at": "2022-10-24T14:53:27Z",
+    "author": "ascopes",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28142",
+    "body": "This is a request for the ability to generate a message stating that a WebFlux controller request body (or other request component) is missing, without exposing potentially sensitive implementation details in the error message. By doing this, it would remove the need for implementing a custom handler for validation where Spring provides messages that may fail organisational governance.\r\n\r\nIf we write a controller such as the following:\r\n\r\n```java\r\n@RestController\r\n@Validated\r\npublic class TestController {\r\n  @PostMapping(\"/foo/{bar}\")\r\n  @ResponseStatus(ACCEPTED)\r\n  public Mono<Void> fooBar(@PathVariable String bar, @RequestBody Body body) {\r\n    ...\r\n  }\r\n}\r\n```\r\n\r\n...the implementation for a missing request body appears to be currently defined in [AbstractMessageReaderArgumentResolver](https://github.com/spring-projects/spring-framework/blob/main/spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/AbstractMessageReaderArgumentResolver.java#L229):\r\n\r\n```java\r\n\tprivate ServerWebInputException handleMissingBody(MethodParameter parameter) {\r\n\t\tString paramInfo = parameter.getExecutable().toGenericString();\r\n\t\treturn new ServerWebInputException(\"Request body is missing: \" + paramInfo, parameter);\r\n\t}\r\n```\r\n\r\nThe error message here cannot be presented to the consumer of the API on systems where governance prevents the exposure of the underlying implementation technology (this would fail penetration testing, for example). The reason for this is that the error message with the concatenated parameter info will render to something like:\r\n\r\n```\r\nRequest body is missing: public reactor.core.publisher.Mono<java.lang.Void> com.mycompany.TestController.fooBar(java.lang.String, com.mycompany.Body)\r\n```\r\n\r\nThis can potentially expose information allowing the inference of the underlying JDK or Spring Boot version by observing the names of the parameters and method in the underlying error, which may enable malicious actors to \"comb\" an API and determine if certain exploits may exist.\r\n\r\nThe issue arises that while we can override this exception with a custom exception handler, this then involves writing a significant amount of boilerplate to cater for parsing every potential binding annotation, and then extracting information such as the name of the parameter (in the case of headers), or the request body. The current API does not provide a simple way of determining that the request body is the part that is missing in this case.\r\n\r\nIf we instead use Spring Validation, and use `@RequestBody(required = false) @Valid @NotNull`, the issue will instead arise that a ConstraintViolationException is raised instead of a WebExchangeBindingException, which then requires two almost identical sets of exception handlers to achieve the same consistent validation error handling. This appears to be due to `validate()` not being called on the body in `AbstractMessageReaderArgumentResolver.java` when the body is determined to be missing.\r\n\r\nIf we omit the message altogether, it leaves a response to the consumer that is not helpful for diagnosing the issue with the request. For example:\r\n\r\n```java\r\n{\r\n  \"status\": 400,\r\n  \"message\": \"null\"\r\n}\r\n```\r\n\r\nIs there a workaround for this, or is this something that could be potentially tweaked? Providing consistent validation using the Spring Validation API with WebFlux is somewhat painful at the moment because of this, and it leads to code that can be somewhat difficult to maintain when it caters for multiple edge cases.\r\n\r\nAn ideal scenario would be where we could obtain a string \"type\" of the parameter in question that failed validation (e.g. `\"header\"`, `\"body\"`, `\"pathVariable\"`, etc, and then a simplified message such as `\"Request body is required\"` that can be presented back to the consumer of the API.\r\n\r\nAny help or suggestions would be greatly appreciated!\r\n\r\nThanks\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "ascopes",
+        "created_at": "2022-03-22T09:50:52Z",
+        "body": "Can confirm that this also occurs in UnsupportedMediaTypeStatusException as well, where the implementation package name is leaked in the error reason.\r\n\r\n`415 UNSUPPORTED_MEDIA_TYPE \"Content type 'application/x-yaml' not supported for bodyType=org.example.MyModelName`"
+      },
+      {
+        "author": "askar882",
+        "created_at": "2022-04-30T19:00:41Z",
+        "body": "I was also trying to find a way to tell the client that the request body missing without exposing much information. And I was able to make this work with a custom exception handler as follows.\r\n```Java\r\n@RestControllerAdvice\r\npublic class ExceptionHandler {\r\n    @ResponseStatus(HttpStatus.BAD_REQUEST)\r\n    @ExceptionHandler(HttpMessageNotReadableException.class)\r\n    public Map<String, Object> requestBodyMissing(HttpServletRequest request) {\r\n        HandlerMethod method = (HandlerMethod) request.getAttribute(\"org.springframework.web.servlet.HandlerMapping.bestMatchingHandler\");\r\n        String requestBody = Arrays.stream(method.getMethodParameters())\r\n                .map(m -> m.getParameterType().getSimpleName() + \" \" + m.getParameterName())\r\n                .collect(Collectors.joining(\",\"));\r\n        return Arrays.stream(new Object[][] {\r\n                {\"status\", 400},\r\n                {\"message\", \"Required request body is missing: \" + requestBody}\r\n        }).collect(Collectors.toMap(o -> (String) o[0], o-> o[1]));\r\n    }\r\n}\r\n```\r\n\r\nWhen a client sends a request without a required body, it will receive something like:\r\n```JSON\r\n{\r\n    \"status\": 400,\r\n    \"message\": \"Required request body is missing: String name\"\r\n}\r\n```"
+      },
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-05-04T14:18:41Z",
+        "body": "@ascopes thanks for creating this issue.\r\n\r\n`ServerWebInputException` is indeed raised for different kinds of missing input, which is reflected in the message, but no easy way for an exception handler to tell what's missing and customize the message. I will experiment with adding a sub-class for `MissingRequestValueException` that exposes the `name` and `type` of the missing value where the type is just a string, e.g. \"request header\", \"cookie value\", etc. Also add a sub-class for type mismatch issues (conversion) and request body decoding issues. This should cover most cases. \r\n\r\nFor validation, I see your point about `ConstraintViolation` with a class-level `@Validated` which is handled with an AOP interceptor (independent of Spring WebFlux) vs putting the same on `@RequestBody` which is handled in WebFlux and the `ConstraintViolation` is translated to `Errors` in `SpringValidatorAdapter`. We might be able to make that more easily accessible so the same adaptation can be performed from an exception handler.\r\n\r\nNote also that for 6.0 we are making wider changes with #27052 to support problem details. This will provide more support for applications to set the response body directly from an `@ExceptionHandler` through the `ProblemDetail` type.\r\n\r\n"
+      },
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-05-04T14:19:40Z",
+        "body": "@askar882 your snippet is for Spring MVC but this issue is for WebFlux. In Spring MVC there is a wider hierarchy of exceptions that make it possible to customize on a case by case basis."
+      },
+      {
+        "author": "ascopes",
+        "created_at": "2022-05-04T14:53:35Z",
+        "body": "@rstoyanchev that sounds great! Look forward to seeing what comes of this, thanks for taking a look."
+      },
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-05-09T09:00:26Z",
+        "body": "I've added `MissingRequestValueException` which covers cases of missing \"named\" values (headers, cookies, request params, etc) and `UnsatisfiedRequestParameterException` as subclasses of `WebInputException` that also expose properties with details about the exception. For request body, I've adjusted it to raise `WebInputException` with a nested `DecoderException` which should help to signal a problem with the request body."
+      },
+      {
+        "author": "dpratsun",
+        "created_at": "2022-05-24T11:57:28Z",
+        "body": "@rstoyanchev could you please tell at which version of Spring Boot `MissingRequestValueException` can be used?"
+      },
+      {
+        "author": "wimdeblauwe",
+        "created_at": "2022-05-28T17:12:23Z",
+        "body": "What is the difference between `org.springframework.web.server.MissingRequestValueException` which was added to Spring 6 and `org.springframework.web.bind.MissingRequestValueException` which is already in Spring 5?"
+      },
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-07-13T15:38:06Z",
+        "body": "@wimdeblauwe, one depends on the Servlet API and is used in Spring MVC. The other is part of the `ResponseStatusException` hierarchy that's used in WebFlux.\r\n\r\n@dpratsun, it's available as of 6.0.0-M4."
+      },
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-10-05T14:53:28Z",
+        "body": "@ascopes, please take a look at #28814, which may further help with concerns here, especially as it relates  to \"governance prevents the exposure of the underlying implementation technology \" and the need to customize Spring MVC / WebFlux error messages.\r\n\r\n"
+      },
+      {
+        "author": "ascopes",
+        "created_at": "2022-10-05T15:07:52Z",
+        "body": "Looks good, thanks for taking this into consideration!"
+      },
+      {
+        "author": "skaba",
+        "created_at": "2022-10-24T14:53:27Z",
+        "body": "Will this be backported to Spring 5?"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5d0f49c2c8c5436c667d5ba4753febd531fe5c7d"
+      ]
+    }
+  },
+  {
+    "number": 28160,
+    "title": "Introduce RuntimeHintsRegistrar",
+    "state": "closed",
+    "created_at": "2022-03-11T08:09:33Z",
+    "updated_at": "2022-04-14T11:42:54Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28160",
+    "body": "In order to provide the possibility for registering `RuntimeHints`, the proposal is to introduce a `RuntimeHintsRegistrar` abstraction designed to address the same needs than [`BeanFactoryNativeConfigurationProcessor`](https://github.com/spring-projects-experimental/spring-native/blob/main/spring-aot/src/main/java/org/springframework/aot/context/bootstrap/generator/infrastructure/nativex/BeanFactoryNativeConfigurationProcessor.java) and [`BeanNativeConfigurationProcessor`](https://github.com/spring-projects-experimental/spring-native/blob/main/spring-aot/src/main/java/org/springframework/aot/context/bootstrap/generator/infrastructure/nativex/BeanNativeConfigurationProcessor.java) in Spring Native. It could even be used initially to register static hints as done with `@NativeHint` annotations.\r\n\r\n```\r\npackage org.springframework.beans.factory.hint;\r\n\r\npublic interface RuntimeHintsRegistrar {\r\n\r\n\tvoid registerHints(RuntimeHints hints, ListableBeanFactory beanFactory);\r\n\r\n\tdefault void ifPresent(String className, Runnable runnable) {\r\n\t\tif (ClassUtils.isPresent(className, null)) {\r\n\t\t\trunnable.run();\r\n\t\t}\r\n\t}\r\n}\r\n```\r\n\r\n\r\n\r\nThe `registerIfPresent` method is designed to provide a more discoverable mechanism to prevent `ClassNotFoundException` errors than inner classes.\r\n\r\nSince they are designed to be used only AOT, `spring.factories` is not a good fit here, so implementations could be registered via a `META-INF/spring/org.springframework.beans.factory.hint.RuntimeHintsRegistrar.imports` file with the same format than [`org.springframework.boot.autoconfigure.AutoConfiguration.imports`]( https://github.com/spring-projects/spring-boot/blob/main/spring-boot-project/spring-boot-autoconfigure/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports).",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-03-11T09:27:08Z",
+        "body": "> Since they are designed to be used only AOT, spring.factories is not a good fit here\r\n\r\nI don't necessarily disagree but it is disruptive to introduce another mechanism for that reason alone. There are many other concepts in the core container that behave differently when AOT is involved. For instance, we could imagine a class-level annotation on the type that provides some opt-in metadata that the transformer can use to ignore those entries.\r\n\r\nI am not huge fan of the `factory.hint` package. Perhaps it is a smell that something named `RuntimeHintsRegistrar` is taking the bean factory as an argument?\r\n\r\ncc @philwebb as I know he's been brainstorming on this topic as well."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "38019d224930ac7b24225b882743c574498a1f56"
+      ]
+    }
+  },
+  {
+    "number": 28189,
+    "title": "Support \"application/problem+json\" as the response Content-Type",
+    "state": "closed",
+    "created_at": "2022-03-16T18:20:15Z",
+    "updated_at": "2022-05-09T17:32:48Z",
+    "author": "rstoyanchev",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28189",
+    "body": "Once  #28187 provides `ProblemDetail` along with the `ErrorResponse` hierarchy of exceptions that encapsulate HTTP status, headers, and body, to support RFC 7807, it is also necessary to improve content negotiation and formatting specifically for error responses.\r\n\r\nIn Spring MVC it is possible to configure [content type resolution](https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-config-content-negotiation) and [message conversion](https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-config-message-converters) and likewise in WebFlux to configure [content type resolution](https://docs.spring.io/spring-framework/docs/current/reference/html/web-reactive.html#webflux-config-content-negotiation) and [message codecs](https://docs.spring.io/spring-framework/docs/current/reference/html/web-reactive.html#webflux-config-message-codecs), but those apply to both `@RequestMapping` and `@ExceptionHandler` methods. \r\n\r\nError handling however has a different perspective. The range of supported media types might be more limited and different, e.g. only `application/problem+json`. The resolution of the request content type might also be done differently, .e.g. defaulting to `application/problem+json` if not explicitly requested, or perhaps even enforcing it.\r\n\r\nSuch a mechanism is also a convenient place for other configuration related to how `ProblemDetail` should be rendered..\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-05-09T17:29:29Z",
+        "body": "On closer investigation, this can be handled transparently as follows.\r\n\r\nMessage converters and encoders indicate a preference for `application/problem+json` when `ProblemType` is serialized. This ensures `application/problem+json` is preferred when the client is flexible or has no preference.\r\n\r\nIf content negotiation fails to find an acceptable media type for serializing `ProblemDetail`, we try again with `application/problem+json` and `application/problem+xml` as the acceptable media types, in effect enforcing a fallback for `ProblemDetail`. \r\n"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8378af9e397afe6bf5d91d16a22edf69912af408",
+        "78ab4d711812c754dc8a9b3021805899bfc5c9fe"
+      ]
+    }
+  },
+  {
+    "number": 28190,
+    "title": "Enable access to an RFC 7807 ProblemDetail formatted error response from the client side",
+    "state": "closed",
+    "created_at": "2022-03-16T18:36:33Z",
+    "updated_at": "2022-05-10T10:49:42Z",
+    "author": "rstoyanchev",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28190",
+    "body": "Currently `WebClientResponseException` exposes the body as a `byte[]` or `String` and so does `RestClientResponseException`. It would be useful if these exposed convenience methods to decode an RFC 7807 formatted response to `ProblemDetail`. \r\n\r\nThe exceptions could be created with a `Callable<ProblemDetail>` or similar to decouple them from the details of decoding, or perhaps the decoding could be done automatically for such a response and the ProblemDetail passed in to the exception.",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "64795664b2ce928c3c86367a88b7a4eebac84491",
+        "922636e85e7acb66bca1b39e8c18e88f9111913b"
+      ]
+    }
+  },
+  {
+    "number": 28198,
+    "title": "Remove obsolete org.springframework.core.NestedIOException",
+    "state": "closed",
+    "created_at": "2022-03-18T15:53:05Z",
+    "updated_at": "2022-08-05T07:39:23Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28198",
+    "body": "Spring's custom `org.springframework.core.NestedIOException` is obsolete and can be replaced with standard `IOException` usage.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "jingxiang",
+        "created_at": "2022-08-05T03:33:59Z",
+        "body": "Why not mark as  Deprecated ? \r\nAs far as I know, this class involves many downstream dependencies, and direct deletion may lead to the unavailability of many frameworks.\r\nFor example：mybatis-spring-boot:2.2.2\r\n\r\n`Caused by: java.lang.NoClassDefFoundError: org/springframework/core/NestedIOException\r\n\tat org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration.sqlSessionFactory(MybatisAutoConfiguration.java:141)\r\n\tat org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration$$EnhancerBySpringCGLIB$$fde06b8c.CGLIB$sqlSessionFactory$2(<generated>)\r\n\tat org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration$$EnhancerBySpringCGLIB$$fde06b8c$$FastClassBySpringCGLIB$$8baa1e6e.invoke(<generated>)\r\n\tat org.springframework.cglib.proxy.MethodProxy.invokeSuper(MethodProxy.java:244)`"
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2022-08-05T07:39:22Z",
+        "body": "@jingxiang this is a good point, `NestedIOException` should have been marked as deprecated in `5.3.x`. I've created #28929. If you're working on mybatis, please update the code to catch `IOException` directly. If you don't, can you please create an issue to notify them? Thanks!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "7f501fabcba647b5fd05eec453b987c1310b3de5",
+        "497818049ca329951a90004250a76299c8d12b7a",
+        "855cd236a05579638f058a82ce19518b0d8a7eb1",
+        "f0a4f5c66eb8606077a3d1ed8b47bbaf98a8ff8c",
+        "0dc68a1fb9f3856c62b93e8b2bbae91e089b002f",
+        "5996a3c0f4317bb4c0db4f3c69f813a521aaceca",
+        "8e5174b0be8b6ca79e426d969927aace0f003d15",
+        "190eee019f60d8e740476e35220110b84a7154b7",
+        "2fb1dd177b7b056f30a9de0739d8afdef37d72aa",
+        "8032af9c3367c55f5d7bdb93cf7d6d45ee9c2df4",
+        "8f68dc59ad7cf751ed056ed24ff048dc0d47da36",
+        "5bff7c041757ec0bcf3f42cd8057686bb0597a73",
+        "f15c324cd4fa7d32889d8e775e7afe795122559a",
+        "a14388a3a448a41ed6783fa53897e3bf0eb265d9",
+        "2ab6698372b6afe09beae332160e665d550e4ca7",
+        "9841b9758f0995c34d9e2445b03d7a18cbf40dfa",
+        "91ec9521052221234fdb143d0b425fe52bf14512",
+        "eb576df1f9454a4392a85c9fd5374fc4f8d8f3c9",
+        "d4bcfd9a746e0155f2929ad7225c29ca68fa7c8d",
+        "23c854ad0cc461992c5f76f53cd83fbcbf6c0e8a",
+        "d8aafdafffc4eb3e7380dc4e20f78545b6324c38",
+        "78ab75ca40494bb9dd1efed14822bd2a548177cf",
+        "3c294246b6581504b2402e0dcc9d24b0b0f7129f"
+      ]
+    }
+  },
+  {
+    "number": 28202,
+    "title": "Determine why previous isolation level is never set in R2dbcTransactionManager",
+    "state": "closed",
+    "created_at": "2022-03-20T12:15:47Z",
+    "updated_at": "2022-03-21T15:30:03Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28202",
+    "body": "## Overview\r\n\r\nCurrently, the `previousIsolationLevel` is never set in `R2dbcTransactionManager.ConnectionFactoryTransactionObject`; however, there is code in place to read the previous isolation level in `R2dbcTransactionManager.doCleanupAfterCompletion(TransactionSynchronizationManager, Object)`.\r\n\r\n## Deliverables\r\n\r\n- [x] Determine why `previousIsolationLevel` is never set.\r\n- [x] Introduce code to set the `previousIsolationLevel` if appropriate; otherwise, delete all code related to `previousIsolationLevel`.",
+    "labels": [
+      "in: data",
+      "type: task"
+    ],
+    "comments": [
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-20T12:16:42Z",
+        "body": "@mp911de, can you please take a look at this?"
+      },
+      {
+        "author": "mp911de",
+        "created_at": "2022-03-21T09:04:05Z",
+        "body": "`previousIsolationLevel` should have been removed with the R2DBC 0.9 upgrade, it's an oversight.\r\n\r\nBefore R2DBC 0.9, we set and reset the Isolation Level on the connection (same as with JDBC). With R2DBC 0.9, if we set the Isolation Level, then the isolation level is only valid for the duration of a transaction and we expect the driver to reset the Isolation Level after the transaction. This is part of the `begin(TransactionDefinition)` contract."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-21T15:17:42Z",
+        "body": "Thanks for the feedback and explanation, @mp911de.\r\n\r\nI'll remove the obsolete code."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "fae36e98b4c3d72941e3f209a87047332ff51ba1"
+      ]
+    }
+  },
+  {
+    "number": 28207,
+    "title": "Introduce predicate for searching enclosing classes in MergedAnnotations",
+    "state": "closed",
+    "created_at": "2022-03-21T16:28:20Z",
+    "updated_at": "2022-03-24T14:44:09Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28207",
+    "body": "## Overview\r\n\r\nDue to the deprecation of `SearchStrategy.TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` (see #28079), we will introduce a way for users to provide a `Predicate<Class<?>>` that is used to decide when the enclosing class for the class supplied to the predicate should be searched.\r\n\r\nThis will give the user complete control over the \"enclosing classes\" aspect of the search algorithm in `MergedAnnotations`.\r\n\r\n- To achieve the same behavior as `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES`, a user can provide `clazz -> true` as the predicate.\r\n- To limit the enclosing class search to inner classes, a user can provide `ClassUtils::isInnerClass` as the predicate.\r\n- To limit the enclosing class search to static nested classes, a user can provide `ClassUtils::isStaticClass` as the predicate.\r\n- For any other use case (such as in `TestContextAnnotationUtils` in `spring-test`), the user can provide a custom predicate.\r\n\r\n## Proposal\r\n\r\nBased on the outcome of #28208, a `searchEnclosingClass` predicate could be supplied when using the `TYPE_HIERARCHY` search strategy as follows.\r\n\r\n```java\r\nMergedAnnotations annotations = MergedAnnotations\r\n    .search(SearchStrategy.TYPE_HIERARCHY)\r\n    .withEnclosingClasses(ClassUtils::isInnerClass)\r\n    .from(myClass);\r\n```\r\n\r\nBy limiting when a `searchEnclosingClass` predicate can be supplied in the fluent search API, we can prevent users from trying to supply such a predicate for other `SearchStrategy` types.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-21T16:44:10Z",
+        "body": "Blocked until #28208 is implemented"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c23edf7da6c403eeedb862e02b9a7293cfba38a1",
+        "1fe394f11d7ab7f328402a04d13f4d12a89a9f87",
+        "23d0240dc724ddeacba5b5e84ce5c5f08e5d3dc3"
+      ]
+    }
+  },
+  {
+    "number": 28208,
+    "title": "Introduce fluent API for search options in MergedAnnotations",
+    "state": "closed",
+    "created_at": "2022-03-21T16:43:40Z",
+    "updated_at": "2022-03-22T19:04:35Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28208",
+    "body": "## Overview\r\n\r\nInspired by the requirements for implementing #28207, we have decided to introduce a fluent API for search options in [`MergedAnnotations`](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/annotation/MergedAnnotations.html).\r\n\r\nThe following is an example of how one would supply search options using the existing API.\r\n\r\n```java\r\nMergedAnnotations annotations = MergedAnnotations.from(myClass, SearchStrategy.TYPE_HIERARCHY,\r\n\t\tRepeatableContainers.of(MyRepeatable.class, MyRepeatableContainer.class),\r\n\t\tmyCustomAnnotationFilter);\r\n```\r\n\r\n## Proposal\r\n\r\nFor each strategy in [`SearchStrategy`](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/annotation/MergedAnnotations.SearchStrategy.html), we will introduce a corresponding `find*()` method that starts the fluent API. Methods such as `usingRepeatableContainers()` and `withAnnotationFilter()` will be optional. The fluent API culminates with an invocation of `from(...)` which performs the search and returns the `MergedAnnotations` instance.\r\n\r\nWith a fluent API, the above can be rewritten as follows.\r\n\r\n```java\r\nMergedAnnotations annotations = MergedAnnotations\r\n    .findAnnotationsInTypeHierarchy()\r\n    .usingRepeatableContainers(RepeatableContainers.of(MyRepeatable.class, MyRepeatableContainer.class))\r\n    .withAnnotationFilter(myCustomAnnotationFilter)\r\n    .from(myClass);\r\n```\r\n\r\nFor a less involved use case that relies on the defaults for repeatable containers and filtering, the code would reduce to the following.\r\n\r\n```java\r\nMergedAnnotations annotations = MergedAnnotations.findAnnotationsInTypeHierarchy().from(myClass);\r\n```\r\n\r\n",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-22T11:56:21Z",
+        "body": "After putting more thought into this, I wonder if it's best to end the fluent API with `from(...)` instead of a verb or command like `search(...)`, `searchFrom(...)`, etc.\r\n\r\n`MergedAnnotations` already has various `from(...)` and `on(...)` methods, so the new fluent API cannot start with either of those.\r\n\r\n@philwebb recommended all new factory methods in `MergedAnnotations` start with the same prefix to make them easily discoverable, which of course makes a lot of sense. So we were thinking of `find*` and `search*` as a reasonable, meaningful prefix for these new methods.\r\n\r\nHowever, if the final action in the fluent API is a method named `search*(...)`, it seems a bit odd to have the first method called `find*(...)` or `search*(...)`.\r\n\r\nSo, another idea I'm tinkering with is starting with a single static factory method for \"search options\" like this:\r\n\r\n```java\r\nMergedAnnotations annotations = MergedAnnotations.searchOptions()\r\n\t.typeHierarchy()\r\n\t.repeatableContainers(myRepeatableContainers)\r\n\t.annotationFilter(myCustomAnnotationFilter)\r\n\t.search(myClass);\r\n```\r\n\r\nOne additional (unplanned) benefit of that is that the `SearchOptions` \"builder\" instance could actually be saved and reused to perform `.search(...)` on different classes/methods. However, I'm not sure how useful that would be in practice."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-22T15:06:56Z",
+        "body": "Current proposal, based on brainstorming sessions and taking #28207 into account:\r\n\r\n```java\r\nMergedAnnotations\r\n\t.search(searchStrategy)\r\n\t.withEnclosingClasses(ClassUtils::isInnerClass)\r\n\t.withRepeatableContainers(repeatableContainers)\r\n\t.withAnnotationFilter(annotationFilter)\r\n\t.from(myClass);\r\n```"
+      },
+      {
+        "author": "philwebb",
+        "created_at": "2022-03-22T15:29:51Z",
+        "body": "Ha, I was about to suggest this :)\r\n\r\n```java\r\nMergedAnnotations\r\n\t.searching(searchStrategy)\r\n\t.withEnclosingClasses(ClassUtils::isInnerClass)\r\n\t.withRepeatableContainers(repeatableContainers)\r\n\t.withAnnotationFilter(annotationFilter)\r\n\t.from(myClass);\r\n```"
+      },
+      {
+        "author": "philwebb",
+        "created_at": "2022-03-22T15:31:20Z",
+        "body": "I think convenience search methods are also worth considering. `SearchStrategy` tends to be one of the more common things to want to define.\r\n\r\n```java\r\nMergedAnnotations.searchingTypeHierarchy().with...().from(myClass)\r\n```"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-22T15:52:49Z",
+        "body": "> I think convenience search methods are also worth considering.\r\n\r\nWe definitely considered that approach, but the choice of meaningful (_and_ concise) names becomes challenging for any `SearchStrategy` other than `TYPE_HIERARCHY`.\r\n\r\n```java\r\nMergedAnnotations\r\n\t// .searchDirect()\r\n\t// .searchInheritedAnnotations()\r\n\t// .searchSuperclass()\r\n\t.searchTypeHierarchy()\r\n\t.withEnclosingClasses(ClassUtils::isInnerClass)\r\n\t.withRepeatableContainers(repeatableContainers)\r\n\t.withAnnotationFilter(annotationFilter)\r\n\t.from(myClass);\r\n```\r\n\r\nThe above seems too vague, and the following seems too verbose.\r\n\r\n```java\r\nMergedAnnotations\r\n\t// .findDirectlyDeclaredAnnotations()\r\n\t// .findInheritedAnnotations()\r\n\t// .findSuperclassAnnotations()\r\n\t.findAnnotationsInTypeHierarchy()\r\n\t.withEnclosingClasses(ClassUtils::isInnerClass)\r\n\t.withRepeatableContainers(repeatableContainers)\r\n\t.withAnnotationFilter(annotationFilter)\r\n\t.from(myClass);\r\n```\r\n\r\nIn the end, @jhoeller and I decided that it's probably best to let the user supply a `SearchStrategy` and rely on the documentation for those enum constants to _explain_ things, since people are accustomed to the increasing scope of the strategies in the context of enums; whereas, it becomes a bit more cumbersome to infer that increasing scope based solely on method names like the ones in the two preceding examples.\r\n\r\nBut... if you have better ideas for how to name all 4 convenience methods, by all means speak up. 👍 \r\n"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c23edf7da6c403eeedb862e02b9a7293cfba38a1"
+      ]
+    }
+  },
+  {
+    "number": 28212,
+    "title": "Fix queriedMethods handling in ReflectionHintsSerializer",
+    "state": "closed",
+    "created_at": "2022-03-22T08:56:39Z",
+    "updated_at": "2022-03-22T09:00:41Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28212",
+    "body": "As discovered by @snicoll, serialiation of `queriedMethods` is broken when there is no `methods`.\r\n```json\r\n[\r\n  {\r\n    \"name\": \"com.example.nativex.sample.basic.SampleConfiguration\"\r\n    \"queriedMethods\": [\r\n      {\r\n        \"name\": \"testBean\",\r\n        \"parameterTypes\": []\r\n      }\r\n    ]\r\n  }\r\n]\r\n```",
+    "labels": [
+      "type: bug",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "1ffc96be8c455cd3bdfd7193d1f9cef45fa31aa8",
+        "e7e843cae2d3303a0e2d09d8a64f14ebbf314c00"
+      ]
+    }
+  },
+  {
+    "number": 28213,
+    "title": "Throw a meaningful exception if a TypeReference does not use a fully qualified name",
+    "state": "closed",
+    "created_at": "2022-03-22T09:16:00Z",
+    "updated_at": "2022-03-22T12:31:51Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28213",
+    "body": "`TypeReference.of(\"int\")` fails because a dot is expected in the type name.\r\n\r\n```\r\nbegin 0, end -1, length 3\r\njava.lang.StringIndexOutOfBoundsException: begin 0, end -1, length 3\r\n\tat java.base/java.lang.String.checkBoundsBeginEnd(String.java:4601)\r\n\tat java.base/java.lang.String.substring(String.java:2704)\r\n\tat org.springframework.aot.hint.SimpleTypeReference.createTypeReference(SimpleTypeReference.java:60)\r\n\tat org.springframework.aot.hint.SimpleTypeReference.of(SimpleTypeReference.java:48)\r\n\tat org.springframework.aot.hint.TypeReference.of(TypeReference.java:75)\r\n```",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-03-22T11:53:38Z",
+        "body": "Ignoring the exception, this is the expected behaviour. Fully qualified name is expected as an input here so it should be `TypeReference.of(\"java.lang.int\")`."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "52d545238102c51f4f4d4227e4db6084aa4e2091"
+      ]
+    }
+  },
+  {
+    "number": 28214,
+    "title": "Introduce HttpStatusCode interface",
+    "state": "closed",
+    "created_at": "2022-03-22T11:00:49Z",
+    "updated_at": "2023-01-26T16:57:44Z",
+    "author": "poutsma",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28214",
+    "body": "According to [the HTTP specification](https://datatracker.ietf.org/doc/html/rfc2616#section-6.1.1), the HTTP response status can be any 3-digit integer. \r\n\r\nIn Spring Framework, the HTTP status codes are enumerated in `HttpStatus`. Because this type is a Java `enum`, we need to have workarounds to allow for status codes not in the enum. For instance, the `ClientHttpResponse` interfaces offers both `getStatusCode` as well as `getRawStatusCode`, as does WebClient's `ClientResponse`, and we have similar workarounds in other places.\r\n\r\nWe cannot change `HttpStatus` from a enum to a class like we did for `HttpMethod` in #27697, because `HttpStatus` is used in the `ResponseStatus` annotation, where class instances can not be used as values.\r\n\r\n@philwebb suggested that we can introduce a new interface `HttpStatusCode`, which is implemented by `HttpStatus`. Code that currently returns a `HttpStatus` will return this new `HttpStatusCode` instead, and we will deprecate the methods that return the raw status codes. All methods that *accepts* the raw integer values will still be available, we will only deprecate the integer returning methods.\r\n\r\nInstances of the `HttpStatusCode` are obtained via static `valueOf(int)` factory method, which returns a `HttpStatus` enum entry if one is available for the given integer, and a default implementation otherwise. This way, we can assure that `HttpStatus`  instance comparisons  (i.e. `if (statusCode == HttpStatus.OK)`) will keep working as they currently do.\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f49de92ac042b847b9d50bc5e9c606471383213a",
+        "28ac0d3883e0c683fb995dffc0af7c8a82f3c3d0",
+        "ca4b6e86a4dd7f278049a6d91196d817c7953c43",
+        "05df42c58aa7d094d2b49b783bb525c8013ae93d"
+      ]
+    }
+  },
+  {
+    "number": 28244,
+    "title": "Initialize NativeDetector at build time",
+    "state": "closed",
+    "created_at": "2022-03-29T06:47:07Z",
+    "updated_at": "2022-03-29T06:56:54Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28244",
+    "body": "In order to allow code removal with constructs like `if (NativeDetector.inNativeImage()) { ... } else { ... }`, `NativeDetector` needs to be initialized at build time. `-H:+InlineBeforeAnalysis` is enabled by default as of GraalVM 21.3 so no further configuration is needed.\r\n\r\nSince build time initialization is not necessarily something we want to expose in public APIs, embedding a `spring-core/src/main/resources/META-INF/native-image/org.springframework/spring-core/native-image.properties` file for that purpose is the solution chosen for now.",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "cdb2463dc88b721dd28845433f03ec6ed2cf5386",
+        "04b1b5d96e320a90961091cd9552dde8f78d9589",
+        "e681e713d4aa75be988d77f0108f80ecf15e21e9",
+        "c6115619ebf15b89d048997944d7d0f516f49e2c",
+        "ff02c787372431af9ca5a936d41f9f383c33af45"
+      ]
+    }
+  },
+  {
+    "number": 28291,
+    "title": "Add support for HEAD methods in Spring's Resource handling",
+    "state": "closed",
+    "created_at": "2022-04-06T13:08:05Z",
+    "updated_at": "2022-04-07T11:53:29Z",
+    "author": "hannosgit",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28291",
+    "body": "<!--\r\n!!! For Security Vulnerabilities, please go to https://spring.io/security-policy !!!\r\n-->\r\n**Affects:**  Spring Web 5.3.18\r\n**Tested with:** Tomcat and Jetty\r\n**Tested with:** Linux and Windows\r\n\r\n---\r\n\r\nI want to download large files (>10GB) from a Spring Web Server, before I start the download I want to know the size of the remote file, so, therefore, I make a HEAD request on the remote file.\r\n\r\nStatic files are served via ResourceHandlers, eg.\r\n\r\n``` Java\r\n@Configuration\r\npublic class MvcConfig implements WebMvcConfigurer {\r\n\r\n    @Override\r\n    public void addResourceHandlers(ResourceHandlerRegistry registry) {\r\n        registry\r\n            .addResourceHandler(\"/**\")\r\n            .addResourceLocations(\"file:download/\");\r\n    }\r\n\r\n}\r\n```\r\n\r\nand then when I make a HEAD request on a large file (> 10 GB), on the first try I get the response within milliseconds but when I try again the response takes seconds ( >10s).\r\n\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "poutsma",
+        "created_at": "2022-04-07T11:34:00Z",
+        "body": "The underlying reason for this is that resource handling in Spring MVC (and WebFlux) does not have explicit support for `HEAD` methods yet. Instead, we treat the request as a `GET`, write the entire file to the body, and rely on the standard `HttpServlet::doHead` functionality to ignore everything written.\r\n\r\nI will introduce `HEAD` support in `ResourceHttpRequestHandler` and `ResourceWebHandler`."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5fc8a9839cb22b960d05d8e9b94d69ceb4297062",
+        "9adfa5e8b0f0cd65a0b14740e0a0f9832d80edcb"
+      ]
+    }
+  },
+  {
+    "number": 28312,
+    "title": "GraalVM reflect config uses wrong format for inner classes",
+    "state": "closed",
+    "created_at": "2022-04-10T08:01:25Z",
+    "updated_at": "2022-04-11T18:53:14Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28312",
+    "body": "If we have a reflection hint for an inner class, GraalVM expects us to use a `$` to separate the parent from the inner class. Unfortunately, the serializer uses a `.` (canonical name).\r\n\r\n",
+    "labels": [
+      "type: bug",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "069aab37cd4392a6419148e37721ca4bdb748b1c"
+      ]
+    }
+  },
+  {
+    "number": 28328,
+    "title": "Work around the fact that GraalVM detects that DataSize is safe to initialize at build time",
+    "state": "closed",
+    "created_at": "2022-04-12T09:08:53Z",
+    "updated_at": "2022-06-03T14:53:01Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28328",
+    "body": "Building a simple command-line leads to: \r\n\r\n```\r\nError: Classes that should be initialized at run time got initialized during image building:\r\n org.springframework.util.unit.DataSize was unintentionally initialized at build time. To see why org.springframework.util.unit.DataSize got initialized use --trace-class-initialization=org.springframework.util.unit.DataSize\r\n\r\ncom.oracle.svm.core.util.UserError$UserException: Classes that should be initialized at run time got initialized during image building:\r\n org.springframework.util.unit.DataSize was unintentionally initialized at build time. To see why org.springframework.util.unit.DataSize got initialized use --trace-class-initialization=org.springframework.util.unit.DataSize\r\n\r\n\tat com.oracle.svm.core.util.UserError.abort(UserError.java:73)\r\n\tat com.oracle.svm.hosted.classinitialization.ConfigurableClassInitialization.checkDelayedInitialization(ConfigurableClassInitialization.java:555)\r\n\tat com.oracle.svm.hosted.classinitialization.ClassInitializationFeature.duringAnalysis(ClassInitializationFeature.java:167)\r\n\tat com.oracle.svm.hosted.NativeImageGenerator.lambda$runPointsToAnalysis$10(NativeImageGenerator.java:704)\r\n\tat com.oracle.svm.hosted.FeatureHandler.forEachFeature(FeatureHandler.java:74)\r\n\tat com.oracle.svm.hosted.NativeImageGenerator.lambda$runPointsToAnalysis$11(NativeImageGenerator.java:704)\r\n\tat com.oracle.graal.pointsto.PointsToAnalysis.runAnalysis(PointsToAnalysis.java:755)\r\n\tat com.oracle.svm.hosted.NativeImageGenerator.runPointsToAnalysis(NativeImageGenerator.java:702)\r\n\tat com.oracle.svm.hosted.NativeImageGenerator.doRun(NativeImageGenerator.java:537)\r\n\tat com.oracle.svm.hosted.NativeImageGenerator.run(NativeImageGenerator.java:494)\r\n\tat com.oracle.svm.hosted.NativeImageGeneratorRunner.buildImage(NativeImageGeneratorRunner.java:426)\r\n\tat com.oracle.svm.hosted.NativeImageGeneratorRunner.build(NativeImageGeneratorRunner.java:587)\r\n\tat com.oracle.svm.hosted.NativeImageGeneratorRunner.main(NativeImageGeneratorRunner.java:126)\r\n\tat com.oracle.svm.hosted.NativeImageGeneratorRunner$JDK9Plus.main(NativeImageGeneratorRunner.java:617)\r\n```\r\n\r\nThis looks wrong and could be addressed in Graal. In the meantime we'll add a flag to prevent that from happening.",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "92f8ab774f6616a2c47b91ec74a95f96c596b954",
+        "64570a85b3db389b1e8c12b22ac61c867d1cc94c"
+      ]
+    }
+  },
+  {
+    "number": 28339,
+    "title": "Allow to register reflection hints for multiple types at once",
+    "state": "closed",
+    "created_at": "2022-04-14T08:08:25Z",
+    "updated_at": "2022-04-14T08:23:16Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28339",
+    "body": "There is a recurrent pattern that some classes share the same hints and the API does not offer a shortcut to register those on multiple types at once..\r\n\r\ncc @christophstrobl",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5be6b3d2a7ed4f1ad980ae02cb8c3cf0a6a616b4"
+      ]
+    }
+  },
+  {
+    "number": 28342,
+    "title": "Allow to register AotContributingBeanFactoryPostProcessor declaratively",
+    "state": "closed",
+    "created_at": "2022-04-14T13:09:28Z",
+    "updated_at": "2022-04-14T13:14:01Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28342",
+    "body": "`RuntimeHintsPostProcessor` is one of its kind. There are actually more needs like this. ",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "7820804bf6d07635d6f28c607ecde9243db4628f"
+      ]
+    }
+  },
+  {
+    "number": 28347,
+    "title": "Reflection configuration for primitives have wrong name",
+    "state": "closed",
+    "created_at": "2022-04-15T09:45:05Z",
+    "updated_at": "2022-04-15T09:48:22Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28347",
+    "body": "The json writer does not handle reflection target name properly for primitives. `java.lang.double` is generated instead of `double` for instance. This leads to warning when building a native image and those hints are obviously not taken into account.",
+    "labels": [
+      "type: bug",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f40a391916ed6c1f9e1130638a0bf19479e514dd"
+      ]
+    }
+  },
+  {
+    "number": 28363,
+    "title": "MultiStatement#toCodeBlock should be name toLambdaBody",
+    "state": "closed",
+    "created_at": "2022-04-21T13:06:54Z",
+    "updated_at": "2022-04-25T09:03:42Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28363",
+    "body": "`toCodeBlock` is confusing as it is heavily tailored for adding the code in the context of a lambda. We could use a `toCodeBlock` that actually creates a regular multi-statements code block.",
+    "labels": [
+      "type: task",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d7391b13ab48535d39bc9e5a66847ae9e8e976e7",
+        "10d254983f78a3faf190ec6fa32b648beda82827"
+      ]
+    }
+  },
+  {
+    "number": 28364,
+    "title": "AOT contribution for `@PersistenceContext` and `@PersistenceUnit`",
+    "state": "closed",
+    "created_at": "2022-04-21T13:26:50Z",
+    "updated_at": "2023-10-16T11:25:03Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28364",
+    "body": "We don't process those at the moment.",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "7ef34b0949f9afea78b84fae4b146a9b9b826266",
+        "3e2ab2dee8c4e218770f1ab69ceda38dc6d84b97",
+        "26054fd3d4aba89474f2173c7be44db6937aaf51"
+      ]
+    }
+  },
+  {
+    "number": 28383,
+    "title": "Generate appropriate AOT bean registration for scoped proxies",
+    "state": "closed",
+    "created_at": "2022-04-26T11:33:50Z",
+    "updated_at": "2022-04-26T13:15:58Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28383",
+    "body": "`ScopedProxyFactoryBean` are not handled property in an AOT optimized  context. As a result, such a bean cannot be injected properly.",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f64fc4baff2625192aff02e0d192b1c678384eae"
+      ]
+    }
+  },
+  {
+    "number": 28384,
+    "title": "BeanRegistrationContributionProvider should have access to the bean factory",
+    "state": "closed",
+    "created_at": "2022-04-26T11:54:53Z",
+    "updated_at": "2022-04-26T13:15:58Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28384",
+    "body": "",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "7ea0cc3da2863c20e544d68f29edc3f66c1d1b13"
+      ]
+    }
+  },
+  {
+    "number": 28386,
+    "title": "Support to Create a Proxy From an Annotated HTTP Service Interface",
+    "state": "closed",
+    "created_at": "2022-04-26T17:03:42Z",
+    "updated_at": "2022-05-09T08:53:13Z",
+    "author": "rstoyanchev",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28386",
+    "body": "This has been raised before, see #16747 and related (duplicate) issues, but was done under Spring Cloud instead, first as an [OpenFeign integration](https://github.com/spring-cloud/spring-cloud-openfeign) and more recently as a [Retrofit integration](https://github.com/spring-projects-experimental/spring-cloud-square).\r\n\r\nThe goal for this issue is first class support in the Spring Framework to create a client proxy from an annotated, HTTP service interface, since it is more generally applicable. Spring Cloud can then provide additional features around that. The same is also planned for RSocket with #24456. \r\n\r\nMethods on such an HTTP service interface will support many of the same [method arguments](https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-ann-arguments) as for server side handling with `@RequestMapping` methods, but narrowing the choice down to those arguments that apply to both client and server side use. On the client side, argument values are used to populate the request, while on the server side, argument values are extracted from the request.\r\n\r\nMethods of the HTTP service interface will require a new annotation, similar in purpose to `@RequestMapping`, but to declare an HTTP exchange in a way that is neutral to client or server perspective.\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d2b674391a01c4b4cc8424466e4cea5ef8167f35",
+        "bb44c0e13a2b0cb3e808f5b184ea7c7a1bcd63b1",
+        "8a46e968751f566b3bc87623bc0a2957789d47ce",
+        "7797453f2861c3eb64a869199ce8b9f95df76207",
+        "4bddbd30c4c5200b8e3e44d4b86ad26cfdd6fa76",
+        "d7ab5b41327aa41e975fb82da57ac29855cc2dba",
+        "62ab360f64b57b2679f19a1dd9eb13d317c6e40e",
+        "a8c3c746afe7242d79713ba12f4696a5df81e801",
+        "2d2726b8f77d7139c2dfdd0e4c0bc1b7591282d7",
+        "2794553d2e12a7c74f7654fc093bcfc93de1723d",
+        "b1384ddafa9c6aac76312c103ba69c901f7b75f1",
+        "564f8ba7a005de1ef1c6484d3f36a120e500005e",
+        "c2a008fc22df64cc6ee5e1f69c1a8069dedcfa5e",
+        "c418768f05751b791434abb43a9ee6e68467b96e"
+      ]
+    }
+  },
+  {
+    "number": 28392,
+    "title": "FormHttpMessageConverter should not have a dependency on the Jakarta Mail API",
+    "state": "closed",
+    "created_at": "2022-04-28T07:55:58Z",
+    "updated_at": "2022-05-02T12:48:33Z",
+    "author": "jomastel",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28392",
+    "body": "When working with `multipartCharset` the `FormHttpMessageConverter` uses the `MimeUtility.encodeText` method.\r\nThis forces a dependency for sending email inside a HTTP converter. \r\nIn our case, we now need to import `org.springframework.boot:spring-boot-starter-mail` to fix this dependency.\r\n\r\nCould an alternative import be used here to avoid such dependencies in the case of `Content-Type` `multipart`? \r\nWe found this issue when using a simple REST API.",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "poutsma",
+        "created_at": "2022-04-28T09:18:17Z",
+        "body": "The dependency to `MimeUtility` was [introduced in 2014](https://github.com/spring-projects/spring-framework/commit/9be0cf21e5d3537d2415fea5eaea152e7407d45b). In 2016, we [introduced the `Content-Disposition` type](https://github.com/spring-projects/spring-framework/commit/99a8510ace46af9b05b822e7c65f08aae885ca98), with its own MIME encoding logic in `encodeFilename`.\r\n\r\nI will drop the call to `MimeUtility.encodeText` in favor of the mechanism in `Content-Disposition` as of 6.0 M4. This means that we will move from using RFC 2047 to RFC 5987 for filename parameters, as we already do in Spring WebFlux' multipart support."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "217117ced04da7e68d171c09b103bf1e91536a09"
+      ]
+    }
+  },
+  {
+    "number": 28400,
+    "title": "Support for Jakarta Concurrency 3.0",
+    "state": "closed",
+    "created_at": "2022-04-29T23:23:14Z",
+    "updated_at": "2022-05-05T15:28:24Z",
+    "author": "jhoeller",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28400",
+    "body": "Jakarta EE 10 includes several significant additions to the Jakarta Concurrency API, including a `jakarta.enterprise.concurrent.Asynchronous` annotation similar to EJB's `jakarta.ejb.Asynchronous` which we detect as well. When the Jakarta Concurrency 3.0 API is present at runtime, we should aim for consistent auto-adapting.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "0f6d459de78f2c2cfc1410bc4f3859175f5ebf92"
+      ]
+    }
+  },
+  {
+    "number": 28414,
+    "title": "Refactor AOT code to reduce coupling and improve generated code",
+    "state": "closed",
+    "created_at": "2022-05-05T06:13:02Z",
+    "updated_at": "2022-05-05T20:35:49Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28414",
+    "body": "We'd like to refactor some of our current AOT code to reduce coupling and to improve the generated code.",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b1e95655819e79830fcd3912a2226f1387de16bf",
+        "c1b4e18ccb5b3b8c77633d5e28b105706b3d2ace",
+        "6c04c10c8cca863597bdd31b55a83ea29cf7c65d",
+        "b063118ab26a51862c8968462754bc6ef03c10cc",
+        "5c8c515a515b5f1735c17a4f3678e3206638f1dd",
+        "033e4997437384c73856887f6216caca3a3e38c7",
+        "bb5d8740094f6b8f0a7a41e7ddf2dbba6edcd626",
+        "b33953cf6cbdd546e84d227e9d464f96d6081e82",
+        "7b4baec9531e4d84fe79cdcaad7e2e96a408502a",
+        "b99bd0b432e27464599936706c4c08b11de90803",
+        "746eb634eeb60108fe4c1b8a737d5a720b0e7521",
+        "af8031007c351e0c971c25bbdee0db9044c3548d",
+        "4e8987c52543a2519bf244b1e90f241e45e50e5d",
+        "f3b66ed4d6951144ef10c93dc532362e0f2c028e",
+        "9731f213a09fa7732b666cde0c28738fa107f51b",
+        "8f1ec4311dd480423b1f9a2124f6356abc0169f9",
+        "c39a2638abaaf4f3546165559e64df529d76679b",
+        "73ef9e84b1c6c8e4e70ccb7ecdd31b4dfdd70aaa",
+        "3c74cb803041c49931ac25cbfd913247814f3a30",
+        "83089e0eaf18b4c288132de68d44053aee83036e",
+        "e3647bcd6c16e121e75fd7bc9d9669cfe34256db",
+        "4a057a7287e876ea76afd0cdd7d30319c481d55c",
+        "c4094192e97af9618a12149756d10dda8e6d271a",
+        "d4846861af7df3e78a1fffbaba4f2ea7d99d12a1",
+        "883e79a2008b2931c931f6aabd515b9dd43f3907",
+        "504f3f26a933ee7a99977ef96a54a17e3f51bae5",
+        "e1ae0c065cf3c862ecce34b6418e880598b70321"
+      ]
+    }
+  },
+  {
+    "number": 28415,
+    "title": "Add position variant of ObjectUtils.addObjectToArray",
+    "state": "closed",
+    "created_at": "2022-05-05T06:15:20Z",
+    "updated_at": "2022-05-05T20:35:47Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28415",
+    "body": "Currently `ObjectUtils.addObjectToArray` only allows you to add an element to the end of the array. With #28414 we need to add an element to the start.\r\n",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d97ae4ac52e7a2c024515aa0b58a9afb73ebb253",
+        "f3e669754170d8617360fe3608b890aee482b444",
+        "f17372ebea338a474947beaabae61a6e71f4d678",
+        "b7b52b8076b6c4ce2c6285d43142ecd0510f7ddd"
+      ]
+    }
+  },
+  {
+    "number": 28416,
+    "title": "Support multiple SpringFactoriesLoader files",
+    "state": "closed",
+    "created_at": "2022-05-05T06:18:07Z",
+    "updated_at": "2022-05-05T20:35:47Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28416",
+    "body": "For AOT we'd like to be able to load a `META-INF/spring/aot.factories` files rather than `META-INF/spring.factories`.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "103b911fc43c0385c8cafbee5010c423c953392f",
+        "4cebd9d3926a0208ffdc28cea04243e8ed97f023",
+        "d30e6bf647348651c3b3fc95396e9985c5e3c283",
+        "58c441f9610b14569907059d5d0ca64975fe7653",
+        "3a83ec1aa8d330bafb53f1e613b18e34f23b29f7",
+        "b784dfe4172d998d7eb96f268e4f92d82f2eafc3",
+        "dbc0a8c8b61ac75729917ddb1921ac6d7ca6e571"
+      ]
+    }
+  },
+  {
+    "number": 28417,
+    "title": "Add Throwable functional interfaces",
+    "state": "closed",
+    "created_at": "2022-05-05T06:21:25Z",
+    "updated_at": "2022-05-06T14:01:50Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28417",
+    "body": "Within the framework and portfolio projects we often need to deal with checked exceptions inside the body of a `Function`, `Supplier`, `Consumer`, etc. This usually involves writing `try`/`catch` blocks inside the body. Since exception handling is usually also handled by the framework, it would be nice if we could offer `Throwing...` versions of common functional interfaces that do the wrapping for us.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "quaff",
+        "created_at": "2022-05-05T08:18:35Z",
+        "body": "Please consider throwing generic exception like this\r\n```java\r\n@FunctionalInterface\r\npublic interface CheckedFunction<T, R, E extends Throwable> {\r\n\r\n\tR apply(T t) throws E;\r\n\r\n}\r\n```"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-05T13:36:30Z",
+        "body": "@quaff, can you please expound on your proposal with a rationale for needing the generic type declaration for the exception?"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-05T13:49:25Z",
+        "body": "> it would be nice if we could offer `Throwing...` versions of common functional interfaces that do the wrapping for us.\r\n\r\nI agree: such types can be very useful.\r\n\r\nI also agree with the `Throwing*` naming convention. Though I noticed you've introduced `Throwable*` types in your commit.\r\n\r\nI think we should go with `Throwing*`. For example, `ThrowableSupplier` implies that the supplier supplies a `Throwable`, like a `StringSupplier` would supply a `String`. \r\n\r\nFurthermore, the `Supplier` itself is not \"throwable\" since it does not implement `Throwable`.\r\n\r\nWhat we're really talking about is a \"supplier that is capable of throwing a checked exception\", but we cannot convert that to a type name because it's simply too long: `CheckedExceptionThrowingSupplier`. If we go with `ThrowingSupplier`, that's succinct and in line with the naming convention used in several other open source projects -- for example, Spring Data, JUnit, AssertJ, Kotlin internals, [some JDK internals](https://twitter.com/sam_brannen/status/1431250271523459078), [etc.](https://www.google.com/search?q=%22ThrowingSupplier%22).\r\n\r\n\r\n"
+      },
+      {
+        "author": "quaff",
+        "created_at": "2022-05-06T01:20:02Z",
+        "body": "> @quaff, can you please expound on your proposal with a rationale for needing the generic type declaration for the exception?\r\n\r\n@sbrannen  For example we can throw Throwable inside lambda\r\n```java\r\n@Aspect\r\npublic class Instrumentation {\r\n\r\n\t@Around(\"execution(* *.*(..))\")\r\n\tpublic Object timing(ProceedingJoinPoint pjp) throws Throwable {\r\n\t\treturn Tracing.execute(pjp, ProceedingJoinPoint::proceed);\r\n\t}\r\n}\r\n```\r\n```java\r\npublic class Tracing {\r\n\tpublic static <T, R> R execute(T input, CheckedFunction<T, R, Throwable> function) throws Throwable {\r\n\t\t// create new span\r\n\t\ttry {\r\n\t\t\treturn function.apply(input);\r\n\t\t} finally {\r\n\t\t\t// finish span\r\n\t\t}\r\n\t}\r\n}\r\n\r\n```"
+      },
+      {
+        "author": "quaff",
+        "created_at": "2022-05-06T01:29:38Z",
+        "body": "> some JDK internals\r\n\r\nMany projects use `Checked*`, for example `vavr` `elasticsearch`"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-06T14:01:50Z",
+        "body": "> @sbrannen For example we can throw Throwable inside lambda\r\n\r\nThe Spring Framework typically tries to avoid throwing `Throwable` because that makes error handling more complex, and we don't want to have to catch `Throwable` and then decide if the exception should really be swallowed/handled/rethrown (e.g., OOME).\r\n\r\nThe commit Phil pushed declares `Exception` in the `throws` clauses in order to allow lambdas to throw unchecked and checked `Exception` types, and I think that is adequate for the needs of the framework.\r\n\r\n> Many projects use `Checked*`, for example `vavr` `elasticsearch`\r\n\r\nIndeed, that would be another option, but we've gone with `Throwing*`."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d205b8b78ae14842d7a95966dbf85cec9b769e5b",
+        "37a2b3ab02724293197285145f11c669e5fef94f",
+        "b3efdf3c2b5b55624164d184d237795be6e7b3b5"
+      ]
+    }
+  },
+  {
+    "number": 28418,
+    "title": "Add RootBeanDefinition constructor that accepts a ResolvableType",
+    "state": "closed",
+    "created_at": "2022-05-05T06:29:05Z",
+    "updated_at": "2022-05-11T14:40:46Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28418",
+    "body": "Needing to use a builder in order to create a `RootBeanDefinition` with a `ResolvableType` is cumbersome. A new constructor would help simplify things, especially AOT generated code.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "e5190796394dbbd00382342c7467e648342c3bda",
+        "b9ed2f9a1be9c374ccb10b7c05b9352b8386c428",
+        "6c8de96992865c6d40d050726a60fa9a301b1ed8",
+        "65d43c79c6c10e828c2ee657946b1bcb3bc955f2",
+        "d31eb4c0f14518e52bc55e2d23e4e6779d303911"
+      ]
+    }
+  },
+  {
+    "number": 28421,
+    "title": "Add byte[] to supported types in SimpleJmsHeaderMapper",
+    "state": "closed",
+    "created_at": "2022-05-05T16:44:57Z",
+    "updated_at": "2022-05-06T14:26:38Z",
+    "author": "artembilan",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28421",
+    "body": "See more info in the https://github.com/spring-projects/spring-integration/issues/3788 and its related PR.\r\n\r\nFor consistency it is better to have a good interoperability between Spring JMS and Spring Integration.\r\n",
+    "labels": [
+      "in: messaging",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "12357fdf44f31c1f4aced29eeeb2784a8d6ffd62"
+      ]
+    }
+  },
+  {
+    "number": 28425,
+    "title": "Remove obsolete SpEL expression grammar file",
+    "state": "closed",
+    "created_at": "2022-05-08T08:55:12Z",
+    "updated_at": "2024-08-28T08:50:09Z",
+    "author": "superdc",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28425",
+    "body": "Can you provide a SpEL expression grammar file for antlr4 as known as `SpringExpression.g4`?",
+    "labels": [
+      "type: task",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "superdc",
+        "created_at": "2022-05-08T09:34:36Z",
+        "body": "@sbrannen need help "
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-09T12:38:23Z",
+        "body": "I am not aware of any formal grammar file for SpEL.\r\n\r\n@aclement, please correct me if I'm wrong about that."
+      },
+      {
+        "author": "superdc",
+        "created_at": "2022-05-09T15:06:17Z",
+        "body": "@snicoll can you provide a spring expression language grammer file(https://github.com/spring-projects/spring-framework/blob/main/spring-expression/src/main/resources/org/springframework/expression/spel/generated/SpringExpressions.g) of anltr4，the grammer of this version is not suitable for antlr4"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-09T16:06:08Z",
+        "body": "The grammar file has apparently been around for a long time (unmodified):\r\n\r\nhttps://github.com/spring-projects/spring-framework/blob/3.2.x/spring-expression/src/main/java/org/springframework/expression/spel/generated/SpringExpressions.g\r\n\r\nReopening to allow @aclement to elaborate on where `SpringExpressions.g` came from."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-10T11:00:38Z",
+        "body": "As explained in commit da112a7ea82fee786a309f24baeda57d15478ff7:\r\n\r\n> The antlr-based SpEL expression grammar file (`SpringExpressions.g`) was introduced during initial development and prototyping of the Spring Expression language; however, it was quickly abandoned in favor of a handcrafted implementation. Consequently, it has become obsolete over time and has never been actively maintained.\r\n\r\nSince the grammar file is not used with the Spring Framework itself, the team has no plans to maintain it or release a new version compatible with later versions of antlr.\r\n\r\nIn light of that, I have repurposed this issue to remove the obsolete SpEL expression grammar file.\r\n"
+      },
+      {
+        "author": "superdc",
+        "created_at": "2022-05-10T11:08:06Z",
+        "body": "> As explained in commit [da112a7](https://github.com/spring-projects/spring-framework/commit/da112a7ea82fee786a309f24baeda57d15478ff7):\r\n> \r\n> > The antlr-based SpEL expression grammar file (`SpringExpressions.g`) was introduced during initial development and prototyping of the Spring Expression language; however, it was quickly abandoned in favor of a handcrafted implementation. Consequently, it has become obsolete over time and has never been actively maintained.\r\n> \r\n> Since the grammar file is not used with the Spring Framework itself, the team has no plans to maintain it or release a new version compatible with later versions of antlr.\r\n> \r\n> In light of that, I have repurposed this issue to remove the obsolete SpEL expression grammar file.\r\n\r\n@sbrannen So now SpEL is not antlr-based，right？parser and lexer are produced by handcraft?"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-10T11:23:36Z",
+        "body": "> @sbrannen So now SpEL is not antlr-based，right？parser and lexer are produced by handcraft?\r\n\r\nThat's correct. \r\n\r\nTake a look at `org.springframework.expression.spel.standard.InternalSpelExpressionParser` and the types in the `org.springframework.expression.spel.ast` package for details.\r\n"
+      },
+      {
+        "author": "superdc",
+        "created_at": "2022-05-11T04:03:21Z",
+        "body": "> > @sbrannen So now SpEL is not antlr-based，right？parser and lexer are produced by handcraft?\r\n> \r\n> That's correct.\r\n> \r\n> Take a look at `org.springframework.expression.spel.standard.InternalSpelExpressionParser` and the types in the `org.springframework.expression.spel.ast` package for details.\r\n\r\n@sbrannen  Can I know the reasons why SpEL turns into not antlr-based？We want to parse SpEL in frontend and construct our custom ast tree. One method is used antlr4 to generate parser, lexer and visitor，but now this method looks impractical."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-05-11T09:21:54Z",
+        "body": "> Can I know the reasons why SpEL turns into not antlr-based?\r\n\r\nI was not the original developer of the Spring Expression language, but as far as I understand, using antlr turned out to be too cumbersome. Thus, the original developer, @aclement, decided it would be easier to handcraft the support. "
+      },
+      {
+        "author": "deanmaster",
+        "created_at": "2024-01-29T12:40:49Z",
+        "body": "hello @sbrannen we have intention to build tooling support for projects to expresison their own needs in more friendly and controllable way. \r\n\r\n1. Using antlr4 would help a lot since it can support code completion from many platforms.\r\n2. If you don't use it any suggestion for testing a dedicate expression if it's working ? from unit test point of view.\r\n\r\nThanks a lot,\r\nTuan Do"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2024-02-01T11:04:44Z",
+        "body": "> If you don't use it any suggestion for testing a dedicate expression if it's working ? from unit test point of view.\r\n\r\nYou can use the tests in our test suite for inspiration -- for example, any of the tests in [`src/test/java`](https://github.com/spring-projects/spring-framework/tree/main/spring-expression/src/test/java/org/springframework/expression/spel) in the `spring-expression` project, in particular [`EvaluationTests`](https://github.com/spring-projects/spring-framework/blob/main/spring-expression/src/test/java/org/springframework/expression/spel/EvaluationTests.java).\r\n\r\n"
+      },
+      {
+        "author": "deanmaster",
+        "created_at": "2024-06-28T01:41:16Z",
+        "body": "hello @sbrannen ,\r\n\r\nCurrently i'm implementation an autocompletion for SpEl in our project. Do you know how can I \"extracted\" from existing code? Or I have to manually create the grammar on my own ? Because everything in the package org.springframework.expression are basically java form which can't convert to any syntax which can be used to return as autocompletion suggestion.\r\n\r\nAny suggestions are really helpful for me.\r\n\r\nThanks,\r\nTuan Do"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2024-06-28T07:50:03Z",
+        "body": "Hi @deanmaster,\r\n\r\n> Do you know how can I \"extracted\" from existing code?\r\n\r\nI doubt there is any way to _extract_ the grammar automatically from the code, since the lexing and parsing is now handwritten.\r\n\r\nThe classes you'll need to look at are `Tokenizer`, `TokenKind`, and `InternalSpelExpressionParser` in the `org.springframework.expression.spel.standard` package.\r\n\r\nThose classes sometimes refer to the original antlr grammar in comments.\r\n\r\n> Or I have to manually create the grammar on my own ?\r\n\r\nYes, I think you'll basically have to create your own grammar from scratch, but you can probably use the [original antlr grammar](https://github.com/spring-projects/spring-framework/blob/3.2.x/spring-expression/src/main/java/org/springframework/expression/spel/generated/SpringExpressions.g) as a starting point."
+      },
+      {
+        "author": "deanmaster",
+        "created_at": "2024-07-11T09:32:02Z",
+        "body": "thanks @sbrannen \r\n\r\nI successfully migrated the original antlr grammar. Thanks for pointing to those classes I will have a look."
+      },
+      {
+        "author": "jakeboone02",
+        "created_at": "2024-08-27T16:06:28Z",
+        "body": "@deanmaster I was curious if you've made any significant progress with your antlr4 grammar. I'd be willing to pitch in if you want help; I have a use case in my [`react-querybuilder`](/react-querybuilder/react-querybuilder) project where I'm currently using [`spel2js`](/benmarch/spel2js) (an old JavaScript port) but would like to move to a static grammar file."
+      },
+      {
+        "author": "deanmaster",
+        "created_at": "2024-08-28T08:50:08Z",
+        "body": "@jakeboone02 i'm able to convert the grammar file to latest v4 ANTLR but obviously it does not reflects newest \"java syntax\" with current version of SpEl. We are pending this topic for now. In the future when i'm able to complete the grammarfile I can share it here"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "da112a7ea82fee786a309f24baeda57d15478ff7"
+      ]
+    }
+  },
+  {
+    "number": 28442,
+    "title": "Add native hints for core annotations",
+    "state": "closed",
+    "created_at": "2022-05-10T23:13:49Z",
+    "updated_at": "2022-05-11T00:10:27Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28442",
+    "body": "In order to support native applications we need [hints for our core annotations](https://github.com/spring-projects-experimental/spring-native/blob/main/spring-native-configuration/src/main/java/org/springframework/core/annotation/CoreAnnotationHints.java).",
+    "labels": [
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2961426d8ad256983ffe1445acd4cbfaab4fd5db",
+        "e7e60f7cb9c73339294e3f078fe722ca28d49b44"
+      ]
+    }
+  }
+]

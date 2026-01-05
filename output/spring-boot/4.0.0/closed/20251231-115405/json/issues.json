@@ -1,0 +1,2228 @@
+[
+  {
+    "number": 47820,
+    "title": "Upgrade to Micrometer 1.16.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:18Z",
+    "updated_at": "2025-11-09T12:20:02Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47820",
+    "body": "Upgrade to [Micrometer 1.16.0](https://github.com/micrometer-metrics/micrometer/releases/tag/v1.16.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "dd412ec06991482ff643fe04c6543f5a50c09d30",
+        "69f7859eefc7b847a4cd38ed3176847c6dde0171",
+        "3a31b45198345df2376a9d7d4b82c772620546e2",
+        "f016d711514dbf02f7a91256d0a6df3cfe78c1ed",
+        "b2c44ceac09036b7c252ce29220c40ab5c0c4627",
+        "c1f4c0decbbb7946f0869929543bde8e9bc9e23a"
+      ]
+    }
+  },
+  {
+    "number": 47821,
+    "title": "Upgrade to Micrometer Tracing 1.6.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:22Z",
+    "updated_at": "2025-11-09T12:20:02Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47821",
+    "body": "Upgrade to [Micrometer Tracing 1.6.0](https://github.com/micrometer-metrics/tracing/releases/tag/v1.6.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ecb4e57a43e4675fecc9091e95b00c609f10daf0",
+        "96ce2cc9b62b0e81e87288432556693bcb34bac2",
+        "34d4919eaf74102569a8559e00b05a3683b9a2a1",
+        "999e38c52d2ecb01a2f4960908f31ffe29f4bb5b",
+        "4a3cb673d450e61776e9385cc89de97301b9d65b",
+        "753f006000692a80e2a44b649639eab0f16df0a3"
+      ]
+    }
+  },
+  {
+    "number": 47822,
+    "title": "Upgrade to Reactor Bom 2025.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:26Z",
+    "updated_at": "2025-11-09T12:20:03Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47822",
+    "body": "Upgrade to [Reactor Bom 2025.0.0](https://github.com/reactor/reactor/releases/tag/2025.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5d84e491b6539c5f6080fa312c8e033a146e353a",
+        "be675858bce6c22fde5a8f891b1837cc8894903d",
+        "23b3b3d258eb07794077c626300a61738b958a2c",
+        "fb57c810f674087a20b2a0a6817691299969f334",
+        "cd36b7a7bc9a6d71753bff9bb57e649fd47ae0c0",
+        "5420b2fc7375e52230d547db47f805aa6c69280e"
+      ]
+    }
+  },
+  {
+    "number": 47823,
+    "title": "Upgrade to Spring AMQP 4.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:30Z",
+    "updated_at": "2025-11-18T08:14:59Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47823",
+    "body": "Upgrade to [Spring AMQP 4.0.0](https://github.com/spring-projects/spring-amqp/releases/tag/v4.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a3de3033ed874077389bcd648172916a5e9e5c4e",
+        "aae3e64b70dc67a0086489ae2d906b4cdd0e6863",
+        "3928c53740d07790b0e6b43274041dfa022fa56b",
+        "5edeb2efcd2c68843166ebcb5819a08a37ffc581",
+        "d727ce40f284e91614154cc038a85a8515c314ef",
+        "5536317bec5aab68b0527b204cbfa1bb86cea3db",
+        "485c6eca20643076cf639d691db7f65ef899906c",
+        "2142b56b5b9850c861433808d94da2c59a86b828"
+      ]
+    }
+  },
+  {
+    "number": 47824,
+    "title": "Upgrade to Spring Data Bom 2025.1.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:34Z",
+    "updated_at": "2025-11-14T16:25:25Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47824",
+    "body": "Upgrade to [Spring Data Bom 2025.1.0](https://github.com/spring-projects/spring-data-bom/releases/tag/2025.1.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4310b0b94ad7ada0f8c4591cc79bc2b1064e445a",
+        "0814e2eaf60aaeeb01ebd5d2eb47020c73038739",
+        "2c3178cf4dcd787ad71afb5a07db97a88a1601cf",
+        "df26341d1a4860cc15a4e38b8ac28702ffedbf86",
+        "47c44585cc03d864fe83357ff426dc0220c9f03d",
+        "30b19904ac5822b5216676f5afe4946d2c46b938",
+        "30f44c4e79331384eeed27141fd8870d89a43460"
+      ]
+    }
+  },
+  {
+    "number": 47825,
+    "title": "Upgrade to Spring Framework 7.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:38Z",
+    "updated_at": "2025-11-18T12:26:41Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47825",
+    "body": "Upgrade to [Spring Framework 7.0.0](https://github.com/spring-projects/spring-framework/releases/tag/v7.0.0).",
+    "labels": [
+      "type: task",
+      "status: superseded"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "de15f2511d6edb2818ab1bf1b17aba36f55dd542",
+        "0ea8588d467eb5063c1aed91c23098e5fa3b4781",
+        "00f60da0de28d6289fa1bd9e2a0118c97092fa97",
+        "9208041dc3266ac0f84cc824f268de051883d4a2",
+        "629a869bb19d6f7b5113e2ddec919de016936e6a",
+        "c88712cca791cd8e2f3fc00d3a0c1758c546dbc8",
+        "b041422c27679811c001dac1b3a7722452ea13f0"
+      ]
+    }
+  },
+  {
+    "number": 47826,
+    "title": "Upgrade to Spring GraphQL 2.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:42Z",
+    "updated_at": "2025-11-19T06:55:49Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47826",
+    "body": "Upgrade to [Spring GraphQL 2.0.0](https://github.com/spring-projects/spring-graphql/releases/tag/v2.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "25615261f033d602166bce6cef4be7d05ea12960",
+        "79c616594704dad2f0aa9191abb1cbc5d3f46b6c",
+        "39d84870f5689b71770fb15038ca870a7da34c84",
+        "ab218f9bcd82b03113c935a20534edca56eb7662",
+        "cc1527b33706a75e556140ba733c8144ea539cb2",
+        "626d14f04946ccc79d1a064c98e8a805e1c69e21",
+        "20ef8de9a13679997b5e00f427b569a3299ea9b9"
+      ]
+    }
+  },
+  {
+    "number": 47827,
+    "title": "Upgrade to Spring HATEOAS 3.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:46Z",
+    "updated_at": "2025-11-13T18:03:12Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47827",
+    "body": "Upgrade to [Spring HATEOAS 3.0.0](https://github.com/spring-projects/spring-hateoas/releases/tag/3.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [
+      {
+        "author": "YusafShaik",
+        "created_at": "2025-11-05T13:07:43Z",
+        "body": "Hi 👋\nI’d like to work on this issue and submit a PR to upgrade Spring HATEOAS 3.0.0\nCould you please confirm if it’s available for contribution?"
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-05T13:14:04Z",
+        "body": "Thanks for the offer, @YusafShaik, but we prefer to handle one-line dependency upgrades such as this ourselves."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d0adc15d69886ea4ed0e38c4eb40fae633528911",
+        "716200115ad00e7672110440963ff62757963fa4",
+        "37ce16f9ccdd67ac05fd97d3f1202caab505b579",
+        "8d09c4c8e43ced5fe8a11fa9fe21edc25f0b6bcf",
+        "0165bd8ba1f8952fa16b58bde31573c295db3ab2",
+        "43b4b26c1818e59162b07e05ef0ae18f64e509f7",
+        "4fa561031b2805a2dac4aa8f0951b28e00046d20"
+      ]
+    }
+  },
+  {
+    "number": 47828,
+    "title": "Upgrade to Spring Integration 7.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:50Z",
+    "updated_at": "2025-11-19T06:55:49Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47828",
+    "body": "Upgrade to [Spring Integration 7.0.0](https://github.com/spring-projects/spring-integration/releases/tag/v7.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b499c8a2730e4fb25e09af22645aa328454e9954",
+        "da236c144a72cb5dfbac1cf4a2689a41072e68d3",
+        "fcaf1ede974895fa25cd01e8a6bcf77e79b748a2",
+        "2545798ba25a29d57a2a6fee6351ec95dd4c7ecc",
+        "9fd4795e7bb56bba04cb58448fdc03a97079e310",
+        "52c3427126227e6f8284b517b190dbbbcfeac101",
+        "9d3434e5b67d4827f7a354f2a3c1641c24b29581"
+      ]
+    }
+  },
+  {
+    "number": 47829,
+    "title": "Upgrade to Spring Kafka 4.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:54Z",
+    "updated_at": "2025-11-18T08:15:00Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47829",
+    "body": "Upgrade to [Spring Kafka 4.0.0](https://github.com/spring-projects/spring-kafka/releases/tag/v4.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "6645658d66473561658a10ef60ea21288dc87ae0",
+        "e58ffb0b4fc0a76aad513b89fc5f27b0fe164dd0",
+        "54993db69cadce71131d32e939a8ae7d4f8a6354",
+        "6934392c05c659233307a4691e33897ee2fc3f06",
+        "86054edfb91c9df6bddcdf80392b44bbe16eadf7",
+        "1b3263038f77957cf65a6a571766efb420ee0824",
+        "8340a62c6f95af532dea753ee1c5f7fc20d16486",
+        "83733a0428ac60ae4e886f7cc475993f1dc34a38"
+      ]
+    }
+  },
+  {
+    "number": 47830,
+    "title": "Upgrade to Spring Pulsar 2.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:04:58Z",
+    "updated_at": "2025-11-15T15:17:49Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47830",
+    "body": "Upgrade to [Spring Pulsar 2.0.0](https://github.com/spring-projects/spring-pulsar/releases/tag/v2.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b5ff8e31dc0bf9aaf0fe8f6d1b5e6ebbb6360e44",
+        "d756350bdb88b5b95af34120e70e8cf152d28f08",
+        "c687998f56ff462e1bfb00bd905218a96a4e0315",
+        "04fd73ba1bcec72b8f7083ce13133a38064de8a8",
+        "94bbfe33c119195bf095ffda1b2b5e5d15e33b0c",
+        "3f69efeadbd7cffb59aa7c65de3b19d99b569800",
+        "47691b0bd3ad0a6f5b7a3f2c14b288fe8654b755",
+        "d9ce7f8f52e29eb38bccd9a4ee7600ad99daff25"
+      ]
+    }
+  },
+  {
+    "number": 47831,
+    "title": "Upgrade to Spring RESTDocs 4.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:05:01Z",
+    "updated_at": "2025-11-19T14:55:16Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47831",
+    "body": "Upgrade to [Spring RESTDocs 4.0.0](https://github.com/spring-projects/spring-restdocs/releases/tag/v4.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8b619cf8b3942c91a800b0fa70806dbbb02a5667",
+        "49fd0bfc4e2ec102ac1e8d60ca502447c2944657",
+        "7f15cc827b301e10ef7393434d582e4331c5918a",
+        "40b138ff76ae13ade493e919a5b54905a1754ca5",
+        "4dc621510d7183dbccbb99918139076b3fd7ab29",
+        "6f62f285790fb0d4f6ae3ddf3f7b74eeff98c355",
+        "5be3deb37c9cc2fb71c04e4acfda34340b28b03d",
+        "9658a6a8947aa05c780bb58a98d02621305ff298"
+      ]
+    }
+  },
+  {
+    "number": 47832,
+    "title": "Upgrade to Spring Security 7.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:05:05Z",
+    "updated_at": "2025-11-18T08:15:01Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47832",
+    "body": "Upgrade to [Spring Security 7.0.0](https://github.com/spring-projects/spring-security/releases/tag/7.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bec6b14a0a95acb887af9fadf619be275ee6c7f3",
+        "a63411e27d61d794d8d3df0dc3d049b2e0047b99",
+        "7f58805c397d3b8ea415993aa085cd024886ef23",
+        "12b7edcb5eeee1b82c3bbdb243491c6aa68de9ec",
+        "85c86d3849d7a4eb7e5f97a1abf004303aeb9326",
+        "3f2fdba7604157fa18cd251255f6f735ec85f3c9"
+      ]
+    }
+  },
+  {
+    "number": 47833,
+    "title": "Upgrade to Spring WS 5.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:05:09Z",
+    "updated_at": "2025-11-19T06:55:50Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47833",
+    "body": "Upgrade to [Spring WS 5.0.0](https://github.com/spring-projects/spring-ws/releases/tag/v5.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "6e09d6bcd18104c2c6d61fc4d2973c6ccefda13a",
+        "95a183f3fd4bf137dedc56f994eb10ee0d1cfb55",
+        "f250d8e4915459b3d9fe41ed383533dae6331d01",
+        "bdf3eb5b683a1ab0010aacc3f95015136cc7ace8",
+        "7dba9d3f8ebbcbf8b42a704df04166ab3a9dc6c4",
+        "8bd2fb5566669ee99e0f5834b2a290a9f05b73f0",
+        "bae83f997ded346b117d9cee97d2c12e3cba5ab1",
+        "12a68ef361195c5dfe817a91c98d5ad1e7d0fbcc"
+      ]
+    }
+  },
+  {
+    "number": 47834,
+    "title": "Upgrade to Spring Batch 6.0.0",
+    "state": "closed",
+    "created_at": "2025-10-27T14:05:45Z",
+    "updated_at": "2025-11-19T16:41:25Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47834",
+    "body": "",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "496f2814b4e0d448fe92775b0c946b822b086836",
+        "2ff5b889038b52c5350c338456734ea37cbb9959",
+        "37c2038de10bc45225e3671a76a612bcfb66e761",
+        "be063b695ab894891d438f5186142f77290097ea",
+        "583dc2843e85f799d8d50489f1fdcf787e1fa6df"
+      ]
+    }
+  },
+  {
+    "number": 47848,
+    "title": "Support for ReactiveElasticsearchClient is in the wrong module",
+    "state": "closed",
+    "created_at": "2025-10-28T11:27:45Z",
+    "updated_at": "2025-11-14T09:40:05Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47848",
+    "body": "At the moment, `spring-boot-elasticsearch` provides support for auto-configuring a `ReactiveElasticsearchClient`. `ReactiveElasticsearchClient` is part of Spring Data Elasticsearch so, arguably, the auto-configuration support should be in `spring-boot-data-elasticsearch`. One downside of moving it would be that it becomes harder to have an auto-configured reactive client without also getting auto-configured reactive data repositories. I think that's an edge case though so I'm in favor of the move.",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "781035b409815bcf51a7c66dcf7ba45ba6402a2a",
+        "e6f6ee78da5cda6d19e2a591117003a6c4dde8c9"
+      ]
+    }
+  },
+  {
+    "number": 47917,
+    "title": "Configure Kotlin Serialization converter with dedicated method",
+    "state": "closed",
+    "created_at": "2025-11-03T13:47:05Z",
+    "updated_at": "2025-11-12T15:19:33Z",
+    "author": "bclozel",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47917",
+    "body": "As of https://github.com/spring-projects/spring-framework/issues/35733, Spring Framework has a dedicated method for configuring a Kotlin Serialization converter specifically.\n\nWe should reflect that in our `DefaultClientHttpMessageConvertersCustomizer` to use this new method.",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [
+      {
+        "author": "bcmedeiros",
+        "created_at": "2025-11-03T14:02:59Z",
+        "body": "I was just about to ask what would be the impact in Boot after the Framework change, and I saw this issue.\n\n> if an application has Kotlin Serialization on the classpath, it is expected to use a dedicated converter for serializing @Serializable types.\n\nIs the newly introduced starter still going to be needed after this ticket is addressed? I understood just having the library in the classpath was not enough, but after this comment in the framework issue, I'm a bit unsure about the starter actually doing anything."
+      },
+      {
+        "author": "bclozel",
+        "created_at": "2025-11-03T14:21:11Z",
+        "body": "@bcmedeiros yes this change is still required and the dedicated module is important: this is what allows you to [use configuration properties](https://github.com/spring-projects/spring-boot/blob/75cfe82bd7c8a7ecf2ae4f0bfe3a55c06ac0759e/module/spring-boot-kotlin-serialization/src/main/java/org/springframework/boot/kotlin/serialization/autoconfigure/KotlinSerializationProperties.java) to drive the creation of the `Json` instance and the Kotlin Serialization converter itself."
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-06T09:00:33Z",
+        "body": "As part of this, we should remove `@Order(-10) // configured ahead of JSON mappers` from the Kotlin converter's `@Bean` method."
+      },
+      {
+        "author": "dmitrysulman",
+        "created_at": "2025-11-11T15:58:57Z",
+        "body": "@bclozel Can I work on this issue?"
+      },
+      {
+        "author": "bclozel",
+        "created_at": "2025-11-12T08:52:47Z",
+        "body": "Thanks for the offer @dmitrysulman , I had the change locally already."
+      },
+      {
+        "author": "dmitrysulman",
+        "created_at": "2025-11-12T12:41:07Z",
+        "body": "@bclozel should a similar change also be applied to `DefaultServerHttpMessageConvertersCustomizer`?"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2e52c3c35e0bd44ec35dceaeaed1737905a00196",
+        "44f0c772a2a82cfc1b24583f682712c51e9c7b6a"
+      ]
+    }
+  },
+  {
+    "number": 47960,
+    "title": "Document the level of support for the OpenTelemetry APIs",
+    "state": "closed",
+    "created_at": "2025-11-05T12:06:44Z",
+    "updated_at": "2025-11-11T13:02:12Z",
+    "author": "ThomasVitale",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47960",
+    "body": "The Spring Boot OpenTelemetry Starter has mixed support for the OpenTelemetry APIs.\n\nIt would be useful to document this in the [OpenTelemetry Support](https://docs.spring.io/spring-boot/4.0-SNAPSHOT/reference/actuator/observability.html#actuator.observability.opentelemetry) section of the docs.\n\n| Aspect | OpenTelemetry API | OpenTelemetry Exporter API | OTLP | OpenTelemetry Environment Variables Spec |\n|---|---:|---:|---:|---:|\n| Logging | ✅ |✅* |✅* |⚠️ |\n| Metrics | ❌ |❌ |✅ |⚠️ |\n| Tracing | ✅ |✅ |✅ |⚠️ |\n\n_* No log is actually collected nor exported, since there is no support in Spring Boot for bridging logs from SLF4J/Logback/Log4J._\n\nThe key part is that metrics are only supported when registered via the Micrometer API. The OpenTelemetry Metrics API can be used to register metrics (since it's in the classpath), but all the metrics registered in that way will be ignored (as decided in https://github.com/spring-projects/spring-boot/issues/36546). So it's a potential source of confusion and something I'd recommend documenting. One of the consequence of this situation, is that the Resource API-related config used for logs and traces is not shared with the metrics support (related issue: https://github.com/spring-projects/spring-boot/issues/46229).\n\nOn the other hand, there is support for registering traces both via OpenTelemetry Tracing API and Micrometer Tracing API. That adds on the confusion since support for the two observability signals is not consistent.\n\nAnother difference is in how the observability signals can be exported. For logs and traces, there is suppport for the OpenTelemetry Exporter API (only the OTLP implementation is supported by Spring Boot, but a developer could plug in a different implementation on their own). For metrics, there is not. Furthermore, logs are not collected from SLF4J/Logback/Log4J, so no log is actually exported (though, the plumbing is there for developers to add this feature on their own using the OpenTelemetry Java Instrumentation). \n\nFinally, support for the OpenTelemetry Environment Variables specification is partially supported for the Resource API and a few more cases, but most environment variables are not supported. It would be nice to document which ones are supported (related issue: https://github.com/spring-projects/spring-boot/issues/47646).\n",
+    "labels": [
+      "type: documentation",
+      "theme: opentelemetry"
+    ],
+    "comments": [
+      {
+        "author": "mhalbritter",
+        "created_at": "2025-11-10T10:18:01Z",
+        "body": "Thanks for the suggestion and the nice work of collecting issues, @ThomasVitale . I've pushed something which should show up soon on [the snapshot docs](https://docs.spring.io/spring-boot/4.0-SNAPSHOT/reference/actuator/observability.html#actuator.observability.opentelemetry).\n\nPlease let me know what you think."
+      },
+      {
+        "author": "ThomasVitale",
+        "created_at": "2025-11-10T15:42:44Z",
+        "body": "@mhalbritter thanks so much for working on this so quickly! I like the clarity of the new documentation!\n\nOnly one comment about this part:\n\n> Logging and tracing use the OpenTelemetry SDK directly, so all environment variables [supported by OpenTelemetry](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/) also work.\n\nAs far as I can tell, even though the SDKs are used directly, the environment variables are not used because the various beans are constructed based on the values from the configuration properties (e.g. `management.opentelemetry.tracing.export.otlp.endpoint`). Wouldn't there be a need to read the env vars explicitly?"
+      },
+      {
+        "author": "mhalbritter",
+        "created_at": "2025-11-11T09:27:50Z",
+        "body": "Oh yeah, you're right. To get OpenTelemetry SDK to respect the variables, you have to use the [Zero-code SDK autoconfigure](https://opentelemetry.io/docs/languages/java/configuration/#zero-code-sdk-autoconfigure), which we don't do.\n\nI've clarified the documentation and also added an example how to use `AutoConfiguredOpenTelemetrySdk`."
+      },
+      {
+        "author": "ThomasVitale",
+        "created_at": "2025-11-11T13:02:12Z",
+        "body": "Great, thank you!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "62177a1cd7b8fd6f0bf016a7a3ca32be8c5b7c3a",
+        "995e8560f56b2f51abfe12a6e5efd8f36563c4c3"
+      ]
+    }
+  },
+  {
+    "number": 47982,
+    "title": "spring-boot-starter-data-mongodb-reactive has dependency on reactor-test",
+    "state": "closed",
+    "created_at": "2025-11-07T09:29:07Z",
+    "updated_at": "2025-11-07T09:32:13Z",
+    "author": "mhalbritter",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47982",
+    "body": "",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c2db108502f9eda09a8ea4dbb19d1c78ae6744fb"
+      ]
+    }
+  },
+  {
+    "number": 47983,
+    "title": "spring-boot-mail should depend on jakarta.mail:jakarta.mail-api and org.eclipse.angus:angus-mail instead of org.eclipse.angus:jakarta.mail",
+    "state": "closed",
+    "created_at": "2025-11-07T09:42:29Z",
+    "updated_at": "2025-11-07T14:35:19Z",
+    "author": "lrozenblyum",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47983",
+    "body": "`spring-boot-starter-mail` (at least for 3.5.6 release) brings transitive depenedency `org.eclipse.angus:jakarta.mail`.\n\nHowever usage of this dependency should be discouraged in Maven/Gradle world because it's an uberjar.\nSo if the classpath of a module contains jakarta.mail-api or/and angus-mail dependencies we have duplication of classes.\n\nSee https://eclipse-ee4j.github.io/angus-mail/#Download_Angus_Mail_Release and also https://github.com/greenmail-mail-test/greenmail/issues/553 for the detail explanation.\n\nSuggestion: depend on jakarta.mail-api and angus-mail as recommended by Angus",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-07T09:53:28Z",
+        "body": "Thanks for raising this.\n\n> So if the classpath of a module contains jakarta.mail-api or/and angus-mail dependencies we have duplication of classes.\n\nI'm not sure that I understand the logic here. Doesn't the problem apply in the other direction too? If `spring-boot-starter-mail` depended on `jakarta.mail:jakarta.mail-api` and `org.eclipse.angus:angus-mail` and the classpath of a module contains `org.eclipse.angus:jakarta.mail`, wouldn't there be duplicate classes in that situation too?"
+      },
+      {
+        "author": "lrozenblyum",
+        "created_at": "2025-11-07T09:56:25Z",
+        "body": "@wilkinsona well in this case it's a problem of another party who included the not-recommended uberjar from `org.eclipse.angus:jakarta.mail` into classpath.\nI guess most projects would follow the Angus's recommendations and won't do that anyway.\n"
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-07T14:23:09Z",
+        "body": "Looking at usage stats on Maven Central is appears to be about 1/3 `org.eclipse.angus:jakarta.mail` and 2/3 `org.eclipse.angus:angus-mail`. I don't think we should change this in 3.x as it may be unexpectedly disruptive. I think we could switch in 4.0 though."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "07b13a40b1ee9b42356950127a496af704e1f787"
+      ]
+    }
+  },
+  {
+    "number": 47994,
+    "title": "Bump @antora/site-generator from 3.2.0-alpha.4 to 3.2.0-alpha.10 in /antora",
+    "state": "closed",
+    "created_at": "2025-11-08T03:15:18Z",
+    "updated_at": "2025-11-08T03:15:28Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47994",
+    "body": "Forward port of issue #47993 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "1da6296c95556f2d1d99fa7eaf99888eeb31ca30"
+      ]
+    }
+  },
+  {
+    "number": 47996,
+    "title": "Devtools Restarter does not work with a parameterless main method",
+    "state": "closed",
+    "created_at": "2025-11-09T11:16:53Z",
+    "updated_at": "2025-11-09T11:17:05Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47996",
+    "body": "Forward port of issue #47987 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "96457f4665c1388beea43cf207ee2370bcb9198a"
+      ]
+    }
+  },
+  {
+    "number": 47997,
+    "title": "Upgrade to Neo4j Java Driver 6.0.2",
+    "state": "closed",
+    "created_at": "2025-11-09T11:30:37Z",
+    "updated_at": "2025-11-11T10:32:48Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47997",
+    "body": "Upgrade to [Neo4j Java Driver 6.0.2](https://github.com/neo4j/neo4j-java-driver/releases/tag/6.0.2).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "0b73feaeae9f1f2a75706b8f1052b1bc673fdcb8",
+        "3180af8792eb4489c1fe560526ee84521d9fb608",
+        "721ba65888643133f5678aa53353cfa1de2f5223"
+      ]
+    }
+  },
+  {
+    "number": 47999,
+    "title": "Upgrade to Spring LDAP 4.0.0",
+    "state": "closed",
+    "created_at": "2025-11-09T13:26:16Z",
+    "updated_at": "2025-11-14T08:46:43Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/47999",
+    "body": "Upgrade to [Spring LDAP 4.0.0](https://github.com/spring-projects/spring-ldap/releases/tag/4.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b924878f31132eb395c39711f0691dcae32fee59",
+        "78b79a7f73e1d56596a1ea3eeec7774afb42a096",
+        "16e2e73a109a753b52ebb70461195d9e42fe065c"
+      ]
+    }
+  },
+  {
+    "number": 48000,
+    "title": "Upgrade to Spring Session 4.0.0",
+    "state": "closed",
+    "created_at": "2025-11-09T13:26:21Z",
+    "updated_at": "2025-11-18T08:15:01Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48000",
+    "body": "Upgrade to [Spring Session 4.0.0](https://github.com/spring-projects/spring-session/releases/tag/4.0.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "e5347088abdbe5b7c789e92aaaf1912c971e774a",
+        "d8fa17d326951c065ea44bed5bcf4894d5ed8c7c",
+        "7bfc93f3c4f459f5e31a68ec5d44b1f9fe593c5a"
+      ]
+    }
+  },
+  {
+    "number": 48023,
+    "title": "RetryPolicySettings should refer to maxRetries, not maxAttempts",
+    "state": "closed",
+    "created_at": "2025-11-10T11:16:54Z",
+    "updated_at": "2025-11-11T10:32:51Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48023",
+    "body": "See https://github.com/spring-projects/spring-framework/issues/35772",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "063e9905a7b5e98c5970227acce05f9e67b967e4",
+        "977be74768e985c7f1b517007788e9d8ae289125",
+        "8584f604e3031277ddc17491ce92edc982dab78a"
+      ]
+    }
+  },
+  {
+    "number": 48034,
+    "title": "Upgrade to GraphQL Java 25.0",
+    "state": "closed",
+    "created_at": "2025-11-10T17:07:30Z",
+    "updated_at": "2025-11-11T10:32:49Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48034",
+    "body": "Upgrade to [GraphQL Java 25.0](https://github.com/graphql-java/graphql-java/releases/tag/v25.0).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f40b1af7d74c3618ad5869fd07f649deba4886f2",
+        "60451c04a0cb92343e7010fe178415c69e45505f"
+      ]
+    }
+  },
+  {
+    "number": 48046,
+    "title": "Configure download mirror to protect plainWar system test from Tomcat buildpack's fragility",
+    "state": "closed",
+    "created_at": "2025-11-10T20:30:14Z",
+    "updated_at": "2025-11-20T11:51:31Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48046",
+    "body": "Forward port of issue #48045 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "032f9157c5d044c16d8e4307b80daf87f5270ba7"
+      ]
+    }
+  },
+  {
+    "number": 48047,
+    "title": "Deprecated EnvironmentPostProcessor does not resolve arguments",
+    "state": "closed",
+    "created_at": "2025-11-10T21:20:16Z",
+    "updated_at": "2025-11-11T07:24:16Z",
+    "author": "ciscoo",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48047",
+    "body": "<!--\nThanks for raising a Spring Boot issue. Please take the time to review the following\ncategories as some of them do not apply here.\n\n🙅 \"Please DO NOT Raise an Issue\" Cases\n- Question\nSTOP!! Please ask questions about how to use something, or to understand why something isn't\nworking as you expect it to, on Stack Overflow using the spring-boot tag.\n- Security Vulnerability\nSTOP!! Please don't raise security vulnerabilities here. Head over to https://spring.io/security-policy to learn how to disclose them responsibly.\n- Managed Dependency Upgrade\nYou DO NOT need to raise an issue for a managed dependency version upgrade as there's a semi-automatic process for checking managed dependencies for new versions before a release. BUT pull requests for upgrades that are more involved than just a version property change are still most welcome.\n- With an Immediate Pull Request\nAn issue will be closed as a duplicate of the immediate pull request, so you don't have to raise an issue if you plan to create a pull request immediately.\n\n🐞 Bug report (please don't include this emoji/text, just add your details)\nPlease provide details of the problem, including the version of Spring Boot that you\nare using. If possible, please provide a test case or sample application that reproduces\nthe problem. This makes it much easier for us to diagnose the problem and to verify that\nwe have fixed it.\n\n🎁 Enhancement (please don't include this emoji/text, just add your details)\nPlease start by describing the problem that you are trying to solve. There may already\nbe a solution, or there may be a way to solve it that you hadn't considered.\n\n\nTIP: You can always edit your issue if it isn't formatted correctly.\n     See https://guides.github.com/features/mastering-markdown \n-->\n\nhttps://github.com/spring-projects/spring-boot/issues/47272 added back the previous EnvironmentPostProcessor in deprecated form, but the implementation (https://github.com/spring-projects/spring-boot/commit/3a9ab1569616c31d58d7f7b3e6ff9c8c364a9360) seems incomplete.\n\nThe following fails:\n\n```java\nimport org.junit.jupiter.api.Test;\nimport org.springframework.boot.SpringApplication;\nimport org.springframework.boot.bootstrap.ConfigurableBootstrapContext;\nimport org.springframework.boot.env.EnvironmentPostProcessor;\nimport org.springframework.boot.logging.DeferredLogFactory;\nimport org.springframework.boot.test.context.SpringBootTest;\nimport org.springframework.core.env.ConfigurableEnvironment;\nimport org.springframework.util.Assert;\n\n@SpringBootTest\nclass DemoApplicationTests {\n\n\t@Test\n\tvoid contextLoads() {\n\t}\n\n    static class DeprecatedEnvironmentPostProcessor implements EnvironmentPostProcessor {\n\n        public DeprecatedEnvironmentPostProcessor(DeferredLogFactory logFactory, ConfigurableBootstrapContext bootstrapContext) {\n            Assert.notNull(logFactory, \"logFactory must not be null\");\n            Assert.notNull(bootstrapContext, \"bootstrapContext must not be null\");\n        }\n\n        @Override\n        public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {\n\n        }\n\n    }\n\n}\n```\n\nI had expected that the deprecated `EnvironmentPostProcessor` continue to work, but fails due to null constructor arguments.\n\nLooks like the call to load the deprecated `EnvironmentPostProcessor` missed providing the `ArgumentResolver` as it does for the non-deprecated variant:\n\nhttps://github.com/spring-projects/spring-boot/blob/c7ec1fa7345b7667f8fe07e2d37689ae63d918f3/core/spring-boot/src/main/java/org/springframework/boot/support/SpringFactoriesEnvironmentPostProcessorsFactory.java#L55\n\nhttps://github.com/spring-projects/spring-boot/blob/c7ec1fa7345b7667f8fe07e2d37689ae63d918f3/core/spring-boot/src/main/java/org/springframework/boot/support/SpringFactoriesEnvironmentPostProcessorsFactory.java#L63\n",
+    "labels": [
+      "type: regression"
+    ],
+    "comments": [
+      {
+        "author": "philwebb",
+        "created_at": "2025-11-10T23:59:28Z",
+        "body": "Thanks for trying the RC @ciscoo! "
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "6158a52b8cb98cf70d521363e2e685c6f5d4a489"
+      ]
+    }
+  },
+  {
+    "number": 48049,
+    "title": "JerseyServerMetricsAutoConfigurationTests httpRequestsAreTimed is flaky",
+    "state": "closed",
+    "created_at": "2025-11-11T10:02:40Z",
+    "updated_at": "2025-11-12T11:42:34Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48049",
+    "body": "https://github.com/spring-projects/spring-boot/issues/45404 has just happened for me in a local build:\n\n```\nio.micrometer.core.instrument.search.MeterNotFoundException: Unable to find a meter that matches all the requirements at once. Here's what was found:\n   FAIL: No meter with name 'http.server.requests' was found.\n   FAIL: No meters with type timer were found.\n   FAIL: No meters have the required tag 'uri'.\n\tat app//io.micrometer.core.instrument.search.MeterNotFoundException$FromRequiredSearch.build(MeterNotFoundException.java:242)\n\tat app//io.micrometer.core.instrument.search.MeterNotFoundException$FromRequiredSearch.access$100(MeterNotFoundException.java:49)\n\tat app//io.micrometer.core.instrument.search.MeterNotFoundException.forSearch(MeterNotFoundException.java:46)\n\tat app//io.micrometer.core.instrument.search.RequiredSearch.lambda$getOne$1(RequiredSearch.java:197)\n\tat java.base@25.0.1/java.util.Optional.orElseThrow(Optional.java:403)\n\tat app//io.micrometer.core.instrument.search.RequiredSearch.getOne(RequiredSearch.java:197)\n\tat app//io.micrometer.core.instrument.search.RequiredSearch.timer(RequiredSearch.java:118)\n\tat app//org.springframework.boot.jersey.autoconfigure.metrics.JerseyServerMetricsAutoConfigurationTests.lambda$httpRequestsAreTimed$0(JerseyServerMetricsAutoConfigurationTests.java:88)\n\tat app//org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.accept(AbstractApplicationContextRunner.java:457)\n\tat app//org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.consumeAssertableContext(AbstractApplicationContextRunner.java:371)\n\tat app//org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.lambda$run$1(AbstractApplicationContextRunner.java:349)\n\tat app//org.springframework.boot.test.util.TestPropertyValues.lambda$applyToSystemProperties$0(TestPropertyValues.java:177)\n\tat app//org.springframework.boot.test.util.TestPropertyValues.applyToSystemProperties(TestPropertyValues.java:191)\n\tat app//org.springframework.boot.test.util.TestPropertyValues.applyToSystemProperties(TestPropertyValues.java:176)\n\tat app//org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.lambda$run$0(AbstractApplicationContextRunner.java:349)\n\tat app//org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.withContextClassLoader(AbstractApplicationContextRunner.java:377)\n\tat app//org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.run(AbstractApplicationContextRunner.java:348)\n\tat app//org.springframework.boot.jersey.autoconfigure.metrics.JerseyServerMetricsAutoConfigurationTests.httpRequestsAreTimed(JerseyServerMetricsAutoConfigurationTests.java:85)\n```\n\nLooking at Develocity, it's also been flaky on CI:\n\n<img width=\"944\" height=\"396\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/f9015c78-dba1-4be5-900c-7f78865c2978\" />",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-12T11:28:30Z",
+        "body": "We only see the flakiness on main. This is due to it using Tomcat 11 that includes [this change](https://github.com/apache/tomcat/commit/69eff83577f7c00cbaaca9384ab4b1989f516797) that affects response processing and when the response is sent to the client. With that change in Tomcat 11, the response is now closed when the number of bytes written is greater than or equal to the expected content length. Closing the response allows it to be sent to the client and this is happening earlier than it did with Tomcat 10.1 and, crucially, before the timer has been registered. Sending the response before the timer has been registered initiates a race between the response being received on the client side, which causes the test to proceed and look for the timer, and the timer being registered on the server side.\n\nThe test can be made to fail reliably by configuring it with an artificially slow meter registry:\n\n```java\n@Bean\nSimpleMeterRegistry simpleMeterRegistry() {\n\treturn new SimpleMeterRegistry() {\n\n\t\t@Override\n\t\tprotected Timer newTimer(Id id, DistributionStatisticConfig distributionStatisticConfig,\n\t\t\t\tPauseDetector pauseDetector) {\n\t\t\ttry {\n\t\t\t\tThread.sleep(2500);\n\t\t\t}\n\t\t\tcatch (InterruptedException ex) {\n\t\t\t\tThread.currentThread().interrupt();\n\t\t\t}\n\t\t\treturn super.newTimer(id, distributionStatisticConfig, pauseDetector);\n\t\t}\n\n\t};\n}\n```"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bbfd9f892ba7bba2bf05a5cd85e9a91f92bdb927",
+        "4096b736c8736e764eb7e9b4ea8164ecf0c008cf"
+      ]
+    }
+  },
+  {
+    "number": 48051,
+    "title": "Upgrade to Native Build Tools Plugin 0.11.3",
+    "state": "closed",
+    "created_at": "2025-11-11T10:40:12Z",
+    "updated_at": "2025-11-11T13:59:06Z",
+    "author": "mhalbritter",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48051",
+    "body": "Upgrade to [Native Build Tools Plugin 0.11.3](https://github.com/graalvm/native-build-tools/releases/tag/0.11.3).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "93b14bf07e5ad40875ff210555755abb4c5c8639"
+      ]
+    }
+  },
+  {
+    "number": 48053,
+    "title": "Document how to use ContextPropagatingTaskDecorator for propagating trace context over thread boundaries",
+    "state": "closed",
+    "created_at": "2025-11-11T11:45:06Z",
+    "updated_at": "2025-11-11T13:31:57Z",
+    "author": "mhalbritter",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48053",
+    "body": "Forward port of issue #48052 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port",
+      "theme: observability"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "72740e0f4851e22888ceb5c39f28dcd3ecf6ddce"
+      ]
+    }
+  },
+  {
+    "number": 48055,
+    "title": "WebSecurityCustomizer beans are excluded by WebMvcTest",
+    "state": "closed",
+    "created_at": "2025-11-11T14:25:40Z",
+    "updated_at": "2025-11-11T14:25:59Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48055",
+    "body": "Forward port of issue #48054 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "756a6408fe23211746dfdc7e2b1465384bfa9f60"
+      ]
+    }
+  },
+  {
+    "number": 48057,
+    "title": "Auto-configured JCacheMetrics cannot be customized",
+    "state": "closed",
+    "created_at": "2025-11-11T15:29:37Z",
+    "updated_at": "2025-11-11T15:29:52Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48057",
+    "body": "Forward port of issue #48056 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "0ae86935ae620073e246c649539d1719d7f1a60a"
+      ]
+    }
+  },
+  {
+    "number": 48059,
+    "title": "PortInUseException incorrectly thrown on failure to bind port due to Netty IP misconfiguration",
+    "state": "closed",
+    "created_at": "2025-11-11T16:11:32Z",
+    "updated_at": "2025-11-17T19:49:11Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48059",
+    "body": "Forward port of issue #48058 to 4.0.x.",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "001f953cc9d21ade6ff6071e7371e1883b0cf150",
+        "93a3511f8acbfcbfecf96597291e16e41f3036cd",
+        "2a9e6a2b93a12ad30ed7d7bc661a844092e9492d"
+      ]
+    }
+  },
+  {
+    "number": 48063,
+    "title": "Clarify how warnings about soon-to-expire SSL certificates are reported",
+    "state": "closed",
+    "created_at": "2025-11-11T18:47:04Z",
+    "updated_at": "2025-11-11T18:47:19Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48063",
+    "body": "Forward port of issue #48062 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "152c09d850fd15bcdb992bd630a254e24d147342"
+      ]
+    }
+  },
+  {
+    "number": 48066,
+    "title": "Upgrade to antora-ui-spring 0.4.19",
+    "state": "closed",
+    "created_at": "2025-11-11T19:01:23Z",
+    "updated_at": "2025-11-11T19:01:39Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48066",
+    "body": "Forward port of issue #48065 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "fc66e12bd7a39f3914ba2902ecc7d1685bd02e8f"
+      ]
+    }
+  },
+  {
+    "number": 48070,
+    "title": "Kotlin serialization is used too aggressively when other JSON libraries are available",
+    "state": "closed",
+    "created_at": "2025-11-12T09:41:37Z",
+    "updated_at": "2025-11-12T20:11:07Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48070",
+    "body": "",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-12T13:10:05Z",
+        "body": "We need to do something similar on the codec side of things as well."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "58cdf71b52b6fccd491802a985a753f66afe57d5",
+        "d161aafcdfb335bbf2acb434fa96f83598482250"
+      ]
+    }
+  },
+  {
+    "number": 48071,
+    "title": "ConfigurationPropertiesPlugin should allow to use manual configuration metadata only",
+    "state": "closed",
+    "created_at": "2025-11-12T12:08:39Z",
+    "updated_at": "2025-11-12T12:08:54Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48071",
+    "body": "Forward port of issue #47984 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "73087f369bafc5ee8b69d21fbb87dc495873194f"
+      ]
+    }
+  },
+  {
+    "number": 48075,
+    "title": "Prevent upgrade to Cassandra Driver 4.19.1",
+    "state": "closed",
+    "created_at": "2025-11-12T12:39:50Z",
+    "updated_at": "2025-11-12T12:39:59Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48075",
+    "body": "Forward port of issue #48074 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "481e92dc4b1fcc24db840896c9d1661438d3836b"
+      ]
+    }
+  },
+  {
+    "number": 48076,
+    "title": "Rename spring-boot-kotlin-serialization to align with the name of the Kotlinx module that it pulls in",
+    "state": "closed",
+    "created_at": "2025-11-12T13:13:22Z",
+    "updated_at": "2025-11-12T19:50:39Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48076",
+    "body": "`spring-boot-kotlin-serialization` depends on `org.jetbrains.kotlinx:kotlinx-serialization-json` so it should really be named `spring-boot-kotlinx-serialization-json`",
+    "labels": [
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "sbera13",
+        "created_at": "2025-11-12T15:47:07Z",
+        "body": "Hi @wilkinsona . Would be happy to help with this. Could you please assign this to me?\n"
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-12T16:22:15Z",
+        "body": "Thanks for the offer, @sbera13, but I already have (some of) the changes for this locally."
+      },
+      {
+        "author": "sbera13",
+        "created_at": "2025-11-12T17:52:13Z",
+        "body": "No worries. Thanks for the update @wilkinsona "
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "56999153839f7ab905e61aaebf3dc5bad019b21f"
+      ]
+    }
+  },
+  {
+    "number": 48082,
+    "title": "Upgrade to antora-ui-spring 0.4.20",
+    "state": "closed",
+    "created_at": "2025-11-12T14:14:33Z",
+    "updated_at": "2025-11-12T14:29:46Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48082",
+    "body": "Forward port of issue #48081 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8e71f9b77adb2152e186a542abec928bbbf332fd"
+      ]
+    }
+  },
+  {
+    "number": 48087,
+    "title": "Upgrade to DB2 JDBC 12.1.3.0",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:23Z",
+    "updated_at": "2025-11-12T14:51:13Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48087",
+    "body": "Upgrade to DB2 JDBC 12.1.3.0.",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c7bc4ff263b0da53eda6f1a10a8c6c65946c681d"
+      ]
+    }
+  },
+  {
+    "number": 48088,
+    "title": "Upgrade to Hibernate 7.1.7.Final",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:27Z",
+    "updated_at": "2025-11-17T07:32:14Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48088",
+    "body": "Upgrade to [Hibernate 7.1.7.Final](https://github.com/hibernate/hibernate-orm/releases/tag/7.1.7).",
+    "labels": [
+      "type: task",
+      "status: superseded"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "978959658b97a51c6743d11ff4ccc06e8680e5d7"
+      ]
+    }
+  },
+  {
+    "number": 48089,
+    "title": "Upgrade to Jackson Bom 3.0.2",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:31Z",
+    "updated_at": "2025-11-12T14:51:15Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48089",
+    "body": "Upgrade to [Jackson Bom 3.0.2](https://github.com/FasterXML/jackson/wiki/Jackson-Release-3.0.2).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d530c2c104264c361545cb04f5d43e9cd7705f4d"
+      ]
+    }
+  },
+  {
+    "number": 48090,
+    "title": "Upgrade to jOOQ 3.19.28",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:35Z",
+    "updated_at": "2025-11-12T14:51:16Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48090",
+    "body": "Upgrade to [jOOQ 3.19.28](https://github.com/jOOQ/jOOQ/releases/tag/version-3.19.28).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "24cc3e490fbf64ee1e5baaa657f7894e1d034644"
+      ]
+    }
+  },
+  {
+    "number": 48091,
+    "title": "Upgrade to Logback 1.5.21",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:39Z",
+    "updated_at": "2025-11-12T14:51:17Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48091",
+    "body": "Upgrade to Logback 1.5.21.",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9aea720fd8764ab4a406bbf26be6095a6c88997a"
+      ]
+    }
+  },
+  {
+    "number": 48092,
+    "title": "Upgrade to MySQL 9.5.0",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:43Z",
+    "updated_at": "2025-11-12T14:51:18Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48092",
+    "body": "Upgrade to [MySQL 9.5.0](https://dev.mysql.com/doc/relnotes/connector-j/en/news-9-5-0.html).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5dffa3da4e76d6d998dab749d60042e537b81a89"
+      ]
+    }
+  },
+  {
+    "number": 48093,
+    "title": "Upgrade to Prometheus Client 1.4.3",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:47Z",
+    "updated_at": "2025-11-12T14:51:18Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48093",
+    "body": "Upgrade to [Prometheus Client 1.4.3](https://github.com/prometheus/client_java/releases/tag/v1.4.3).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "0cb87dd0471f48efb6fa93580041f324d7cff950"
+      ]
+    }
+  },
+  {
+    "number": 48094,
+    "title": "Upgrade to Tomcat 11.0.14",
+    "state": "closed",
+    "created_at": "2025-11-12T14:31:51Z",
+    "updated_at": "2025-11-12T14:51:19Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48094",
+    "body": "Upgrade to [Tomcat 11.0.14](https://tomcat.apache.org/tomcat-11.0-doc/changelog.html).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4dd933738c7d804dffd899768ccd271aefd505f0"
+      ]
+    }
+  },
+  {
+    "number": 48095,
+    "title": "Some configuration properties are not documented in the appendix",
+    "state": "closed",
+    "created_at": "2025-11-12T14:56:26Z",
+    "updated_at": "2025-11-12T14:57:14Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48095",
+    "body": "Forward port of issue #48073 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "edd530c7e1dcc2936e50077b1ecb545a5473346d"
+      ]
+    }
+  },
+  {
+    "number": 48096,
+    "title": "Custom XML converters should override defaults in HttpMessageConverters",
+    "state": "closed",
+    "created_at": "2025-11-12T15:11:42Z",
+    "updated_at": "2025-11-12T15:19:33Z",
+    "author": "bclozel",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48096",
+    "body": "Currently, a `JacksonXmlHttpMessageConverter` bean provided by the application will be configured as a custom converter, ahead of the default ones. It should be instead configured using the `withXmlConverter` builder method.",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "44f0c772a2a82cfc1b24583f682712c51e9c7b6a"
+      ]
+    }
+  },
+  {
+    "number": 48097,
+    "title": "Default values of Kotlinx Serialization JSON configuration properties are not documented",
+    "state": "closed",
+    "created_at": "2025-11-12T17:35:51Z",
+    "updated_at": "2025-11-12T19:50:40Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48097",
+    "body": "",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "eb381d642a00a9e36d70cd90fac4fca809106a25"
+      ]
+    }
+  },
+  {
+    "number": 48099,
+    "title": "Image building may fail when specifying a platform if an image has already been built with a different platform",
+    "state": "closed",
+    "created_at": "2025-11-12T22:14:03Z",
+    "updated_at": "2025-11-12T22:42:28Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48099",
+    "body": "Forward port of issue #48098 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a25bcfc6107dc3e62e900018da7c0d2bfa521c72"
+      ]
+    }
+  },
+  {
+    "number": 48103,
+    "title": "Buildpack fails with recent Docker installs due to hardcoded version in URL",
+    "state": "closed",
+    "created_at": "2025-11-13T04:39:46Z",
+    "updated_at": "2025-11-13T05:02:23Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48103",
+    "body": "Forward port of issue #48102 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "55c3f03144a647cf962956118efcd26eeb1b8126"
+      ]
+    }
+  },
+  {
+    "number": 48106,
+    "title": "Add ExplicitInitialization checkstyle rule",
+    "state": "closed",
+    "created_at": "2025-11-13T09:31:38Z",
+    "updated_at": "2025-11-13T09:33:35Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48106",
+    "body": "Forward port of issue #48105 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d1e5fe32483d894b4a471f0d2cb46568720e86fd"
+      ]
+    }
+  },
+  {
+    "number": 48109,
+    "title": "Use ObjectNode for building ImagePlatform JSON",
+    "state": "closed",
+    "created_at": "2025-11-13T09:56:12Z",
+    "updated_at": "2025-11-13T09:56:24Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48109",
+    "body": "Forward port of issue #48108 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "e89bb1f62f866e3f3d244e9d778b96948daf7847"
+      ]
+    }
+  },
+  {
+    "number": 48110,
+    "title": "Check that deprecation replacement property exists in additional-spring-configuration-metadata.json",
+    "state": "closed",
+    "created_at": "2025-11-13T10:03:39Z",
+    "updated_at": "2025-11-13T10:20:43Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48110",
+    "body": "Forward port of issue #48107 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9cc18130e6f65ba1e1bfe9a34a1016f3e6987f4f"
+      ]
+    }
+  },
+  {
+    "number": 48112,
+    "title": "Document support for configuring servlet context init parameters using properties",
+    "state": "closed",
+    "created_at": "2025-11-13T10:56:56Z",
+    "updated_at": "2025-11-13T10:57:12Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48112",
+    "body": "Forward port of issue #48111 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f1aae5c7fc96adbe7e5f3f2d602aff61e99a839f"
+      ]
+    }
+  },
+  {
+    "number": 48115,
+    "title": "Document EndpointJsonMapper and management.endpoints.jackson.isolated-json-mapper",
+    "state": "closed",
+    "created_at": "2025-11-13T11:29:51Z",
+    "updated_at": "2025-11-13T11:39:18Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48115",
+    "body": "Forward port of issue #48114 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-13T11:39:18Z",
+        "body": "See https://github.com/spring-projects/spring-boot/issues/48116 for correct of the property's name in 4.0."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "62a1dd6ed1f2b4fb4a9742332118908ec52c226d"
+      ]
+    }
+  },
+  {
+    "number": 48116,
+    "title": "Properties for configuring an isolated JsonMapper or ObjectMapper are incorrectly named",
+    "state": "closed",
+    "created_at": "2025-11-13T11:31:03Z",
+    "updated_at": "2025-11-13T12:02:21Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48116",
+    "body": "",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bb0437c0e1d88e3bb4db397ae040494180306333"
+      ]
+    }
+  },
+  {
+    "number": 48120,
+    "title": "Upgrade to Jetty 12.1.4",
+    "state": "closed",
+    "created_at": "2025-11-13T13:10:39Z",
+    "updated_at": "2025-11-13T13:21:43Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48120",
+    "body": "Upgrade to [Jetty 12.1.4](https://github.com/jetty/jetty.project/releases/tag/jetty-12.1.4).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "eeb256bdcb59a15dc94ab1677372d49085797810"
+      ]
+    }
+  },
+  {
+    "number": 48122,
+    "title": "Use since attribute in configuration properties deprecation consistently",
+    "state": "closed",
+    "created_at": "2025-11-13T13:45:38Z",
+    "updated_at": "2025-11-13T13:55:58Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48122",
+    "body": "Forward port of issue #47980 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "3d23261f874c5b0b427cf3f4c66e9c884ecbe521",
+        "083a0a68afac5a4efedb969eb296e4de10986014"
+      ]
+    }
+  },
+  {
+    "number": 48126,
+    "title": "Upgrade to spring-doc-actions 0.0.21",
+    "state": "closed",
+    "created_at": "2025-11-13T20:39:38Z",
+    "updated_at": "2025-11-13T23:44:12Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48126",
+    "body": "Something like https://github.com/spring-projects/spring-security/commit/9f214978a4e49b2cf5b263e2078b5f47cc170ac7",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [
+      {
+        "author": "philwebb",
+        "created_at": "2025-11-13T23:44:12Z",
+        "body": "Fixed in https://github.com/spring-projects/spring-boot/commit/829c7898159821a7f91a77ca074232e0b54ca7a5"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "829c7898159821a7f91a77ca074232e0b54ca7a5"
+      ]
+    }
+  },
+  {
+    "number": 48128,
+    "title": "New arm64 macbooks fail to bootBuildImage due to incorrect platform image",
+    "state": "closed",
+    "created_at": "2025-11-13T23:27:18Z",
+    "updated_at": "2025-11-13T23:34:47Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48128",
+    "body": "Forward port of issue #48127 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "90d53b6d1b6933f2abc1c9a40d92d32eebb57f6c"
+      ]
+    }
+  },
+  {
+    "number": 48131,
+    "title": "Correct section about required setters in \"Type-safe Configuration Properties\"",
+    "state": "closed",
+    "created_at": "2025-11-14T08:08:14Z",
+    "updated_at": "2025-11-14T08:15:11Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48131",
+    "body": "Forward port of issue #48130 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "3a913ef480b631278fbd1ab4578e3cfdcaeb6449"
+      ]
+    }
+  },
+  {
+    "number": 48132,
+    "title": "Auto-configuration exclusions are checked using a different class loader to the one that loads auto-configuration classes",
+    "state": "closed",
+    "created_at": "2025-11-14T08:55:51Z",
+    "updated_at": "2025-11-14T08:56:01Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48132",
+    "body": "Forward port of issue #48129 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "097184c2e4f43b810d0262e296b54c41b6c6480e"
+      ]
+    }
+  },
+  {
+    "number": 48134,
+    "title": "Fix typo in PortInUseException Javadoc",
+    "state": "closed",
+    "created_at": "2025-11-14T08:58:00Z",
+    "updated_at": "2025-11-14T08:58:21Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48134",
+    "body": "Forward port of issue #48133 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b65fe6520a27dab6a4800e82b27d95fbf8fbf52c"
+      ]
+    }
+  },
+  {
+    "number": 48136,
+    "title": "Optimize StringBuilder initialization in CorrelationIdFormatter",
+    "state": "closed",
+    "created_at": "2025-11-14T09:10:27Z",
+    "updated_at": "2025-11-14T09:10:38Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48136",
+    "body": "Forward port of issue #48135 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8a52f4931b0edadcdd12d5de968557c9818dbf35"
+      ]
+    }
+  },
+  {
+    "number": 48137,
+    "title": "Upgrade to Elasticsearch Client 9.2.1",
+    "state": "closed",
+    "created_at": "2025-11-14T09:47:31Z",
+    "updated_at": "2025-11-14T09:47:46Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48137",
+    "body": "Upgrade to [Elasticsearch Client 9.2.1](https://www.elastic.co/docs/release-notes/elasticsearch/clients/java/9-2-1).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "1fac16773dcc8e9cd1cdecc61dee25323af7ec92"
+      ]
+    }
+  },
+  {
+    "number": 48142,
+    "title": "Build should not exclude commons-logging anymore",
+    "state": "closed",
+    "created_at": "2025-11-15T09:50:50Z",
+    "updated_at": "2025-11-15T10:29:54Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48142",
+    "body": "As of Spring Framework 7, `commons-logging:commons-logging` is an API dependency of `spring-core` that supersedes `spring-jcl`.\n\nWe therefore no longer need to exclude commons logging but we still have a few places where we do that.",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bc25b58c6ff2a73ce3440789c50302332a64a481"
+      ]
+    }
+  },
+  {
+    "number": 48150,
+    "title": "Upgrade to Hibernate 7.1.8.Final",
+    "state": "closed",
+    "created_at": "2025-11-17T07:32:10Z",
+    "updated_at": "2025-11-17T07:38:26Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48150",
+    "body": "Upgrade to [Hibernate 7.1.8.Final](https://github.com/hibernate/hibernate-orm/releases/tag/7.1.8).\n\nSupersedes #48088",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d9a378b8e5ad85ce915e0b5a1734b70a784b20cd"
+      ]
+    }
+  },
+  {
+    "number": 48151,
+    "title": "Upgrade to Jetty Reactive HTTPClient 4.1.4",
+    "state": "closed",
+    "created_at": "2025-11-17T07:32:16Z",
+    "updated_at": "2025-11-17T07:38:27Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48151",
+    "body": "Upgrade to Jetty Reactive HTTPClient 4.1.4.",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a03981eb49df29bc8e4e84bcd832a2a2924165ff"
+      ]
+    }
+  },
+  {
+    "number": 48152,
+    "title": "Upgrade to Testcontainers 2.0.2",
+    "state": "closed",
+    "created_at": "2025-11-17T07:32:20Z",
+    "updated_at": "2025-11-17T07:38:28Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48152",
+    "body": "Upgrade to [Testcontainers 2.0.2](https://github.com/testcontainers/testcontainers-java/releases/tag/2.0.2).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2394f44474ca7c35f73524600083da632120629f"
+      ]
+    }
+  },
+  {
+    "number": 48155,
+    "title": "Elasticsearch client's sniffer functionality should not be enabled by default",
+    "state": "closed",
+    "created_at": "2025-11-17T16:56:15Z",
+    "updated_at": "2025-11-18T22:08:13Z",
+    "author": "anbusampath",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48155",
+    "body": "Refer - https://github.com/spring-projects/spring-boot/issues/47301#issuecomment-3542187734 for background.\n\nElasticsearch Java Client 9.0.0 introduced [Rest5Client](https://www.elastic.co/docs/release-notes/elasticsearch/clients/java/9-0-0) which is drop-in replacement for [elasticsearch-rest-client ](https://mvnrepository.com/artifact/org.elasticsearch.client/elasticsearch-rest-client)and [elasticsearch-rest-client-sniffer](https://mvnrepository.com/artifact/org.elasticsearch.client/elasticsearch-rest-client-sniffer).\n\nSpring Boot 3 enables sniffer feature only if elasticsearch-rest-client-sniffer dependency available on classpath. On cloud deployment, it is advised to not use sniff explained in [When not to sniff?](https://www.elastic.co/blog/elasticsearch-sniffing-best-practices-what-when-why-how). Spring Boot 4 enabled it by default. Since sniffing is optional opt-in feature, it is better to disable by default. \n\nDisable by default keeps functionally equal to previous version.\n\n@l-trotta @filiphr Please share your thought as well.\n",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "filiphr",
+        "created_at": "2025-11-17T17:22:20Z",
+        "body": "Thanks for raising this @anbusampath. We personally never used the Sniffer. With Spring Boot 4 we are also disabling that by default and leave it to our users to enable it if they want to use it.\n\nIn any case reading the blog post you've shared I can imagine that people might have more problems if sniffing is enabled by default and they do not really understand it. From that point of view I would vote for making it opt-in in Spring Boot itself as well. "
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-17T17:35:09Z",
+        "body": "I think this section of the best practices blog post is key:\n\n> The main takeaway from this is you should know your infrastructure before you enable sniffing. There are many solutions to this IP address issue, and there is no silver bullet, because it all depends on your system configuration.\n\nWe should disable it by default in Boot. Thanks for raising this, @anbusampath."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5e4876671d60eaf649f3dc2a38cf6874c46e2914",
+        "ae4bf3e501d0fea7b7ab9b6e8799aab5cbec9446"
+      ]
+    }
+  },
+  {
+    "number": 48158,
+    "title": "spring.build-type is not taken into account in buildSrc",
+    "state": "closed",
+    "created_at": "2025-11-17T21:00:29Z",
+    "updated_at": "2025-11-17T21:00:39Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48158",
+    "body": "Forward port of issue #48157 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "7a8bc93fef8e4b4589db72ee3484a57a15059732"
+      ]
+    }
+  },
+  {
+    "number": 48160,
+    "title": "Ivysettings are missing realm for commercial builds",
+    "state": "closed",
+    "created_at": "2025-11-18T05:00:12Z",
+    "updated_at": "2025-11-18T05:00:19Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48160",
+    "body": "Forward port of issue #48159 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2e54aa67600e4fbbed92c341bc5d036cb1bab2d9"
+      ]
+    }
+  },
+  {
+    "number": 48161,
+    "title": "Starter for spring-boot-micrometer-metrics is missing",
+    "state": "closed",
+    "created_at": "2025-11-18T07:46:11Z",
+    "updated_at": "2025-11-18T08:34:13Z",
+    "author": "mhalbritter",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48161",
+    "body": "",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4af532b8eedb8af108dc21229f92684455fb84a7"
+      ]
+    }
+  },
+  {
+    "number": 48163,
+    "title": "Revise AWS section of \"Deploying to the Cloud\" in reference manual",
+    "state": "closed",
+    "created_at": "2025-11-18T10:06:10Z",
+    "updated_at": "2025-11-18T10:06:21Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48163",
+    "body": "Forward port of issue #48156 to 4.0.x.",
+    "labels": [
+      "type: documentation",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "7e9f5ebd96b861dbe0ca814c4ca520eb3fa94668"
+      ]
+    }
+  },
+  {
+    "number": 48167,
+    "title": "Upgrade to Gradle 9.2.1",
+    "state": "closed",
+    "created_at": "2025-11-18T12:26:18Z",
+    "updated_at": "2025-11-18T12:45:21Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48167",
+    "body": "",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "3d8c4390915edcd0c279de3b742f5260983a6fa7"
+      ]
+    }
+  },
+  {
+    "number": 48168,
+    "title": "Upgrade to Spring Framework 7.0.1",
+    "state": "closed",
+    "created_at": "2025-11-18T12:26:37Z",
+    "updated_at": "2025-11-20T09:49:09Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48168",
+    "body": "Upgrade to [Spring Framework 7.0.1](https://github.com/spring-projects/spring-framework/releases/tag/v7.0.1).\n\nSupersedes #47825",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "dc140dfc2ea951b75dbb2ba910972318d919759d",
+        "4848bc1a16aab785742b318845c5d6030abf9e83"
+      ]
+    }
+  },
+  {
+    "number": 48171,
+    "title": "ssl.chain.expiry metrics doesn't update for dynamically registered SSL bundles",
+    "state": "closed",
+    "created_at": "2025-11-18T15:07:37Z",
+    "updated_at": "2025-11-18T15:07:47Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48171",
+    "body": "Forward port of issue #48153 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "44e29b654d4677670ebfe7cbfd2cb335649971c0"
+      ]
+    }
+  },
+  {
+    "number": 48174,
+    "title": "Bump js-yaml from 4.1.0 to 4.1.1 in /antora",
+    "state": "closed",
+    "created_at": "2025-11-18T16:40:51Z",
+    "updated_at": "2025-11-18T16:41:18Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48174",
+    "body": "Forward port of issue #48173 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b1d78efbf3fc4b826a213f5711cc936dd6781fa7"
+      ]
+    }
+  },
+  {
+    "number": 48175,
+    "title": "Change tomcat and jetty runtime modules to starters",
+    "state": "closed",
+    "created_at": "2025-11-18T21:47:57Z",
+    "updated_at": "2025-11-20T11:43:51Z",
+    "author": "vpavic",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48175",
+    "body": "https://github.com/spring-projects/spring-boot/issues/46944 and https://github.com/spring-projects/spring-boot/commit/635e766aaf4c3e47e4884daa96fbefffced91bff introduced some changes that are, in my opinion, negating some of the benefits of the modularization and are a step in wrong direction.\n\nPrior to that commit, `spring-boot-tomcat` would only pull in the necessary Tomcat dependencies (`tomcat-embed-core`) but now it also pulls in `tomcat-embed-el` and `tomcat-embed-websocket` that are not needed by many applications. This goes against some of the [promises of modularization](https://spring.io/blog/2025/10/28/modularizing-spring-boot#why-modularize-the-codebase).\n\nAdditionally, _runtime_ modules introduced by that commit are in reality starter modules (as they hold no actual code) pretending to be actual modules. This sets a bad precedent, as it raises questions about what qualifies as a module vs a starter.\n\nI didn't review the full codebase to whether there are other occurrences of this pattern, but my expectation around modules would be that they:\n\n- hold code that integrates given technology in Spring Boot\n- transitively pull in only minimal dependencies using appropriate dependency configuration while declaring non-essential ones as optional\n- are combined with other dependencies (based on some opinion) in starters\n\nI understand the goal of the https://github.com/spring-projects/spring-boot/issues/46944 was to make WAR deployments easier, but it shouldn't be done at the expense of other use cases. Did you perhaps consider having dedicated starters that hold opinion about WAR deployments?\n\nI focused only on `spring-boot-tomcat` in this issue, but analogous concerns apply to `spring-boot-jetty`.",
+    "labels": [
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "philwebb",
+        "created_at": "2025-11-20T06:03:26Z",
+        "body": "Thanks for raising this @vpavic. It's been pretty hard to find an arrangement that works for all users and all build systems.\n\nWe discussed this issue this morning on our team call and were going to roll-back the change, but I think I've found another way to make it work by making the runtime modules starters. I've tested this setup manually using https://github.com/philwebb/gh-46944 and it appears to work.\n\nThe rest of the team will probably want to review this before we release 4.0.0, but 🤞 this works and also solves your concerns. "
+      },
+      {
+        "author": "vpavic",
+        "created_at": "2025-11-20T06:34:19Z",
+        "body": "Thanks for taking this feedback into account, especially at such a late stage. Your changes from 2685f4b look like the arrangement I had hoped to have."
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-20T09:52:36Z",
+        "body": "The error infrastructure is missing when deployed to a container:\n\n```\n   ErrorMvcAutoConfiguration:\n      Did not match:\n         - @ConditionalOnClass did not find required class 'org.springframework.boot.web.server.autoconfigure.ServerProperties' (OnClassCondition)\n```"
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-20T11:43:50Z",
+        "body": "https://github.com/spring-projects/spring-boot/issues/48201 fixes the problem with the missing error infrastructure, not by changing how things are packaged in an uber war but by removing a dependency on `spring-boot-web-server` and `ServerProperties` from `ErrorMvcAutoConfigruation`.\n\nThere remains a small difference in what's in `WEB-INF/lib-provided`:\n\n```\n unzip -l gh-46944-tomcat-maven/target/gh-46944-tomcat-maven-0.0.1-SNAPSHOT.war| grep WEB-INF/lib-provided | sort\n        0  11-20-2025 11:16   WEB-INF/lib-provided/\n   122023  02-01-1980 00:00   WEB-INF/lib-provided/spring-boot-tomcat-4.0.0-SNAPSHOT.jar\n   174087  02-01-1980 00:00   WEB-INF/lib-provided/spring-boot-web-server-4.0.0-SNAPSHOT.jar\n   270004  11-05-2025 19:03   WEB-INF/lib-provided/tomcat-embed-el-11.0.14.jar\n   286284  11-05-2025 19:03   WEB-INF/lib-provided/tomcat-embed-websocket-11.0.14.jar\n  3579737  11-05-2025 19:03   WEB-INF/lib-provided/tomcat-embed-core-11.0.14.jar\n```\n\n```\n unzip -l gh-46944-tomcat-gradle/build/libs/gh-46944-tomcat-gradle-0.0.1-SNAPSHOT.war| grep WEB-INF/lib-provided | sort\n        0  02-01-1980 00:00   WEB-INF/lib-provided/\n    26378  02-01-1980 00:00   WEB-INF/lib-provided/jakarta.annotation-api-3.0.0.jar\n   122023  02-01-1980 00:00   WEB-INF/lib-provided/spring-boot-tomcat-4.0.0-SNAPSHOT.jar\n   174087  02-01-1980 00:00   WEB-INF/lib-provided/spring-boot-web-server-4.0.0-SNAPSHOT.jar\n   270004  02-01-1980 00:00   WEB-INF/lib-provided/tomcat-embed-el-11.0.14.jar\n   286284  02-01-1980 00:00   WEB-INF/lib-provided/tomcat-embed-websocket-11.0.14.jar\n  3579737  02-01-1980 00:00   WEB-INF/lib-provided/tomcat-embed-core-11.0.14.jar\n```\n\nIdeally, `jakarta.annotation-api-3.0.0.jar` would be in `WEB-INF/lib-provided` as it will be provided by the servlet container but I think what we have is good enough for now at least."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2685f4bf2917f467a14eaf5a8c9a8e08b45dcfe1"
+      ]
+    }
+  },
+  {
+    "number": 48177,
+    "title": "Properties bound in the child management context ignore the parent's environment prefix",
+    "state": "closed",
+    "created_at": "2025-11-19T00:16:03Z",
+    "updated_at": "2025-11-19T01:08:43Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48177",
+    "body": "Forward port of issue #48176 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d4b9786b8b53556c726e63bd26163cc37c985570"
+      ]
+    }
+  },
+  {
+    "number": 48182,
+    "title": "SslMeterBinder doesn't register metrics for dynamically added bundles if no bundles exist at bind time",
+    "state": "closed",
+    "created_at": "2025-11-19T13:49:46Z",
+    "updated_at": "2025-11-19T14:12:35Z",
+    "author": "mhalbritter",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48182",
+    "body": "Forward port of issue #48180 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "3a13d07301135e6c1585333852e0c59cfac064d8"
+      ]
+    }
+  },
+  {
+    "number": 48184,
+    "title": "Upgrade to Cassandra Driver 4.19.2",
+    "state": "closed",
+    "created_at": "2025-11-19T14:50:15Z",
+    "updated_at": "2025-11-19T14:58:04Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48184",
+    "body": "Upgrade to Cassandra Driver 4.19.2.",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c8f8798a7dcdc406d25cd43f04388b439e09f0b3"
+      ]
+    }
+  },
+  {
+    "number": 48185,
+    "title": "Upgrade to Kafka 4.1.1",
+    "state": "closed",
+    "created_at": "2025-11-19T14:50:19Z",
+    "updated_at": "2025-11-19T14:58:04Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48185",
+    "body": "Upgrade to [Kafka 4.1.1](https://downloads.apache.org/kafka/4.1.1/RELEASE_NOTES.html).",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "885a83407fdbaf822e217a54544428f7439fc3ab"
+      ]
+    }
+  },
+  {
+    "number": 48190,
+    "title": "Upgrade to antora-ui-spring v0.4.21",
+    "state": "closed",
+    "created_at": "2025-11-19T17:38:27Z",
+    "updated_at": "2025-11-19T17:39:08Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48190",
+    "body": "Forward port of issue #48189 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "058e455cd85f3a55a8170ff23e64f0da6f1ad647"
+      ]
+    }
+  },
+  {
+    "number": 48193,
+    "title": "spring.test.webclient.mockrestserviceserver.enabled is not aligned with its module's name",
+    "state": "closed",
+    "created_at": "2025-11-20T00:16:03Z",
+    "updated_at": "2025-11-20T09:29:15Z",
+    "author": "jonenst",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48193",
+    "body": "<!--\nThanks for raising a Spring Boot issue. Please take the time to review the following\ncategories as some of them do not apply here.\n\n🙅 \"Please DO NOT Raise an Issue\" Cases\n- Question\nSTOP!! Please ask questions about how to use something, or to understand why something isn't\nworking as you expect it to, on Stack Overflow using the spring-boot tag.\n- Security Vulnerability\nSTOP!! Please don't raise security vulnerabilities here. Head over to https://spring.io/security-policy to learn how to disclose them responsibly.\n- Managed Dependency Upgrade\nYou DO NOT need to raise an issue for a managed dependency version upgrade as there's a semi-automatic process for checking managed dependencies for new versions before a release. BUT pull requests for upgrades that are more involved than just a version property change are still most welcome.\n- With an Immediate Pull Request\nAn issue will be closed as a duplicate of the immediate pull request, so you don't have to raise an issue if you plan to create a pull request immediately.\n\n🐞 Bug report (please don't include this emoji/text, just add your details)\nPlease provide details of the problem, including the version of Spring Boot that you\nare using. If possible, please provide a test case or sample application that reproduces\nthe problem. This makes it much easier for us to diagnose the problem and to verify that\nwe have fixed it.\n\n🎁 Enhancement (please don't include this emoji/text, just add your details)\nPlease start by describing the problem that you are trying to solve. There may already\nbe a solution, or there may be a way to solve it that you hadn't considered.\n\n\nTIP: You can always edit your issue if it isn't formatted correctly.\n     See https://guides.github.com/features/mastering-markdown \n-->\nHi, I was looking into the history of @AutoConfigureWebClient(registerRestTemplate=true). I saw AutoConfigureWebClient was renamed to AutoConfigureRestClient (awesome) and registerRestTemplate was removed in https://github.com/spring-projects/spring-boot/commit/9eb05ebb102b17e9680706169d36aa52b7e8ac73 with @philwebb  looking into the naming side of things. \n\n\nI still see \n```\nmodule/spring-boot-restclient-test/src/main/resources/META-INF/spring-configuration-metadata.json:      \"name\": \"spring.test.webclient.register-rest-template\",\n```\nthis could be cleaned up I guess ?\n\nAlso it seems like in 2016 (springboot 1.4.0 wow) when AutoConfigureWebClient was created, the word \"webclient\" didn't mean webflux, it was more like a generic word. And so in 2016, AutoConfigureWebClient along with MockRestServiceServerAutoConfiguration were created with properties in the `spring.test.webclient` namespace, so maybe \"spring.test.webclient.mockrestserviceserver\" can be renamed as well ? I don't know what consequences this has at all so maybe it's not possible\n\nFor info, using `git grep 'spring\\.test\\.webcl'`\nv3.5.6 has\n```\n@ConditionalOnBooleanProperty(\"spring.test.webclient.mockrestserviceserver.enabled\")\n@ConditionalOnBooleanProperty(\"spring.test.webclient.register-rest-template\")\n```\nmain currently only has\n```\n@ConditionalOnBooleanProperty(\"spring.test.webclient.mockrestserviceserver.enabled\")\n```\nso renaming it would remove this last trace of things that have webclient in their name but are not related to webflux webclient.\n(this ambiguous naming is what sent me to this rabbithole in the first place)\n\nI'm not an expert so maybe I misunderstood all of this, if so please ignore/close this issue ",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "75da8b80ec15ff60d4362f17dd0686177ca429b1"
+      ]
+    }
+  },
+  {
+    "number": 48197,
+    "title": "Gradle war task does not exclude starter POMs from lib-provided",
+    "state": "closed",
+    "created_at": "2025-11-20T05:58:50Z",
+    "updated_at": "2025-11-20T05:59:00Z",
+    "author": "philwebb",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48197",
+    "body": "Forward port of issue #48196 to 4.0.x.",
+    "labels": [
+      "type: bug",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2e75008ba162c7815777a37ff536ce4a9e45bb30"
+      ]
+    }
+  },
+  {
+    "number": 48198,
+    "title": "With both Jackson 2 and 3 on the classpath, @JsonTest fails due to duplicate jacksonTesterFactoryBean",
+    "state": "closed",
+    "created_at": "2025-11-20T08:22:18Z",
+    "updated_at": "2025-11-20T09:15:01Z",
+    "author": "goafabric",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48198",
+    "body": "When using the \"funky\" combination of \n- Spring Boot 4.0 (RC2)\n- AOT Test Processing\n- @JsonTest\n- Legacy  spring-boot-jackson2 dependency\n\nWe get the following error below.\nThis may be a drastic combination, but its currently used in some of our projects.\nRemoving spring-boot-jackson2 solves the issue.\n\nThe problem persists in latest SNAPSHOT (20.11.2025)\n\nMinimal Producer is attached.\n\n```\nCaused by: org.springframework.beans.factory.support.BeanDefinitionOverrideException: Invalid bean definition with name 'jacksonTesterFactoryBean' defined in class path resource [org/springframework/boot/jackson2/autoconfigure/Jackson2TesterTestAutoConfiguration.class]: Cannot register bean definition [Root bean: class=null; scope=prototype; abstract=false; lazyInit=null; autowireMode=3; dependencyCheck=0; autowireCandidate=true; primary=false; fallback=false; factoryBeanName=org.springframework.boot.jackson2.autoconfigure.Jackson2TesterTestAutoConfiguration; factoryMethodName=jacksonTesterFactoryBean; initMethodNames=null; destroyMethodNames=[(inferred)]; defined in class path resource [org/springframework/boot/jackson2/autoconfigure/Jackson2TesterTestAutoConfiguration.class]] for bean 'jacksonTesterFactoryBean' since there is already [Root bean: class=null; scope=prototype; abstract=false; lazyInit=null; autowireMode=3; dependencyCheck=0; autowireCandidate=true; primary=false; fallback=false; factoryBeanName=org.springframework.boot.jackson.autoconfigure.JacksonTesterTestAutoConfiguration; factoryMethodName=jacksonTesterFactoryBean; initMethodNames=null; destroyMethodNames=[(inferred)]; defined in class path resource [org/springframework/boot/jackson/autoconfigure/JacksonTesterTestAutoConfiguration.class]] bound.\n```",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "goafabric",
+        "created_at": "2025-11-20T08:22:32Z",
+        "body": "[Archiv.zip](https://github.com/user-attachments/files/23649111/Archiv.zip)"
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-20T08:28:40Z",
+        "body": "Thanks for the report and sample. You don't have to be using AOT for the problem to occur. It will also fail during a normal test run if you using `@JsonTest` and have both Jackson 2 and 3 on the classpath."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "81ec7aeb703e7434288fcfa81260dc4d97d04620"
+      ]
+    }
+  },
+  {
+    "number": 48199,
+    "title": "Removed property spring.test.webclient.register-rest-template is still documented",
+    "state": "closed",
+    "created_at": "2025-11-20T08:23:05Z",
+    "updated_at": "2025-11-20T09:29:35Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48199",
+    "body": "See #48193.",
+    "labels": [
+      "type: documentation"
+    ],
+    "comments": [
+      {
+        "author": "chenwulong",
+        "created_at": "2025-11-20T09:22:14Z",
+        "body": "I’d like to work on this, is it still available?"
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2025-11-20T09:29:35Z",
+        "body": "Thanks for the offer, @chenwulong, but assigned issues are not available for contribution."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "331e9bcbf79dad3b1557912a66aa3501d88149d5"
+      ]
+    }
+  },
+  {
+    "number": 48201,
+    "title": "Error properties are a general web concern and should not be located beneath server.*",
+    "state": "closed",
+    "created_at": "2025-11-20T09:59:16Z",
+    "updated_at": "2025-11-20T12:54:38Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48201",
+    "body": "",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "3becdc7d47f5c0a9478d1a734f4ee94f84a1e7bd"
+      ]
+    }
+  },
+  {
+    "number": 48205,
+    "title": "Update SDKMan configuration to publish 4.0.x as the default version",
+    "state": "closed",
+    "created_at": "2025-11-20T14:20:08Z",
+    "updated_at": "2025-11-20T14:20:19Z",
+    "author": "wilkinsona",
+    "url": "https://github.com/spring-projects/spring-boot/issues/48205",
+    "body": "Forward port of issue #48203 to 4.0.x.",
+    "labels": [
+      "type: task",
+      "status: forward-port"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "34879288f9305e8fb4ca292607e0f997e48a60c6"
+      ]
+    }
+  }
+]

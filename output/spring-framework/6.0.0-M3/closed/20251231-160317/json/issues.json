@@ -1,0 +1,1137 @@
+[
+  {
+    "number": 22609,
+    "title": "Prevent @Bean method overloading by default (avoiding accidental overloading and condition mismatches)",
+    "state": "closed",
+    "created_at": "2019-03-17T03:35:55Z",
+    "updated_at": "2022-02-20T07:57:51Z",
+    "author": "rfelgent",
+    "url": "https://github.com/spring-projects/spring-framework/issues/22609",
+    "body": "Hello poeple,\r\n\r\nI lost some hours configuring a bean with same id but different properties in java config, as the raised error message was not very helpful.\r\n\r\nThe bean in question must be created, as it is required via declarative `@DependsOn` configuration.\r\n\r\nThe error\r\n\r\n```\r\nA component required a bean named 'postgresqlContainer' that could not be found.\r\n\t- Bean method 'postgresqlContainer' in 'PersistenceConfig.DbServersConfig' not loaded because @ConditionalOnProperty (app.persistence.servers.postgresql.enabled=true) found different value in property 'enabled'\r\n\t- Bean method 'postgresqlContainer' in 'PersistenceConfig.DbServersConfig' not loaded because @ConditionalOnProperty (app.persistence.servers.postgresql.enabled=true) found different value in property 'enabled'\r\n```\r\n\r\nThis config fails:\r\n\r\n```java\r\n@Configuration\r\npublic class PersistenceConfig {\r\n\r\n  @Configuration\r\n  public class DbServersConfig {\r\n\r\n    @Bean(value = \"postgresqlContainer\", initMethod = \"start\", destroyMethod = \"stop\")\r\n    @ConditionalOnProperty(prefix = \"app.persistence.servers.postgresql\", name = \"enabled\", havingValue = \"true\")\r\n    public PostgreSQLContainer postgresqlContainer(TCPostgresqlProperties postgresqlProperties) {\r\n        Instance retVal = <do_your_logic>\r\n        return retVal;\r\n    }\r\n\r\n    @Bean(\"postgresqlContainer\")\r\n    @ConditionalOnProperty(prefix = \"app.persistence.servers.postgresql\", name = \"enabled\", havingValue = \"false\", matchIfMissing = true)\r\n    public PostgreSQLContainer postgresqlContainer() {\r\n      return null;\r\n    }\r\n  }\r\n}\r\n```\r\n\r\nThis config works:\r\n\r\n```java\r\n@Configuration\r\npublic class PersistenceConfig {\r\n\r\n  @Configuration\r\n  public class DbServersConfig {\r\n\r\n    @Bean(value = \"postgresqlContainer\", initMethod = \"start\", destroyMethod = \"stop\")\r\n    @ConditionalOnProperty(prefix = \"app.persistence.servers.postgresql\", name = \"enabled\", havingValue = \"true\")\r\n    public PostgreSQLContainer  postgresqlContainer(TCPostgresqlProperties postgresqlProperties) {\r\n        Instance retVal = <do_your_logic>\r\n        return retVal;\r\n    }\r\n\r\n    @Bean(\"postgresqlContainer\")\r\n    @ConditionalOnProperty(prefix = \"app.persistence.servers.postgresql\", name = \"enabled\", havingValue = \"false\", matchIfMissing = true)\r\n    public PostgreSQLContainer postgresqlContainer2() {\r\n      return null;\r\n    }\r\n  }\r\n}\r\n```\r\n\r\nIf you name both methods differently (`postgresqlContainer` and `postgresqlContainer2`) then everything works as expected otherwise you get an error.\r\n\r\nIs this desired behavior ?\r\n\r\nI am unsure if my scenario could indicate a bug, too. I do not know if this problem happens only to `@ConditionalOnProperty` or any other condition like `@ConditionalOnExpression`.\r\n\r\nBest regards",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "mbhave",
+        "created_at": "2019-03-18T23:35:14Z",
+        "body": "@rfelgent I was able to replicate this behavior. It appears to be happening because of [this](https://github.com/spring-projects/spring-framework/blob/master/spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassBeanDefinitionReader.java#L188) in Spring Framework. That check can cause unpredictable behavior because it depends on the order in which the bean definitions were processed. In the example above, if the bean definition corresponding to the second bean is processed first, it will be loaded as `configClass.skippedBeanMethods.contains(methodName)` will return false. \r\n\r\nI don't think there is anything we can do in Spring Boot about this. We can move it to the Spring Framework issue tracker if the rest of the team think that it's something that can be fixed there."
+      },
+      {
+        "author": "wilkinsona",
+        "created_at": "2019-03-19T09:10:13Z",
+        "body": "Framework's behaviour should be predictable thanks to [this logic](https://github.com/spring-projects/spring-framework/blob/0fc0849c0a13eb504cd2f308d3824148f8f36806/spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassParser.java#L394-L422).\r\n\r\nI think it's worth moving this to Framework to consider an enhancement to use something more distinct than the method name when determining if a method has already been skipped. The simple workaround, as you have already noted, @rfelgent, is to avoid overloading `@Bean` methods and use distinct method names instead."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2019-03-19T12:15:54Z",
+        "body": "@mbhave and @wilkinsona, thanks for the detective work!\r\n\r\nI agree that the algorithm in question should take overloaded methods into account and thus track skipped methods based on each method's name plus its formal parameter list.\r\n\r\nLet's see if the rest of the team agrees."
+      },
+      {
+        "author": "jhoeller",
+        "created_at": "2019-03-19T13:20:47Z",
+        "body": "The current behavior is more or less by design: There is only one bean definition per bean name, so we're conceptutally merging all relevant metadata into one definition per name. Overloaded `@Bean` methods are effectively just like overloaded constructors on a particular bean class, still constituting one bean definition only. And for condition handling, all conditions on all overloaded methods effectively apply to that same single bean. Conditions are not straightforward to isolate per bean method since we'd have to apply them to the overloaded factory method selection instead of to the bean definition.\r\n\r\nThe general recommendation is indeed not to use overloading but distinct bean/method names. And in the case of overloading, to declare the same annotations on all overloaded methods because that's closest to the actual semantics at runtime. This is not really obvious, so at the very least we need to document this properly... and we could possibly raise exceptions in case of condition mismatches among overloaded methods for the same bean definition, suggesting unified conditions or distinct bean names."
+      },
+      {
+        "author": "mbhave",
+        "created_at": "2019-03-19T15:44:40Z",
+        "body": "> Framework's behaviour should be predictable thanks to this logic.\r\n\r\n@wilkinsona Sorry, I didn't explain myself very well in the previous comment. The behavior would be predictable for a given class. The unpredictability I was referring was across classes, where the `Condition` would match in some cases and not in others, depending on the order of the methods returned."
+      },
+      {
+        "author": "fprochazka",
+        "created_at": "2019-09-04T13:19:19Z",
+        "body": "I'd like to add my two cents - I've just lost several hours trying to debug why one of my beans was not registered (it was declared in a `@Configuration` class by `@Bean` method)... the problem was, I've made a typo and given the two methods the same name... because they had different arguments I didn't notice anything (no error anywhere) and the app just wasn't starting\r\n\r\n```java\r\n@ConditionalOnWebApplication\r\n@Configuration\r\npublic class HttpRequestHelpersConfiguration\r\n{\r\n\r\n    @Bean\r\n    public RequestContextHolderFacade requestContextHolderFacade()\r\n    {\r\n        return new RequestContextHolderFacade();\r\n    }\r\n\r\n    @Bean\r\n    public RequestHandlerProvider requestContextHolderFacade(\r\n        final ApplicationContext applicationContext,\r\n        final RequestContextHolderFacade requestContextHolderFacade\r\n    )\r\n    {\r\n        return new RequestHandlerProvider(\r\n            applicationContext,\r\n            requestContextHolderFacade\r\n        );\r\n    }\r\n\r\n}\r\n```\r\n\r\n->\r\n\r\n```\r\n15:07:27.203 [restartedMain  ] ERROR        o.s.b.d.LoggingFailureAnalysisReporter:\t\r\n\r\n***************************\r\nAPPLICATION FAILED TO START\r\n***************************\r\n\r\nDescription:\r\n\r\nParameter 2 of constructor in ThymeleafMvcTemplatesConfiguration required a bean of type 'RequestHandlerProvider' that could not be found.\r\n\r\n\r\nAction:\r\n\r\nConsider defining a bean of type 'RequestHandlerProvider' in your configuration.\r\n```\r\n\r\nI don't have any strong opinion about the behaviour, as I have no problem renaming the method... but there should be a better error message provided by Spring.\r\n\r\nThanks :) "
+      },
+      {
+        "author": "alfonz19",
+        "created_at": "2020-01-10T11:01:35Z",
+        "body": "Just to add my experience. Just like other I made typo in method name. Same return type, same method name, different parameters. 2 beans with 2 different qualifiers. First bean declaration wasn't called at all (System.out.println in it wasn't printed, breakpoint wasn't hit), the other method was called twice. Both bean were injectable using 2 different qualifiers, however bean declaration of first qualifier were ever called."
+      },
+      {
+        "author": "Hakky54",
+        "created_at": "2022-02-07T16:41:22Z",
+        "body": "I also have the same issue. I wanted to refactor the code below:\r\n\r\n[github/mutual-tls-ssl/SSLConfig.java](https://github.com/Hakky54/mutual-tls-ssl/blob/ca34a84fc4d6cd62fc675ec148e52d1fedd800ff/client/src/main/java/nl/altindag/client/SSLConfig.java#L24)\r\n\r\n```java\r\n@Component\r\npublic class SSLConfig {\r\n\r\n    @Bean\r\n    @Scope(\"prototype\")\r\n    public SSLFactory sslFactory(\r\n            @Value(\"${client.ssl.one-way-authentication-enabled:false}\") boolean oneWayAuthenticationEnabled,\r\n            @Value(\"${client.ssl.two-way-authentication-enabled:false}\") boolean twoWayAuthenticationEnabled,\r\n            @Value(\"${client.ssl.key-store:}\") String keyStorePath,\r\n            @Value(\"${client.ssl.key-store-password:}\") char[] keyStorePassword,\r\n            @Value(\"${client.ssl.trust-store:}\") String trustStorePath,\r\n            @Value(\"${client.ssl.trust-store-password:}\") char[] trustStorePassword) {\r\n        SSLFactory sslFactory = null;\r\n\r\n        if (oneWayAuthenticationEnabled) {\r\n            sslFactory = SSLFactory.builder()\r\n                    .withTrustMaterial(trustStorePath, trustStorePassword)\r\n                    .withProtocols(\"TLSv1.3\")\r\n                    .build();\r\n        }\r\n\r\n        if (twoWayAuthenticationEnabled) {\r\n            sslFactory = SSLFactory.builder()\r\n                    .withIdentityMaterial(keyStorePath, keyStorePassword)\r\n                    .withTrustMaterial(trustStorePath, trustStorePassword)\r\n                    .withProtocols(\"TLSv1.3\")\r\n                    .build();\r\n        }\r\n\r\n        return sslFactory;\r\n    }\r\n\r\n}\r\n```\r\n\r\nInto the following snippet:\r\n```java\r\n@Component\r\npublic class SSLConfig {\r\n\r\n    @Bean\r\n    @Scope(\"prototype\")\r\n    @ConditionalOnExpression(\"${client.ssl.one-way-authentication-enabled} == true and ${client.ssl.two-way-authentication-enabled} == false\")\r\n    public SSLFactory sslFactory(@Value(\"${client.ssl.trust-store:}\") String trustStorePath,\r\n                                 @Value(\"${client.ssl.trust-store-password:}\") char[] trustStorePassword) {\r\n\r\n        return SSLFactory.builder()\r\n                .withTrustMaterial(trustStorePath, trustStorePassword)\r\n                .withProtocols(\"TLSv1.3\")\r\n                .build();\r\n    }\r\n\r\n\r\n    @Bean\r\n    @Scope(\"prototype\")\r\n    @ConditionalOnExpression(\"${client.ssl.two-way-authentication-enabled} == true and ${client.ssl.one-way-authentication-enabled} == false\")\r\n    public SSLFactory sslFactory(@Value(\"${client.ssl.key-store:}\") String keyStorePath,\r\n                                 @Value(\"${client.ssl.key-store-password:}\") char[] keyStorePassword,\r\n                                 @Value(\"${client.ssl.trust-store:}\") String trustStorePath,\r\n                                 @Value(\"${client.ssl.trust-store-password:}\") char[] trustStorePassword) {\r\n\r\n        return SSLFactory.builder()\r\n                .withIdentityMaterial(keyStorePath, keyStorePassword)\r\n                .withTrustMaterial(trustStorePath, trustStorePassword)\r\n                .withProtocols(\"TLSv1.3\")\r\n                .build();\r\n    }\r\n\r\n}\r\n```\r\n\r\nHowever it fails. When I set debug on I see that the first is not matched because the expression is evaluated into negative. But the second method should pass, however that one is never evaluated. \r\n\r\nI don't think this is a must option as there is a workaround such as not using method overloading/ and use different method name or combine it in a single method. However it will give a better DX if this would just work out of the box. Looking forward to have this feature 😄 \r\n\r\nAny news regarding this issue?"
+      },
+      {
+        "author": "rfelgent",
+        "created_at": "2022-02-07T21:13:38Z",
+        "body": "I am sorry for you @Hakky54 - you walked into the same trap like me and others :-(\r\n\r\n@jholler, I do understand your hint regarding \"more or less\" by design and I do love your suggestions regarding\r\n\"... so at the very least we need to document this properly... and we could possibly raise exceptions in case of condition mismatches among overloaded methods for the same bean definition...\""
+      },
+      {
+        "author": "fprochazka",
+        "created_at": "2022-02-07T22:49:59Z",
+        "body": "Simply disallowing to declare more methods with the same name on the same configuration class (and guarding that with an exception) would suffice to prevent others from walking into the same trap :+1: \r\n\r\nI guess this could be even easily made into an ErrorProne check for example :thinking:  "
+      },
+      {
+        "author": "Hakky54",
+        "created_at": "2022-02-07T23:54:15Z",
+        "body": "I have forked the repo and made it working for this specific use case. It was a bit tricky because of some unit tests which still needed to pass. Anyone of the spring-framework team here? Just curious if it is worth to submit a PR as I am wondering if the team is considering to have this kind of capability for allowing of creating a bean conditionally while using method overload."
+      },
+      {
+        "author": "Hakky54",
+        "created_at": "2022-02-08T11:56:03Z",
+        "body": "I have created a PR to make this feature working, see here for the details: https://github.com/spring-projects/spring-framework/pull/28019 Would love to get everyones input ❤️ "
+      },
+      {
+        "author": "jhoeller",
+        "created_at": "2022-02-15T14:42:28Z",
+        "body": "After a team discussion this morning, we are leaning towards a more radical step: **disallowing overloaded `@Bean` methods completely**, therefore raising an error in case of the same method name reappearing in any form. The original method overloading arrangement for factory methods was inspired by overloaded constructors, treated the same way by our constructor resolution algorithm. Unfortunately this causes more harm than good with `@Bean` methods where it is not obvious that all such same-named methods are part of the same bean definition, with all metadata expected to be equivalent. This was simply never meant to be used with mutually exclusive conditions, or any differing conditions to begin with.\r\n\r\nThe use cases for factory method overloading (just like with constructor overloading) are mostly related to optional arguments, with the \"greediest satisfiable\" factory method being calling, e.g. a variant with an optional argument, falling back to the overloaded method without the optional argument otherwise. In a modern-day Spring application, optional factory method arguments can be modeled in various forms, including `@Nullable` arguments and `Optional<...>` declarations, so there should not be any exclusive needs for factory method overloading anymore. That's why we are considering to disallow it completely for Spring Framework 6.0, ideally as of the 6.0 M3 release already.\r\n\r\nEnforcing a strict non-overloading rule for `@Bean` methods would prevent accidental overloading that cannot ever work properly, as well as half-accidental overloading that might work by chance but not really by design. For exclusive conditions (\"alternative beans\"), it is always preferable to use distinct bean names, no matter whether there are optional arguments involved or not. After all, alternative beans with the same (or no) arguments can only be modeled with distinct method names according to Java language rules; this is a strong indication that method overloading for exclusive conditions is misguided, only accidentally working if the method arguments happen to differ between the alternative definitions."
+      },
+      {
+        "author": "jhoeller",
+        "created_at": "2022-02-17T21:26:23Z",
+        "body": "I ended up introducing an `enforceUniqueMethods` flag on the `@Configuration` annotation, by default set to `true`. This prevents accidental overloading by enforcing distinct `@Bean` method names for separate bean definitions (which includes \"alternative\" bean definitions with mutually exclusive conditions). This can be switched to `false` for the previous lenient acceptance of overloaded methods as factory method candidates for the same bean definition.\r\n\r\nAll in all, the default behavior should provide better guidance now. The error message shown when rejecting same-named `@Bean` methods in 6.0 hints at the `enforceUniqueMethods` flag for whoever intends to opt into the overloading behavior, or whoever has existing configuration classes which happen to rely on the overloading."
+      },
+      {
+        "author": "rfelgent",
+        "created_at": "2022-02-20T07:57:51Z",
+        "body": "@jhoeller thx \r\n\r\n- for improved exception logging\r\n- and for the opt in configuration\r\n\r\n"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 27416,
+    "title": "Upgrade to AspectJ 1.9.8 GA",
+    "state": "closed",
+    "created_at": "2021-09-15T14:20:25Z",
+    "updated_at": "2022-02-16T14:31:04Z",
+    "author": "bclozel",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27416",
+    "body": "This is the first version that officially supports JDK17 source and target compatibility level (see eclipse/org.aspectj#79).\r\n\r\nRight now, we've downgraded the language level to 1.8 in aspectj Gradle tasks. Closing this issue would involve reverting the changes to the `compileAspectj` and `compileTestAspectj` tasks in `spring-aspects.gradle`.",
+    "labels": [
+      "type: dependency-upgrade"
+    ],
+    "comments": [
+      {
+        "author": "jhoeller",
+        "created_at": "2021-12-14T12:10:05Z",
+        "body": "We're tracking the AspectJ 1.9.8 RCs in spring-projects/spring-framework#27537 (for 6.0 M1), so I'm repurposing this ticket for AspectJ 1.9.8 GA (in 6.0 M2)."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-01-14T14:32:01Z",
+        "body": "Related Issue:\r\n\r\n- spring-projects/spring-boot#29754"
+      },
+      {
+        "author": "philjoseph",
+        "created_at": "2022-02-08T09:50:35Z",
+        "body": "Hello AspectJ team, so is the GA for version 1.9.8, that will be the first GA for Java 17, currently depending on the optimization @sbrannen mentioned 25 days ago ? "
+      },
+      {
+        "author": "kriegaex",
+        "created_at": "2022-02-08T10:19:48Z",
+        "body": "No @philjoseph, that optimisation is already merged. Actually, we had stable versions for 1.9.8 - currently RC3 - for a long time and could have declared any of them final. Actually, I wanted to celebrate my committer status for AspectJ by cutting the release, even though technically it is not necessary, because I can already deploy to Maven Central ob behalf of the organisation. I just cannot directly commit and always have to trigger Andy Clement to merge my PRs for every little commit. Because internal Eclipse processes are rather Byzyntine, I still do not have committer status for AspectJ proper (only for AJDT), so I simply did not \"push the release button\". Sorry to have no more exciting (feature-wise) or better justified excuse for you. Maybe I should just deploy a release. For further oprimisations (Andy fixed a few minor bugs since 1.9.8.RC3), there is always the next release. But if you simply want to use Java 17, just use RC3. It does not contain the optimisation you talked about yet, though. That will be in the next Maven Central version."
+      },
+      {
+        "author": "kriegaex",
+        "created_at": "2022-02-11T02:19:35Z",
+        "body": "Release 1.9.8 is out, see also https://github.com/eclipse/org.aspectj/pull/121 and the [release announcement](https://www.eclipse.org/lists/aspectj-users/msg15534.html) I sent to the AspectJ users mailing list. Quote:\r\n\r\n> Dear AspectJ users,\r\n> \r\n> we have just released 1.9.8 (yes, finally). It is [available on Maven Central](https://repo1.maven.org/maven2/org/aspectj/aspectjtools/1.9.8/) already. The AspectJ installer can be found on [Aspectj.dev](https://aspectj.dev/maven/org/aspectj/installer/1.9.8/).\r\n> \r\n> For more information, please read the [release notes](https://htmlpreview.github.io/?https://github.com/kriegaex/org.aspectj/blob/4b9d86acd096e5ee9e108ff0a450c420c880b6ea/docs/dist/doc/README-198.html).\r\n> \r\n> See [AspectJ GitHub issue spring-projects/spring-framework#95](https://github.com/eclipse/org.aspectj/issues/95) for more information and for an example project showing how to upgrade to the latest AspectJ version when using [dev.aspectj:aspectj-maven-plugin:1.13.1](https://github.com/dev-aspectj/aspectj-maven-plugin).\r\n> \r\n> Enjoy AspectJ!\r\n> \r\n> The AspectJ team"
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2022-02-16T08:53:02Z",
+        "body": "FTR we've decided to backport this to `5.3.x` as well, see #28060 "
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4e3d1fa4e9da90b21c2e19c29037f0d687ee4f3e",
+        "2019e176ee9c75c2f20ce68a82df2cf1a2af872a"
+      ]
+    }
+  },
+  {
+    "number": 27814,
+    "title": "Raise bytecode level to Java 17 for Kotlin classes",
+    "state": "closed",
+    "created_at": "2021-12-14T14:27:52Z",
+    "updated_at": "2022-02-11T10:42:15Z",
+    "author": "bclozel",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27814",
+    "body": "This requires Kotlin 1.6.20, as the fix for https://youtrack.jetbrains.com/issue/KT-49329 is needed.",
+    "labels": [
+      "type: task",
+      "theme: kotlin"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "6c42bcfaec45128f7b0807676288552912a1b234"
+      ]
+    }
+  },
+  {
+    "number": 27828,
+    "title": "Provide repackaged version of JavaPoet",
+    "state": "closed",
+    "created_at": "2021-12-16T16:05:35Z",
+    "updated_at": "2022-02-10T15:02:30Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27828",
+    "body": "Our AOT processing needs a code generation library and we're quite happy using JavaPoet in Spring Native. It would be quite unusual for the core container to have a direct dependency on a third-party so the plan is to jarjar it in `org.springframework.javapoet` in the `spring-core` module.\r\n\r\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-01-11T14:29:54Z",
+        "body": "We've decided to depend on JavaPoet directly for now with an optional dependency in modules that require it."
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2022-02-03T13:06:45Z",
+        "body": "With our design evolving where certain components can provide both the regular runtime behavior and something that can generate a pre-processed version of it, it became apparent that it's odd to rely on an optional dependency of javapoet. \r\n\r\nWe've decided to give the repackaging another try."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "42243d974f99255eb3a4efd69022b77e4e8610c7",
+        "dd7ec1ae057b7937cf031656b40d89cdf57d9e69",
+        "61e15d94fc8aa9dc29e027d5a435aa2bd9571a03",
+        "d0b66129f9238cbb8aa755faab177396aa5c0456",
+        "f9ccac0682d444cffdb4aa5ae9a4fcd04d2350c1",
+        "467dd75b00ebf3de8fc6863c48ad8c77c131f6da",
+        "f61ad4764276bd0fa2d0061ab6f2cceb9c158d07",
+        "b74b86ba9f34ec287487f76bd4c085d9d0f96d2e",
+        "dfae8effa8c26ab69cf7b237b3c2fdd382f64b75",
+        "bb06af0273fb32410c6496f275bdb8c28445240f",
+        "cff4346293581caabd2c5ffdd1ded57ed231c2eb",
+        "ce7513e7575b9dc7e9e5d6c138f40ad026e3124a",
+        "704e1a02d9b234480fe2f328427009ee5c2c0322"
+      ]
+    }
+  },
+  {
+    "number": 27829,
+    "title": "Add a way to register the need for runtime reflection, resources, proxying, and serialization on components",
+    "state": "closed",
+    "created_at": "2021-12-16T16:17:30Z",
+    "updated_at": "2022-01-25T14:48:35Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27829",
+    "body": "Spring Native has a component called `NativeConfigurationRegistry` that offers a programmatic API to register the need for reflection, resources that are to be shipped in the native image, proxies as well as classes that should be `Serializable`.\r\n\r\nWe'd like to revisit this contract and make less native specific as we believe that such information could be useful elsewhere.\r\n\r\nSuch an infrastructure could land in `spring-core` as it is rather high-level and focused on classes and resources. The actual processing of the registry, for instance, to write GraalVM-specific configuration files is not in the scope of this issue.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5f8198d74f380ef534ac91c85c717c74bced0531",
+        "7c2f94c5c3369cdbb55f8060603c0e66f79eb22d",
+        "cb44ef0561e1531d595025f31dcdec0e0408e47f",
+        "578d04ff860cc2246b9122e3065d881753833193",
+        "a0c97e4c36e5e07bc13bab4409ec740332a57871",
+        "5da0e8537ca7fb93f2c6c056b4e547d568b080d8",
+        "e4277e6b1f14ef5c4a36fb13fcd9352de1ad0609",
+        "374bfd13be732271009f6551e1fe15e4a09badb3",
+        "4e127de10a671be15a2bdf8ef54276612a2419bb",
+        "f906fa78a1f282cfc60f49a078c429f91e6c53a6",
+        "4d3f27d6dfe1949ccd1b0d921112c91a0cfb951b",
+        "6f7d9ab589ecfec6fc454650448de09e8e9681e5",
+        "73f01676d8cd61e5608c8a10d0d2f6742fc6c32a",
+        "aef0850d3937de88cf22480cce8a6b0f7f89e540",
+        "6936f7e0cb1eae8357f3c700d2c2d33834475ec2",
+        "258ea0686e145fe05bdd02faed665956d6dc71a1",
+        "40336fa1bc866039776e0a53cb7257b97814fe7a",
+        "7dae7b01d8719029a9d52c7525e27026e066a806",
+        "1a43f1ddf771ae5eaa1fd12c3b101ee5401e8e5b",
+        "a4ac99900cd56c6f3f5a0126c055792714c600c1",
+        "48ce714d159f0c648f836a5abdf18c12cb4c6f40"
+      ]
+    }
+  },
+  {
+    "number": 27866,
+    "title": "Inconsistent overriding (and enforcement of non-overriding) between bean definition names and aliases",
+    "state": "closed",
+    "created_at": "2021-12-29T16:19:18Z",
+    "updated_at": "2022-02-04T20:13:51Z",
+    "author": "levitin",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27866",
+    "body": "When I try to register two beans (one of aliases of the first bean corresponds to method name (= future id) of the second bean, the creation of second bean is ignored. The context starts without any exception. \r\n\r\n```java\r\n@Configuration\r\npublic class MyConfiguration {\r\n\r\n    @Bean({\"name1\", \"name2\"})\r\n    public MyInterface myBean() {\r\n        return new MyFirstBean();\r\n    }\r\n\r\n    @Bean\r\n    public MyInterface name2() {\r\n        return new MySecondBean();\r\n    }\r\n}\r\n```\r\n\r\n`MyMap` in the following example contains only one bean, actually: `name1 -> MyFirstBean`\r\n\r\n```java\r\n    @Autowired\r\n    Map<String, MyInterface> myMap;\r\n```\r\n\r\nI'm not sure if it is a bug or a feature. In my opinion [NoUniqueBeanDefinitionException](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/beans/factory/NoUniqueBeanDefinitionException.html) should be thrown in this case.\r\n\r\nWhat do you think?",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2021-12-29T16:59:25Z",
+        "body": "It depends. Given that `myBean` claims `name1` and `name2`, it sounds logical that `MySecondBean` isn't created. We need to put a priority somewhere. If we did the reverse, you could equally claim that `MyFirstBean` isn't used despite it declaring an alias for `name2`.\r\n\r\nHaving said that, I was expecting this to fail with Spring Boot as we prevent bean overriding by default. It did not and that felt a little bit more surprising. Flagging to get more feedback from the team.\r\n"
+      },
+      {
+        "author": "levitin",
+        "created_at": "2021-12-29T22:27:02Z",
+        "body": "> If we did the reverse, you could equally claim that MyFirstBean isn't used despite it declaring an alias for name2\r\n\r\nYes, another direction would also cause an unpleasant surprise. But it is even worse, if giving any bean a \"harmless\" alias would suddenly exclude another existing bean in case of name matching. I think, such side effect could be really dangerous, perhaps it can be even a security issue. \r\n\r\nIn my opinion, in such case as described above, it would be much more safer, if the context would not even start at all. \r\n\r\nIs there any reason not to treat every bean name and every alias as unique?\r\n"
+      },
+      {
+        "author": "jhoeller",
+        "created_at": "2022-01-18T10:13:53Z",
+        "body": "There are indeed two inconsistencies in our overriding checks between bean definition names and aliases: Not only is a new bean definition overriding an existing alias not prevented when allowBeanDefinitionOverriding=false (like in Boot by default), the factory also silently registers a new bean definition but does not remove a same-named alias when allowBeanDefinitionOverriding=true.\r\n\r\nIn other words, bean definition overriding between bean definition names and aliases is a feature, but a later definition should consistently override an existing definition - so in our scenario here, the `name2` method should override the existing `name2` alias. And with overriding deactivated, it should consistently throw an exception when encountering such an attempted override for an existing alias.\r\n\r\nI'll revise this for 6.0 M3."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "6b1c2dc944e9541720d8fd7de3ce3c54ca03d5c2"
+      ]
+    }
+  },
+  {
+    "number": 27921,
+    "title": "Implement an AOT equivalent of AutowiredAnnotationBeanPostProcessor",
+    "state": "closed",
+    "created_at": "2022-01-11T15:21:32Z",
+    "updated_at": "2022-02-15T12:34:15Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27921",
+    "body": "`InjectionMetadata`  provides some information we could use at build-time. For instance, if `AutowiredAnnotationBeanPostProcessor` is enabled for the `ApplicationContext` that app uses without AOT, we should be able to find out about `autowired` elements, potentially even reusing any custom configuration that was set on the post processor.\r\n\r\nThere is also some logic in the way injection works that we may need to streamline to be consistent.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-01-31T13:58:59Z",
+        "body": "We're trying to design an interface that allows a `BeanPostProcessor` to opt-in for providing a code contributor that replaces what it does at runtime. The current model is implementing an interface that returns a contributor based on a `RootBeanDefinition`, similar to `MergedBeanDefinitionPostProcessor#postProcessMergedBeanDefinition`.\r\n\r\nWhile the processor would be excluded by default at runtime, it would be nice if it could indicate that it needs to run again.  If we want such a feature, the phase at which the `BeanFactory` is processed should become a high-level concept, something like \"build-time\" vs. \"runtime\" vs. \"optimized-runtime\".\r\n"
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2022-02-14T13:23:20Z",
+        "body": "We need #28047 to move forward on this one."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8cd55e651b605cd174d34b6a98672828b6fc1168",
+        "6fd95f60ea60b590689e18c8a0ad34c36773608b",
+        "8ada53707f11daa17002b31a94033d673dd4c6b1",
+        "31de85b77bc3cf732badbb9caec4bd2bd25550b2",
+        "c05167bc531f4b2dc695a3c7c376e362edb92d71",
+        "f9a00c9974ddb03786e66bedea1d54eb592d3e3b",
+        "e74e794dbbf439912b483a31dacdffa205b5234a",
+        "b8f675cdb70d196c6408b7d6767bb7174059d3c9",
+        "2c57c9ec9cf9f2cad3314c8783674cbe5d4ab347",
+        "0cbae1ca08280dc7804492aded7b95f6f038e989",
+        "3a4f63cfcb04e753268763a7a5c7f1420018ab9e",
+        "dc6e8a422d05d2660a3b3f36140c525e5c9d9018",
+        "2150272f1789b76eb96d24c70f92cc0da7e4a47e",
+        "6b50c75e03be62f1882c7a02bb1cdfa54c3af139",
+        "39fd3a2787ac93a39b73e4dd688f18bedeccd9e2",
+        "2141373c432dfc18bb665ec4f54b1e3c3b121c99",
+        "d540460a56cf282fdf51fb8bbe8b548beccc8a08",
+        "333b3c76a33e9cbf9553d7a2d660834ecda95f7f",
+        "c9e90d5f75b05d4b55965679551ae40f2a7901e6"
+      ]
+    }
+  },
+  {
+    "number": 27928,
+    "title": "Gradle apiDiff task does not work against a milestone",
+    "state": "closed",
+    "created_at": "2022-01-13T10:47:00Z",
+    "updated_at": "2022-01-13T11:28:48Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27928",
+    "body": "Running `./gradlew apiDiff -PbaselineVersion=6.0.0-M1` leads to:\r\n\r\n```\r\nStarting a Gradle Daemon (subsequent builds will be faster)\r\n> Task :spring-instrument:apiDiff FAILED\r\n> Task :spring-jcl:apiDiff FAILED\r\n\r\nFAILURE: Build completed with 2 failures.\r\n\r\n1: Task failed with an exception.\r\n-----------\r\n* What went wrong:\r\nExecution failed for task ':spring-instrument:apiDiff'.\r\n> Could not resolve all files for configuration ':detachedConfiguration9'.\r\n   > Could not find org.springframework:spring-instrument:6.0.0-M1.\r\n     Searched in the following locations:\r\n       - https://repo.maven.apache.org/maven2/org/springframework/spring-instrument/6.0.0-M1/spring-instrument-6.0.0-M1.pom\r\n       - https://repo.spring.io/libs-spring-framework-build/org/springframework/spring-instrument/6.0.0-M1/spring-instrument-6.0.0-M1.pom\r\n     Required by:\r\n         project :\r\n\r\n* Try:\r\n> Run with --stacktrace option to get the stack trace.\r\n> Run with --info or --debug option to get more log output.\r\n> Run with --scan to get full insights.\r\n==============================================================================\r\n\r\n2: Task failed with an exception.\r\n-----------\r\n* What went wrong:\r\nExecution failed for task ':spring-jcl:apiDiff'.\r\n> Could not resolve all files for configuration ':detachedConfiguration10'.\r\n   > Could not find org.springframework:spring-jcl:6.0.0-M1.\r\n     Searched in the following locations:\r\n       - https://repo.maven.apache.org/maven2/org/springframework/spring-jcl/6.0.0-M1/spring-jcl-6.0.0-M1.pom\r\n       - https://repo.spring.io/libs-spring-framework-build/org/springframework/spring-jcl/6.0.0-M1/spring-jcl-6.0.0-M1.pom\r\n     Required by:\r\n         project :\r\n\r\n* Try:\r\n> Run with --stacktrace option to get the stack trace.\r\n> Run with --info or --debug option to get more log output.\r\n> Run with --scan to get full insights.\r\n==============================================================================\r\n\r\n* Get more help at https://help.gradle.org\r\n\r\nDeprecated Gradle features were used in this build, making it incompatible with Gradle 8.0.\r\n\r\nYou can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.\r\n\r\nSee https://docs.gradle.org/7.3.3/userguide/command_line_interface.html#sec:command_line_warnings\r\n\r\nBUILD FAILED in 15s\r\n31 actionable tasks: 8 executed, 4 from cache, 19 up-to-date\r\n```\r\n\r\nAdding the milestone repo manually fixes the problem.",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2d9c9fe9cca01f0851158424134467e96f6debcf"
+      ]
+    }
+  },
+  {
+    "number": 27985,
+    "title": "Upgrade to Groovy 4.0",
+    "state": "closed",
+    "created_at": "2022-01-28T17:22:01Z",
+    "updated_at": "2022-02-04T20:13:51Z",
+    "author": "jhoeller",
+    "url": "https://github.com/spring-projects/spring-framework/issues/27985",
+    "body": "",
+    "labels": [
+      "in: web",
+      "in: core",
+      "type: dependency-upgrade"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9688e61e2066b2fb45f865e64a75c29c99405192"
+      ]
+    }
+  },
+  {
+    "number": 28007,
+    "title": "HibernateJpaDialect compatibility with Hibernate 6 (read-only transactions etc)",
+    "state": "closed",
+    "created_at": "2022-02-04T10:32:18Z",
+    "updated_at": "2023-04-19T14:26:53Z",
+    "author": "odrotbohm",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28007",
+    "body": "During our work to investigate the compatibility with Hibernate 6 in Spring Data JPA we ran into an issue surfacing in Spring Frameworks transaction management:\r\n\r\nIn `….beginTransaction(…)`, `HibernateJpaDialect` calls `SessionImplementor.connection()` a method that has been removed in CR1 (could've been in one of the betas already, I didn't check) to issue read-only transactions. It looks like the new way to access the `Connection` is calling `….getJdbcConnectionAccess().obtainConnection()`.\r\n\r\nRelated tickets:\r\n* spring-projects/spring-data-jpa#2423",
+    "labels": [
+      "in: data",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "jhoeller",
+        "created_at": "2022-02-04T11:16:57Z",
+        "body": "We aim for a complete Hibernate 6.0 support story in our own 6.0 M3, not sure yet how far we'll go (native API via `orm.hibernate6`? or just with JPA? keeping up Hibernate 5.x support in parallel? etc): #22128\r\n\r\nThat said, it's definitely worth considering what we could do in 5.3.x to allow for using Hibernate 6.0 with our JPA support at least. We might want to leniently tolerate it at runtime for a start, even without full alignment yet. Let's use this ticket for it."
+      },
+      {
+        "author": "odrotbohm",
+        "created_at": "2022-02-04T11:24:43Z",
+        "body": "Once I avoided read-only transactions by rather using a simple `@Transactional` the integration tests using Hibernate 6 CR1 on a Boot 3 M1 ran just fine. I.e. it might be just that particular issue for starters. That's why I thought I'd open the ticket around something actionable. But of course, as you see fit.\r\n\r\nOh, H6 is JakartaEE based. I guess that is a showstopper for any support of it in our 5.x generation."
+      },
+      {
+        "author": "jhoeller",
+        "created_at": "2022-02-04T13:42:19Z",
+        "body": "Good point, there's no classic JPA binding for it anymore, it's exclusively built on `jakarta.persistence` indeed. And it won't be usable with `orm.hibernate5` either due to plenty of incompatibilities in the native Hibernate API. Alright, so Hibernate ORM 6.0 becomes a Spring Framework 6.0 only topic then :-)"
+      },
+      {
+        "author": "jhoeller",
+        "created_at": "2022-02-04T13:45:15Z",
+        "body": "Alright, so we'll definitely sort out `HibernateJpaDialect` compatibility for 6.0 M3 for a start, using this ticket. Full Hibernate 6.0 alignment - or even Hibernate 6.0 baselining - might take longer anyway, let's use #22128 for that part then."
+      },
+      {
+        "author": "odrotbohm",
+        "created_at": "2022-02-04T16:25:29Z",
+        "body": "I just realized that the API I found and suggested as workaround (never tested using it myself, though) also already exists in 5.6.5. I.e. we could try to just move that in 6.0 but stick to the Hibernate 5.x baseline."
+      },
+      {
+        "author": "jhoeller",
+        "created_at": "2022-02-04T21:07:13Z",
+        "body": "It turns out that it is indeed straightforward to support both Hibernate 5.6 and 6.0 through a revision of `HibernateJpaDialect` where it retrieves the current JDBC connection differently. The correct replacement is `getJdbcCoordinator().getLogicalConnection().getPhysicalConnection()` for obtaining the current connection held by the session, as far as the connection release mode is appropriate for it. This seems to work fine on 5.6 as well as 6.0.\r\n\r\nThe other area affected is `HibernateJpaVendorAdapter` and its selection of default dialects for the database enum. Those dialects seem to be deprecated now, the Informix dialect is even gone completely. However, this shouldn't be a big deal since we recommend explicit Hibernate dialect configuration in any case (rather than relying on our database enum).\r\n\r\nFrom that perspective, we seem to be covered in terms of JPA compatibility, so I'll close this ticket right away. The main remaining part for #22128 is whether we want/need an `orm.hibernate6` package next to `orm.hibernate5`, or possibly as a replacement for `orm.hibernate5`. This mostly depends on what we are going to recommend for existing `orm.hibernate5` users: staying on Hibernate 5.6, upgrading to Hibernate 6.0 via `orm.hibernate6`, or upgrading to Hibernate 6.0 via JPA."
+      },
+      {
+        "author": "odrotbohm",
+        "created_at": "2022-02-08T13:31:34Z",
+        "body": "Thanks for that, Jürgen. Verified working as expected now! 🙇"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d07e1be623b607c77afe6faf8c02eda8a1b0b110"
+      ]
+    }
+  },
+  {
+    "number": 28013,
+    "title": "Add support for registering multiple init & destroy method names",
+    "state": "closed",
+    "created_at": "2022-02-07T12:14:49Z",
+    "updated_at": "2025-06-17T06:53:02Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28013",
+    "body": "A `BeanDefinition` can have an `init` and `destroy` method name. While uncommon, it is possible for a bean to have more than one of those, see `InitDestroyAnnotationBeanPostProcessor`. \r\n\r\nTo replace the runtime behavior of searching for those annotations, we need a way to specify multiple init and destroy method names. There might be an impact on `isExternallyManagedConfigMember` in `RootBeanDefinition` as well.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-02-07T13:11:08Z",
+        "body": "Reviewing what we did in Spring Native to support this feature, it looks like that adding multiple init/destroy method names could be enough to support this use case, if we'd honor `MergedBeanDefinitionPostProcessor`. \r\n\r\nThe current code registers detected method as externally managed. We could rather \"just\" register it and let the new code invokes the method. "
+      },
+      {
+        "author": "chenggwang",
+        "created_at": "2025-06-16T15:32:11Z",
+        "body": "> A `BeanDefinition` can have an `init` and `destroy` method name. While uncommon, it is possible for a bean to have more than one of those, see `InitDestroyAnnotationBeanPostProcessor`.\n> \n> To replace the runtime behavior of searching for those annotations, we need a way to specify multiple init and destroy method names. There might be an impact on `isExternallyManagedConfigMember` in `RootBeanDefinition` as well.\n\nHi snico！So far, it seems that this support is only used in AOT. It doesn't seem to be used in other spring modules. For example, at least @bean(initMethod={\"init1\",init2,...\" }), extending to xml configuration is obviously not supported. It seems that it is not needed elsewhere. So should this method be set as protected? Because we can directly accessible beanDefinition. SetDestroyMethodNames (init1 init2), if you really need to generality, the initialization method execution order how to guarantee? And how to coordinate?"
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2025-06-16T16:11:23Z",
+        "body": "Do you have an actual problem? If so, please create a new issue with a sample that demonstrates it and we can have a look."
+      },
+      {
+        "author": "chenggwang",
+        "created_at": "2025-06-17T06:53:02Z",
+        "body": "> Do you have an actual problem? If so, please create a new issue with a sample that demonstrates it and we can have a look.\n\nI didn't find any actual problems. I discovered during the use of Spring that a bean can have multiple initialization or destruction methods using either 'beanDefinition. SetInitMethodNames (init1, init2)' or 'beanDefinition. SetDestroyMethodNames (destruct1, destruct12)'. These methods were submitted by you three years ago. If only AOT is supported, should these methods be visible within the package so that they cannot be called externally? If bean multi initialization methods are supported, implement @ bean (initMethod={\"init1\", init2,... \"}). Support multi initialization methods, I have modified the implementation locally and can submit the code."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "41ee23345d72623d18accb9484ce5119403c39d5"
+      ]
+    }
+  },
+  {
+    "number": 28020,
+    "title": "Upgrade to Gradle 7.4",
+    "state": "closed",
+    "created_at": "2022-02-08T15:26:13Z",
+    "updated_at": "2022-02-08T15:27:51Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28020",
+    "body": "https://docs.gradle.org/7.4/release-notes.html",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5c60a721a7ab81f50e9b88a031bc8a1d3e17ccb4"
+      ]
+    }
+  },
+  {
+    "number": 28028,
+    "title": "Add core JavaPoet utilities",
+    "state": "closed",
+    "created_at": "2022-02-10T13:46:35Z",
+    "updated_at": "2022-02-10T15:02:31Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28028",
+    "body": "Our prototype with Spring Native has shown that working with multiple statements and/or code blocks can lead to repetitive code. Also, JavaPoet does not resolve imports on code snippet so that makes code assertion a bit awkward. \r\n\r\nthis issue is about porting those utilities in `spring-core` so that we can benefit from it.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b3ceb0f625a5b40d1007bb4dfe673be497fc2c9e"
+      ]
+    }
+  },
+  {
+    "number": 28029,
+    "title": "Make BeanDefinitionValueResolver public",
+    "state": "closed",
+    "created_at": "2022-02-10T13:59:54Z",
+    "updated_at": "2022-02-10T15:02:31Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28029",
+    "body": "`BeanDefinitionValueResolver` is package private at the moment and the AOT engine could use calling it directly to resolve constructur arguments typically. \r\n\r\nWe could also improve the current usage where a default `TypeConverter` can be provided by default as the current pattern uses a protected method of the bean factory to initialize it.",
+    "labels": [
+      "type: task",
+      "in: core",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d64f8c1a05f9b5a3cd6451a20261c5e6f7b4108d",
+        "a4ab4b773abb818b4d3fea5ef70297bb5b112058"
+      ]
+    }
+  },
+  {
+    "number": 28030,
+    "title": "Add code contribution infrastructure",
+    "state": "closed",
+    "created_at": "2022-02-10T14:21:30Z",
+    "updated_at": "2022-02-10T15:02:32Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28030",
+    "body": "We need a contract where individual components can provide some code, the related `RuntimeHints` that could be necessary in a constrained environment as well as whether the code is using protected access (i.e. non public types or methods). \r\n\r\nThis is required by #27921",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "1a4573641d3ae35d044e366b472e68cc6daaad8a",
+        "5bbc7dbce237f049a53291d47d6b1e5f6f897907",
+        "e873715737fda8fc284bc5c18f0e8c260416c3ba"
+      ]
+    }
+  },
+  {
+    "number": 28047,
+    "title": "Add Bean instantiation generator infrastructure",
+    "state": "closed",
+    "created_at": "2022-02-14T13:23:00Z",
+    "updated_at": "2022-03-09T09:45:57Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28047",
+    "body": "As part of our AOT effort, we need an infrastructure that lets us generate the code to instantiate a bean.\r\n\r\nThis includes some low-level code generation infrastructure to write method calls, parameters, etc, as well as an API that can be used to contribute to the bean instance. \r\n\r\nSuch contributors should namely be based on the existing `BeanPostProcessor` infrastructure as they augment a bean instance with some logic that can be translated into code during the AOT phase. As BPP are ordered, so can their contributions so that the order in which they are applied by executing generated code matches.\r\n\r\nTo ease code generation, we need an infrastructure that focuses on something quite basic for a first version, something like:\r\n\r\n```java\r\nBeanDefinitionRegistrar.of(\"restTemplateClientService\", RestTemplateClientService.class)\r\n\t  .withConstructor(RestTemplateBuilder.class)\r\n\t  .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) ->\r\n\t\t\t  new RestTemplateClientService(attributes.get(0))))\r\n\t  .register(beanFactory);\r\n```\r\n\r\nThis registeres a `restTemplateClientService` bean that requires a `RestTemplateBuilder`. Rather than doing all the dependency resolution at build-time, we leverage framework's dependency resolution algorithm, via the `instanceContext` who can provide us resolved attributes according to `Executable` to use to instantiate the bean (here a constructor that takes a `RestTemplateBuilder`).",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9809752c3c9b77e4fa6d1e06c9e1b080b6affb17",
+        "c541bde513443862e24e372c83f33e8c511d8903",
+        "572d0173703e15a80e76eac2ad0bea9c56f35326",
+        "ea19b92deb44fc74c04da6771afd714efeb79521",
+        "97986b368a42f858a8f6ee84e2ca4a79f17e7410",
+        "c5e1a774a5a1e27eb1ca693b663ec37e6583ac41",
+        "20b17f02a29de8f10773d400b92f310fc6aba5a2"
+      ]
+    }
+  },
+  {
+    "number": 28054,
+    "title": "Remove deprecated SocketUtils",
+    "state": "closed",
+    "created_at": "2022-02-15T15:46:36Z",
+    "updated_at": "2022-03-21T16:59:25Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28054",
+    "body": "See:\r\n\r\n-  #28052",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "sbrannen",
+        "created_at": "2022-02-15T15:46:51Z",
+        "body": "Closed via 2cee63491d1fbb6e21a9044715d98838fec9a51b"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-21T16:59:24Z",
+        "body": "Please note that the team plans to introduce `TestSocketUtils` in Spring Framework 5.3.18. See #28210 for details."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ee51dab1f348361f26c477ad64ab730ad7359d6e",
+        "c661d7925e574793475f0fd38998300babc619e7",
+        "9b27fbee897797bba181587fd736e4dc99f36e69",
+        "2cee63491d1fbb6e21a9044715d98838fec9a51b",
+        "fb72f1fdade2591220d58e8a0d91d954c8824080"
+      ]
+    }
+  },
+  {
+    "number": 28065,
+    "title": "Add support for refreshing an ApplicationContext for AOT processing",
+    "state": "closed",
+    "created_at": "2022-02-17T08:15:07Z",
+    "updated_at": "2022-03-09T10:19:03Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28065",
+    "body": "For us to be able to pre-process an `ApplicationContext` at build-time, we need a way to \"refresh\" it up to a point where it is ready to create bean instances, this includes:\r\n\r\n* Prepare the `BeanFactory`\r\n* Invoke `BeanDefinitionRegistryPostProcessor` implementations\r\n* Invoke `MergedBeanDefinitionPostProcessor` implementations (note that these are special extensions of `BeanPostProcessor` that operates at the (merged) `BeanDefinition` level\r\n\r\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "67d5786ef572c29b301688181beaccda1a974229",
+        "ab8b45d02dd9c25fdcde1b27e1f55154ce969de2",
+        "d5d2da8683804383293fa78a194e1a784ee483a4",
+        "b5695b92483118aa738ada26e438c32017dbeef7"
+      ]
+    }
+  },
+  {
+    "number": 28079,
+    "title": "Deprecate \"enclosing classes\" search strategy for MergedAnnotations",
+    "state": "closed",
+    "created_at": "2022-02-19T15:32:00Z",
+    "updated_at": "2022-03-16T18:36:16Z",
+    "author": "sbrannen",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28079",
+    "body": "### Overview\r\n\r\nThe `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` search strategy for `MergedAnnotations` was originally introduced to support `@Nested` test classes in JUnit Jupiter.\r\n\r\nHowever, while implementing #19930, we determined that the `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` search strategy unfortunately could not be used since it does not allow the user to control when to recurse up the enclosing class hierarchy. For example, this search strategy will automatically search on enclosing classes for static nested classes as well as for inner classes, when the user probably only wants one such category of \"enclosing class\" to be searched. Consequently, [`TestContextAnnotationUtils`](https://github.com/spring-projects/spring-framework/blob/main/spring-test/src/main/java/org/springframework/test/context/TestContextAnnotationUtils.java) was introduced in the _Spring TestContext Framework_ to address the shortcomings of the `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` search strategy.\r\n\r\nSince this search strategy is unlikely to be useful to general users, the team should consider deprecating this search strategy in Spring Framework 6.0.\r\n\r\n### Related Issues\r\n\r\n- #19930\r\n- #23378\r\n- #28080",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "philwebb",
+        "created_at": "2022-03-11T17:41:07Z",
+        "body": "@sbrannen We use this strategy in Spring Boot to find `@ConstructorBinding` annotations from nested classes. Can we reconsider deprecating it?"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-12T15:27:36Z",
+        "body": "Hi @philwebb,\r\n\r\nI saw that you once used it in Boot's `ConfigurationPropertiesBean`, but that no longer seems to be the case.\r\n\r\nWhere is `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` still used in Spring Boot?"
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2022-03-12T16:23:29Z",
+        "body": "Here is one: https://github.com/spring-projects/spring-boot/blob/de321b00b7d0f2c5c1c79a77e7241b43fbcd8313/spring-boot-project/spring-boot-actuator/src/main/java/org/springframework/boot/actuate/context/properties/ConfigurationPropertiesReportEndpoint.java#L559\r\n\r\nWe don't on `main` as the semantic of `@ConstructorBinding` has evolved in such a way that it is no longer necessary to search it this way."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-13T14:40:15Z",
+        "body": "Thanks for the link and explanation, @snicoll.\r\n\r\nIf the search strategy is only used for `@ConstructorBinding` against Framework 5.3.x and is no longer used in Boot 3.0+ (relying on Framework 6.0+), is there still an issue with having the search strategy deprecated in Framework 5.3.x and removed in 6.0?"
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2022-03-13T18:00:12Z",
+        "body": "I think so, yes. Our policy is to not rely on deprecated code unless absolutely necessary. Getting in this situation for the whole duration of the `2.x` line is far from ideal and we'd probably copy the code to avoid using deprecated code in framework.\r\n\r\nWhile I have the opportunity, I disagree with the opening statements. It may have been introduced for a very specific use case but once it becomes public API, we can't really argue that this is the only use. It sounds like an addition in [TestContextAnnotationUtils](https://github.com/spring-projects/spring-framework/blob/main/spring-test/src/main/java/org/springframework/test/context/TestContextAnnotationUtils.java) is fixing the problem. It doesn't, at least for us.\r\n"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-16T14:22:43Z",
+        "body": "For the `5.3.x` line, the team has decided not to deprecate the `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` search strategy.\r\n\r\nInstead, we will add notes to the documentation to increase awareness of how the search strategy behaves.\r\n\r\nIn addition, we will reconsider deprecation/removal of the search strategy in `6.0.x`."
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-16T18:22:46Z",
+        "body": "**Team Decision**: we have decided to deprecate the `TYPE_HIERARCHY_AND_ENCLOSING_CLASSES` search strategy in 6.0 M3, allowing consumers of 6.0 milestones and release candidates to provide feedback before potentially completely removing it and/or providing an alternate mechanism for achieving the same goal prior to 6.0 GA.\r\n\r\n- see #28080 for details"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "29d98285bea8be459d0bdcaad655c84338c3d0e5",
+        "5689395678f57fe967a3b21ed7d9087cfec7b622",
+        "b97a3ae07aa29d9c55c95f54c50b5558564a87c5",
+        "fc8f31ccfbecd2179d7ce216a5a3521f13397c05",
+        "c9cd53f469a7b3a79284542fe0222b0f9fd05785"
+      ]
+    }
+  },
+  {
+    "number": 28088,
+    "title": "Add API to contribute to the setup of an ApplicationContext",
+    "state": "closed",
+    "created_at": "2022-02-21T13:34:32Z",
+    "updated_at": "2022-03-09T12:21:45Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28088",
+    "body": "When a context is pre-processed at build-time and we generate optimized code for it, bean definition registration is one obvious part but not the only one. The core container should have an abstraction and an API that other components can implement to contribute to the setup of the context.\r\n\r\nOne example is the thing that scans for `@EventListener`-annotated methods and register an event-listener if necessary. As these components are actually replacing something else, they could opt-in for excluding bean definitions that they are replacing.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5bc701d4fe32b45481bcf63f093759df75df7f57",
+        "ec6a19fc6b37ef03d2667100a2ee9de1488c902d"
+      ]
+    }
+  },
+  {
+    "number": 28093,
+    "title": "Rationalise merged BeanDefinition resolution for inner beans",
+    "state": "closed",
+    "created_at": "2022-02-22T10:45:31Z",
+    "updated_at": "2022-03-09T10:19:02Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28093",
+    "body": "There are more places where we need to create a `beanName` for an inner bean definition so rather than copy/pasting those, it would be better to have that logic in a single place.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-02-22T13:47:06Z",
+        "body": "I was under the impression I could add that in `BeanFactoryUtils` but this introduces a package tangle. @jhoeller any idea?"
+      },
+      {
+        "author": "snicoll",
+        "created_at": "2022-03-06T17:12:32Z",
+        "body": "It turns out that the way a `RootBeanDefinition` for an inner bean is required and it goes beyons getting a bean name for it. I've updated the issue accordingly."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "fc4312b633f7ec2ae98d89450b59a78e9cd6ee35",
+        "929b5a040eb69dd421670a67cae0a23647f1f291",
+        "cc57b55c61fa35d97d7a16db1b389f6b85ec8633"
+      ]
+    }
+  },
+  {
+    "number": 28098,
+    "title": "Support type-safe transaction rollback rules",
+    "state": "closed",
+    "created_at": "2022-02-23T09:12:33Z",
+    "updated_at": "2022-03-04T18:36:36Z",
+    "author": "hduyyg",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28098",
+    "body": "Source code in question：\r\n\r\n```java\r\nprivate int getDepth(Class<?> exceptionClass, int depth) {\r\n\tif (exceptionClass.getName().contains(this.exceptionName)) {\r\n\t\t// Found it!\r\n\t\treturn depth;\r\n\t}\r\n\t// If we've gone as far as we can go and haven't found it...\r\n\tif (exceptionClass == Throwable.class) {\r\n\t\treturn -1;\r\n\t}\r\n\treturn getDepth(exceptionClass.getSuperclass(), depth + 1);\r\n}\r\n```\r\n\r\ntest code:\r\n\r\n```java\r\npublic class CustomException extends Exception {\r\n}\r\n\r\npublic class CustomExceptionX extends Exception {\r\n}\r\n\r\n@Override\r\n@Transactional(rollbackFor = CustomException.class)\r\npublic void testTransaction() throws Exception {\r\n    taskMapper.softDeleteById(1, \"test\");\r\n    if (1 == 1) {\r\n        throw new CustomExceptionX();\r\n    }\r\n}\r\n```\r\n",
+    "labels": [
+      "in: data",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "sbrannen",
+        "created_at": "2022-02-28T17:16:13Z",
+        "body": "This is by design and was originally implemented using `contains()` for use in XML configuration files where users often specified the _simple name_ of a custom exception type instead of the _fully qualified class name_.\r\n\r\nYou can see examples of this in the [reference docs](https://docs.spring.io/spring-framework/docs/current/reference/html/data-access.html#transaction-declarative-rolling-back).\r\n\r\n```xml\r\n\r\n\r\n<tx:advice id=\"txAdvice\" transaction-manager=\"txManager\">\r\n  <tx:attributes>\r\n    <tx:method name=\"get*\" read-only=\"true\" rollback-for=\"NoProductInStockException\"/>\r\n    <tx:method name=\"*\"/>\r\n  </tx:attributes>\r\n</tx:advice>\r\n```\r\n\r\nWith your proposal to use `equals()` instead of `contains()`, configuration like that would no longer work since `NoProductInStockException` would only ever be equal to the fully qualified class name if the `NoProductInStockException` was declared as a top-level class in the _default_ package -- which is rather unlikely.\r\n\r\nPlease take note of the [Javadoc for `RollbackRuleAttribute`](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/transaction/interceptor/RollbackRuleAttribute.html#RollbackRuleAttribute-java.lang.String-) as well:\r\n\r\n> **NB**: Consider carefully how specific the pattern is, and whether to include package information (which is not mandatory). For example, \"Exception\" will match nearly anything, and will probably hide other rules. \"java.lang.Exception\" would be correct if \"Exception\" was meant to define a rule for all checked exceptions. With more unusual exception names such as \"BaseBusinessException\" there's no need to use a fully package-qualified name.\r\n\r\nSimilar documentation exists for the `rollbackForClassName` attribute in `@Transactional`.\r\n\r\n----\r\n\r\nThe Javadoc for the `RollbackRuleAttribute(Class)` constructor states the following,\r\n\r\n> Create a new instance of the RollbackRuleAttribute class.\r\n> \r\n> This is the preferred way to construct a rollback rule that matches the supplied Exception class, its subclasses, and its nested classes.\r\n\r\nHowever, that last sentence is not honored in the current implementation, since the type information (supplied via the `Class` reference) is not taken into account in the implementation of `getDepth(...)`.\r\n"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-01T18:02:22Z",
+        "body": "Correction to my previous statement. The Javadoc for the `RollbackRuleAttribute(Class)` constructor is _mostly_ correct.\r\n\r\nHowever, the documentation for rollback rules can be improved to warn that unintentional matches may arise if the name of a thrown exception _contains_ the name of a registered exception type.\r\n\r\nI am therefore repurposing this issue to improve the documentation."
+      },
+      {
+        "author": "hduyyg",
+        "created_at": "2022-03-02T03:14:22Z",
+        "body": "I think this rollback rule is fallible and needs more precise matching rules。\r\nA lot of people don't really read documents。"
+      },
+      {
+        "author": "sbrannen",
+        "created_at": "2022-03-02T16:13:27Z",
+        "body": "> I think this rollback rule is fallible and needs more precise matching rules。\r\n\r\nI agree with you. I've raised #28125 to improve the documentation for `5.3.x`.\r\n\r\nAnd we'll use _this_ issue to improve the behavior in `6.0`.\r\n\r\nSpecifically:\r\n\r\n- If an _exception pattern_ is supplied as a `String` -- for example, in XML configuration or via `@Transactional(rollbackForClassName = \"example.CustomException\")` -- the existing `contains()` logic will continue to be used.\r\n- If a concrete _exception type_ is supplied as a `Class` reference -- for example, via `@Transactional(rollbackFor = example.CustomException.class)` -- new logic will be implemented which honors the supplied type information, thereby avoiding an unintentional match against `example.CustomException2` when `example.CustomException` (without the `2)` was supplied as the exception type.\r\n"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c1033dbfb3609f3b3fe002d7b582b3302620c05a",
+        "67b91b239091afe169045cf0dafa800aaa5884aa"
+      ]
+    }
+  },
+  {
+    "number": 28111,
+    "title": "Support for ImportAware in AOT-processed contexts",
+    "state": "closed",
+    "created_at": "2022-02-28T10:35:18Z",
+    "updated_at": "2022-03-09T10:23:48Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28111",
+    "body": "When a context is pre-processed by the AOT engine, there's no configuration class parsing at runtime anymore and the link between an `ImportAware` configuration class and the class that imported it should be preserved.\r\n\r\nThis can be done by computing the mapping and then providing a post procesor that honors the callback.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-03-09T10:23:47Z",
+        "body": "Closed by https://github.com/spring-projects/spring-framework/commit/9ba927215edc7b8f936d6205d8f1c0c10b2202a2"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ed4e8586a55db64eb50876e204292571a0b23242",
+        "b388dac236389f9501da898db55c9addc404d848",
+        "2ccb1a1291eeac6a84c7237c7f87fa48173257fa",
+        "5944f0912952f6e56ded849220679149317206a9",
+        "369ef07660e550f478ba04975af58c06ad98a7c7",
+        "eba6cb964e532bb2a6872cc787bf55d4a1ae02c9",
+        "e103d0b7c333c87c6dbffdf1f1559f6c70b53fd1",
+        "12f4201c82da0ead72d3055d9b8f5fb816d0a4fc",
+        "145401fc5348d3cbe354cd8928d8095effd1183f"
+      ]
+    }
+  },
+  {
+    "number": 28120,
+    "title": "Support for compiling and running generated code in tests",
+    "state": "closed",
+    "created_at": "2022-03-01T14:47:44Z",
+    "updated_at": "2022-03-09T10:19:03Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28120",
+    "body": "With the AOT engine now generating an optimized view of the bean factory, there is a need to be able to compile and run the generated code in a test to assert that it has the intended effect. \r\n\r\nSuch general purpose utility could land in a new `spring-core-test` module for a start (with, potentially, a dependency on `spring-core`). ",
+    "labels": [
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "philwebb",
+        "created_at": "2022-03-02T03:36:06Z",
+        "body": "I've pushed a branch [here](https://github.com/philwebb/spring-framework/tree/gh-28120) for review. Currently the package is under `org.springframework.aot.test.generator`."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "30cd14d61ddeb6851b4e4b30f8824465975dfe79",
+        "4d24d9e5c0e93d50329274d63222ce1705e22625",
+        "7255a8b48e6bedb3e964c44d1a8e00bb6e240d07",
+        "653dc5951d24fc2c5560cb38314f536a67c3bbbf",
+        "d311dceaea25dd8bf9fec89c1d98c4d356bb1980",
+        "4b82546b975a95bb69b70d892e1661accf869d7d",
+        "54c591dfdcb76e077b2cb39e528717e6a47cc8ac",
+        "55cb758619915b3f63b85e1b6d5a7f5a1192e5a9",
+        "3ba3b5846ae764bbb445107f1f6d0aaf1357affd",
+        "d4d1759315b5557c75b4786e15dd4483407afcf2",
+        "d47b115a450888fc1099bfc985b3c6de07665c59",
+        "f031a765e709bf9495f22ed7c89af409a7fe4f7c",
+        "4f93dad28bf4e045672104add7158376b9710c66",
+        "e4a812e3195af6511a9a51cbafabdcce8be0cc23",
+        "8e0d29daf95bcd823f2b4233fb3b1e04048320c7",
+        "446674f0dbb23481f51ce0f8a5f39a13d7c0b4c3"
+      ]
+    }
+  },
+  {
+    "number": 28144,
+    "title": "Replace KotlinBodySpec with proper ResponseSpec extensions",
+    "state": "closed",
+    "created_at": "2022-03-08T10:25:23Z",
+    "updated_at": "2022-03-16T08:49:41Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28144",
+    "body": "Due to #20606, we had to introduce `KotlinBodySpec` in Spring Framework 5.0.x in order to unlock Kotlin developers for most common use cases of `WebTestClient` in Kotlin.\r\n\r\n[As of Kotlin 1.6, the related Kotlin issue on recursive generic types has been fixed](https://blog.jetbrains.com/kotlin/2021/11/kotlin-1-6-0-is-released/#improved-type-inference-for-recursive-generic-types), making it possible for Spring Framework to provide regular reified extensions for `ResponseSpec` methods that takes a `ParameterizedTypeReference` (to be verified of course, but that's my current understanding).\r\n\r\nAs a consequence, my proposal is in Spring Framework 6 to remove `KotlinBodySpec`, as well as the current `inline fun <reified B : Any> ResponseSpec.expectBody(): KotlinBodySpec<B>` extension, and introduce regular reified extensions for `ResponseSpec.expectBody` since `ResponseSpec.expectBodyList`, `ResponseSpec.returnResult` extensions already exists.\r\n\r\nThis is a breaking change, I am afraid impossible to avoid, so it should be mentioned in the release notes. I am not sure we should deprecate the related extension in Spring Framework 5.3 since we need to support Kotlin 1.5 there and the current extension prevent to introduce the new proper one describe in this issue.",
+    "labels": [
+      "in: test",
+      "type: enhancement",
+      "theme: kotlin"
+    ],
+    "comments": [
+      {
+        "author": "sdeleuze",
+        "created_at": "2022-03-16T08:49:41Z",
+        "body": "See [related comment in KT-5464](https://youtrack.jetbrains.com/issue/KT-5464#focus=Comments-27-5878033.0-0) where we discussed the fact that while this is now usable with Kotlin 1.6+, Kotlin is still more verbose than Java so there is room for improvement."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "617ba845771f8cf6d8f7e30ba8ff66214e97bc54",
+        "afa307e7dca4458c08a7a53ecb9ae8fd37a6dddd",
+        "1be3eecb2a088af4c5b9bc44c8a68cc724074be3"
+      ]
+    }
+  },
+  {
+    "number": 28146,
+    "title": "WebSocketConfigurationSupport.DefaultSockJsSchedulerContainer is private and exposed as a Bean",
+    "state": "closed",
+    "created_at": "2022-03-08T15:55:25Z",
+    "updated_at": "2022-03-09T15:40:09Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28146",
+    "body": "`defaultSockJsSchedulerContainer()` is a package protected method that exposes a type that is private. This makes it impossible to create a programmatic equivalent of this configuration arrangement.",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "67b7c16bc0b5e9f21d38173676d52db4541a997f"
+      ]
+    }
+  },
+  {
+    "number": 28147,
+    "title": "Upgrade Kotlin to 1.6.20-RC",
+    "state": "closed",
+    "created_at": "2022-03-09T09:49:48Z",
+    "updated_at": "2022-03-09T09:51:03Z",
+    "author": "sdeleuze",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28147",
+    "body": "Since Kotlin 1.6.20 won't be available for M3, the upgrade to 1.6.20 will be part of M4, see #28036.",
+    "labels": [
+      "type: dependency-upgrade",
+      "theme: kotlin"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 28148,
+    "title": "Add support for contributing runtime hints for generated code",
+    "state": "closed",
+    "created_at": "2022-03-09T09:50:00Z",
+    "updated_at": "2022-03-09T10:19:01Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28148",
+    "body": "If a component wishes to contribute hints for generated code, it can use `TypeReference.of` taking a `String` but we could just as well offer a way to create a type reference using a `ClassName`.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "14b147ce704151e5d554ff10181b24ff01d1059d"
+      ]
+    }
+  },
+  {
+    "number": 28149,
+    "title": "Add GeneratedType infrastructure",
+    "state": "closed",
+    "created_at": "2022-03-09T09:56:34Z",
+    "updated_at": "2022-03-09T10:19:01Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28149",
+    "body": "Contributions need a way to contribute code without having to care about naming and access to privileged packages. A generation context of some kind offering a way to access such type and contribute methods is a first step towards that goal.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "fd191d165bb6c886d8c3720c96240441f89d75cd"
+      ]
+    }
+  },
+  {
+    "number": 28150,
+    "title": "Introduce ApplicationContextAotGenerator",
+    "state": "closed",
+    "created_at": "2022-03-09T10:03:12Z",
+    "updated_at": "2022-03-09T10:19:04Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28150",
+    "body": "Based on https://github.com/spring-projects/spring-framework/issues/28065 and https://github.com/spring-projects/spring-framework/issues/28088, we are now capable of creating an entry point for processing a `GenericApplicationContext` ahead of time. \r\n\r\nThe generator refreshes the context for AOT processing  first, and then identifies the relevant contributions that are applicable for contributed bean definitions. It then invokes them so that code and runtime hints are contributed.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9b07457d06d0bfc5f87d157a79a227b66b9aee2b"
+      ]
+    }
+  },
+  {
+    "number": 28151,
+    "title": "Update AOT processing to account for multiple init or destroy methods",
+    "state": "closed",
+    "created_at": "2022-03-09T13:36:55Z",
+    "updated_at": "2022-03-12T12:41:15Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28151",
+    "body": "Now that #28013 is implemented we need to make sure that the bean definition is registered with the appropriate init and destroy method names.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "theme: aot"
+    ],
+    "comments": [
+      {
+        "author": "snicoll",
+        "created_at": "2022-03-10T10:22:27Z",
+        "body": "I am blocked. I've added `AotContributingBeanPostProcessor` to the BPP that detects custom init and destroy methods. I am now left with the choice of mutating the `RootBeanDefinition`. From an AOT perspective, that's alright as the bean instance supplier is generated first (and therefore the contributors are invoked upfront).\r\n\r\nFrom a context perspective, it is a little bit odd as `MergedDefinitionBeanPostProcessor` explicitly states that the methods of the base `BeanDefinition` class couldn't be invoked. \r\n\r\nLooking at things from a generic fashion, if `MergedDefinitionBeanPostProcessor` did register those using the API that was created as part of #28103, then this PP shouldn't even have to be an aot-contributing. It kind of shows in the current implementation where it mutates the `RootBeanDefinition` if necessary and always return a `null` contribution."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "76457a542d4e9b5cd7f9a7620b3b7ecdede98425",
+        "672555a568445d27ab3d1efc0d87dd9bde779acc",
+        "4a35b6c48d19c23a8146afdf2d07251c893c0acb",
+        "4ecda241fbb18644b36bf968be5d1624e623016e"
+      ]
+    }
+  },
+  {
+    "number": 28153,
+    "title": "BeanRegistrationBeanFactoryContribution should expect a RootBeanDefinition",
+    "state": "closed",
+    "created_at": "2022-03-10T10:49:43Z",
+    "updated_at": "2022-03-10T10:57:36Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28153",
+    "body": "Given the contract of `MergedBeanDefinitionPostProcessor` and the AOT equivalent, we can expect that bean definitions suitable for code generation are `RootBeanDefinition` instances.",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a0061b7fb944b70d6d1e581ff46c4e16ed1071e8"
+      ]
+    }
+  },
+  {
+    "number": 28154,
+    "title": "Ambiguous check only applied to constructors",
+    "state": "closed",
+    "created_at": "2022-03-10T13:10:11Z",
+    "updated_at": "2022-03-10T14:37:49Z",
+    "author": "snicoll",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28154",
+    "body": "When a constructor should be invoked to create a bean instance, there is the danger that several flavors exist with different parameter types so that the call to `new MyBean(attributes.get(0)` is ambiguous as the type is not declared.\r\n\r\nThere is an explicit check for this case where an explicit type-based method on `InjectedElementAttributes` is used. Unfortunately, it hasn't been applied to factory methods that suffer from the same problem if several methods have a similar signature.\r\n\r\n",
+    "labels": [
+      "type: task",
+      "in: core",
+      "theme: aot"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "93a26514175c7b88537b6710e4559552ae484a41"
+      ]
+    }
+  },
+  {
+    "number": 28187,
+    "title": "Add types to represent RFC 7807 problem details and exceptions",
+    "state": "closed",
+    "created_at": "2022-03-16T15:16:19Z",
+    "updated_at": "2022-05-20T20:56:13Z",
+    "author": "rstoyanchev",
+    "url": "https://github.com/spring-projects/spring-framework/issues/28187",
+    "body": "The goal for this issue is to add a representation for an RFC 7807 problem detail, and integrate it into Spring MVC and Spring WebFlux error response handling.\r\n\r\nOn the WebFlux side we have the `ResponseStatusException` hierarchy which contains HTTP status, a reason, and headers. We can now add a `ProblemDetail` as the body. This provides full encapsulation of all error response details within the exception.\r\n\r\nOn the Spring MVC side, we have the `DefaultHandlerExceptionResolver` which maps exceptions to HTTP status and headers, so exceptions do not themselves contain that information. Furthermore the exception hierarchy does not have a single base class where this can be added. We can add an interface to represent an error response, e.g. `ErrorResponse`, similar to the information exposed from `ResponseStatusException` on the WebFlux side, and then have all Spring MVC exceptions implement it in order to expose it in which case `DefaultHandlerExceptionResolver` no longer needs mapping logic.\r\n\r\n`ResponseEntityExceptionHandler` is a base class for a controller advice that uses an `@ExceptionHandler` method to render error details. It has been around for some time, but so far application have had to extend it to decide on the error body format. We can now fill in the blank and use `ProblemDetail` for `ResponseError` exceptions that expose such information. A similar class does not exist for WebFlux but can be added.\r\n\r\n`ResponseEntity` handling for both Spring MVC and WebFlux should support `ProblemDetail` and `ErrorResponse` as return types, automatically setting the response status, headers, and body accordingly. This is also an opportunity to set the `instance` field of `ProblemDetail` to the request path as a fallback if `instance` hasn't been set.\r\n\r\n",
+    "labels": [
+      "in: web",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "rstoyanchev",
+        "created_at": "2022-03-16T18:41:57Z",
+        "body": "See commits linked the umbrella issue #27052."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  }
+]

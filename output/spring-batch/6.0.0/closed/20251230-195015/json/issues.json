@@ -1,0 +1,696 @@
+[
+  {
+    "number": 4289,
+    "title": "Add integration tests for DDL migration scripts",
+    "state": "closed",
+    "created_at": "2023-02-08T10:44:55Z",
+    "updated_at": "2025-11-19T15:34:29Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4289",
+    "body": "To avoid issues like #4260 and #4271, we need to create integration tests to validate migration scripts. For PostgreSQL, it could be something like this:\r\n\r\n```java\r\n/*\r\n * Copyright 2020-2023 the original author or authors.\r\n *\r\n * Licensed under the Apache License, Version 2.0 (the \"License\");\r\n * you may not use this file except in compliance with the License.\r\n * You may obtain a copy of the License at\r\n *\r\n *      https://www.apache.org/licenses/LICENSE-2.0\r\n *\r\n * Unless required by applicable law or agreed to in writing, software\r\n * distributed under the License is distributed on an \"AS IS\" BASIS,\r\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\r\n * See the License for the specific language governing permissions and\r\n * limitations under the License.\r\n */\r\npackage org.springframework.batch.core.test.repository;\r\n\r\nimport org.junit.jupiter.api.Assertions;\r\nimport org.junit.jupiter.api.Test;\r\nimport org.postgresql.ds.PGSimpleDataSource;\r\nimport org.testcontainers.containers.PostgreSQLContainer;\r\nimport org.testcontainers.junit.jupiter.Container;\r\nimport org.testcontainers.junit.jupiter.Testcontainers;\r\nimport org.testcontainers.utility.DockerImageName;\r\n\r\nimport org.springframework.core.io.ClassPathResource;\r\nimport org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;\r\n\r\n/**\r\n * @author Mahmoud Ben Hassine\r\n */\r\n@Testcontainers\r\nclass PostgreSQLMigrationScriptIntegrationTests {\r\n\r\n\t@Container\r\n\tpublic static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse(\"postgres:13.3\"));\r\n\r\n\t@Test\r\n\tvoid migrationScriptShouldBeValid() {\r\n\t\tPGSimpleDataSource datasource = new PGSimpleDataSource();\r\n\t\tdatasource.setURL(postgres.getJdbcUrl());\r\n\t\tdatasource.setUser(postgres.getUsername());\r\n\t\tdatasource.setPassword(postgres.getPassword());\r\n\r\n\t\tResourceDatabasePopulator databasePopulator = new ResourceDatabasePopulator();\r\n\t\tdatabasePopulator.addScript(new ClassPathResource(\"/org/springframework/batch/core/schema-postgresql-4.sql\"));\r\n\t\tdatabasePopulator.addScript(new ClassPathResource(\"/org/springframework/batch/core/migration/5.0/migration-postgresql.sql\"));\r\n\r\n\t\tAssertions.assertDoesNotThrow(() -> databasePopulator.execute(datasource));\r\n\t}\r\n\r\n\r\n}\r\n\r\n```\r\n\r\nFor embedded databases, it could be something like this:\r\n\r\n```java\r\n/*\r\n * Copyright 2020-2023 the original author or authors.\r\n *\r\n * Licensed under the Apache License, Version 2.0 (the \"License\");\r\n * you may not use this file except in compliance with the License.\r\n * You may obtain a copy of the License at\r\n *\r\n *      https://www.apache.org/licenses/LICENSE-2.0\r\n *\r\n * Unless required by applicable law or agreed to in writing, software\r\n * distributed under the License is distributed on an \"AS IS\" BASIS,\r\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\r\n * See the License for the specific language governing permissions and\r\n * limitations under the License.\r\n */\r\npackage org.springframework.batch.core.repository;\r\n\r\nimport org.junit.jupiter.api.Assertions;\r\nimport org.junit.jupiter.api.Test;\r\n\r\nimport org.springframework.core.io.ClassPathResource;\r\nimport org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;\r\nimport org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;\r\nimport org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;\r\nimport org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;\r\n\r\n/**\r\n * @author Mahmoud Ben Hassine\r\n */\r\nclass H2MigrationScriptIntegrationTests {\r\n\r\n\t@Test\r\n\tvoid migrationScriptShouldBeValid() {\r\n\t\tEmbeddedDatabase datasource = new EmbeddedDatabaseBuilder()\r\n\t\t\t\t.setType(EmbeddedDatabaseType.H2)\r\n\t\t\t\t.addScript(\"/org/springframework/batch/core/schema-h2-v4.sql\")\r\n\t\t\t\t.build();\r\n\r\n\t\tResourceDatabasePopulator databasePopulator = new ResourceDatabasePopulator();\r\n\t\tdatabasePopulator.addScript(new ClassPathResource(\"/org/springframework/batch/core/migration/5.0/migration-h2.sql\"));\r\n\r\n\t\tAssertions.assertDoesNotThrow(() -> databasePopulator.execute(datasource));\r\n\t}\r\n\r\n\r\n}\r\n```\r\n\r\nNB: Those tests should *not* be part of the CI/CD build. They can be used on demand to validate a migration script when needed.",
+    "labels": [
+      "type: task",
+      "in: core",
+      "related-to: ddl-scripts"
+    ],
+    "comments": [
+      {
+        "author": "baezzys",
+        "created_at": "2025-08-04T08:17:17Z",
+        "body": "Hi @fmbenhassine,\n\nI'd like to work on this issue. I can implement integration tests for all databases that have migration scripts (PostgreSQL, H2, MySQL, Oracle, SQL Server, etc.) using TestContainers for external databases and EmbeddedDatabaseBuilder for embedded ones."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-08-04T08:34:51Z",
+        "body": "Hi @baezzys ,\n\nSure! Thank you for your offer to help 🙏"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d79971b8a5d44e32bb5ea08c6389b2d20b468396",
+        "b095f10caa88c68ea72d2b93af02065a754c199a",
+        "45c175b1ba2f4a3488e67e5af0546a597789937e",
+        "1f11625d35143495603ddedf10aa8d8acfcdd179",
+        "8608e18de568e4f54efe886dec56076180d3f1c1",
+        "ced1cbf246121f85d771b8d851102cb8d1967c46",
+        "01619c6f2d4826962162181d96b2837b204a32e1",
+        "b2c63d3233f6429bb4990f396975b135ca241a38",
+        "9a422fa57cfea2cf1eda7ece09d0bab776cb6d50"
+      ]
+    }
+  },
+  {
+    "number": 4732,
+    "title": "Inaccurate error message when using ResourcelessJobRepository with a partitioned step",
+    "state": "closed",
+    "created_at": "2024-12-10T09:01:59Z",
+    "updated_at": "2025-11-14T11:35:39Z",
+    "author": "monnetchr",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4732",
+    "body": "**Bug description**\r\nThe ResourcelessJobRepository cannot be used with a Partitioner:\r\n```\r\n[main] ERROR org.springframework.batch.core.step.AbstractStep - Encountered an error executing step step in job partitionJob\r\norg.springframework.batch.core.JobExecutionException: Cannot restart step from STARTING status.  The old execution may still be executing, so you may need to verify manually that this is the case.\r\n```\r\n\r\n**Steps to reproduce**\r\nSimply change `spring-batch-samples/src/main/resources/simple-job-launcher-context.xml` to use `ResourcelessJobRepository` and then run `spring-batch-samples/src/test/java/org/springframework/batch/samples/partition/file/PartitionFileJobFunctionalTests.java`\r\n\r\n",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2024-12-10T09:37:49Z",
+        "body": "The resourceless job repository does not support features involving the execution context (including partitioned steps). This is mentioned in the javadocs of the class: https://docs.spring.io/spring-batch/docs/current/api/org/springframework/batch/core/repository/support/ResourcelessJobRepository.html and in the reference docs here: https://docs.spring.io/spring-batch/reference/whatsnew.html#new-resourceless-job-repository\r\n\r\nYou need to configure another job repository implementation that supports batch-metadata. I am closing this issue now as I believe it answers your concern, but please add a comment if you need more support on this. Thank you."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2024-12-10T11:09:04Z",
+        "body": "I must admit the error message is confusing, there is no restart in that sample yet the message is mentioning restart. I will re-open this issue and change it into an enhancement."
+      },
+      {
+        "author": "kwondh5217",
+        "created_at": "2025-03-18T12:50:56Z",
+        "body": "Hi @fmbenhassine, I would like to contribute to this issue.\n\nTo improve clarity, would it make sense to explicitly prevent the use of `ResourcelessJobRepository` with partitioned steps by throwing an exception? \n\nProposed change:\n```java\n@Override\npublic Set<StepExecution> split(StepExecution stepExecution, int gridSize) throws JobExecutionException {\n    if (jobRepository instanceof ResourcelessJobRepository) {\n        throw new JobExecutionException(\"ResourcelessJobRepository cannot be used with partitioned steps \"\n                                        + \"as it does not support execution context.\");\n    }\n    ..."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-14T11:35:28Z",
+        "body": "This was fixed as part of 90d895955d951156849ba6fa018676273fdbe2c4.\n\n> **Steps to reproduce**\n> Simply change `spring-batch-samples/src/main/resources/simple-job-launcher-context.xml` to use `ResourcelessJobRepository` and then run `spring-batch-samples/src/test/java/org/springframework/batch/samples/partition/file/PartitionFileJobFunctionalTests.java`\n\nI tried that sample with 6.0.0-RC2 and now it prints:\n\n```\n12:27:34.354 [main] INFO  o.s.b.c.c.x.CoreNamespaceHandler - DEPRECATION NOTE: The batch XML namespace is deprecated as of Spring Batch 6.0 and will be removed in version 7.0.\n12:27:34.566 [main] INFO  o.s.b.c.s.i.ChunkOrientedTasklet - DEPRECATION NOTE: The legacy implementation of the chunk-oriented processing model is deprecated as of Spring Batch 6.0 and will be removed in version 7.0.\n12:27:35.250 [main] INFO  o.s.b.c.l.s.TaskExecutorJobLauncher - Job: [FlowJob: [name=partitionJob]] launched with the following parameters: [{JobParameter{name='random', value=1393027390114809605, type=class java.lang.Long, identifying=true}}]\n12:27:35.254 [main] INFO  o.s.b.c.j.SimpleStepHandler - Executing step: [step]\n12:27:35.286 [SimpleAsyncTaskExecutor-2] INFO  o.s.b.c.s.AbstractStep - Step: [step1:partition1] executed in 28ms\n12:27:35.286 [SimpleAsyncTaskExecutor-1] INFO  o.s.b.c.s.AbstractStep - Step: [step1:partition0] executed in 28ms\n12:27:35.287 [main] INFO  o.s.b.c.s.AbstractStep - Step: [step] executed in 32ms\n12:27:35.288 [main] INFO  o.s.b.c.l.s.TaskExecutorJobLauncher - Job: [FlowJob: [name=partitionJob]] completed with the following parameters: [{JobParameter{name='random', value=1393027390114809605, type=class java.lang.Long, identifying=true}}] and the following status: [COMPLETED] in 34ms\n```\n\nwhich does not log the confusing error message anymore."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "69331c516dbb95cc23d4340fe083460fc376551e"
+      ]
+    }
+  },
+  {
+    "number": 4787,
+    "title": "Elaborate usage of PlatformTransactionManager",
+    "state": "closed",
+    "created_at": "2025-03-19T09:41:10Z",
+    "updated_at": "2025-11-19T11:09:39Z",
+    "author": "quaff",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4787",
+    "body": "There are many places to configure `transactionManager`, it's unclear whether it's mandatory or not, from my understanding, it's should be optional since `dataSource` is mandatory, Spring Batch could create `DataSourceTransactionManager()` as default, correct me if I'm wrong.\n\nAnd it's unclear whether it's used for batch metadata operations or JDBC reader/writer of step, if [Spring Boot](https://docs.spring.io/spring-boot/how-to/batch.html)'s `@BatchDataSource` and `@BatchTransactionManager` are used for separated DataSource, which `transactionManager` should be used for `StepBuilder::chunk`?\n\nhttps://github.com/spring-projects/spring-batch/blob/e1b0f156e4db9ae2c3b60b83ec372dac8bddad68/spring-batch-core/src/main/java/org/springframework/batch/core/step/builder/StepBuilder.java#L118",
+    "labels": [
+      "in: documentation",
+      "type: enhancement",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-05-22T13:47:31Z",
+        "body": "> Spring Batch could create `DataSourceTransactionManager()` as default, correct me if I'm wrong.\n\nSpring Batch used to do that, but it was causing issues like #816.\n\n> it's unclear whether it's used for batch metadata operations or JDBC reader/writer of step\n\nThose can be different: one can use a `ResourcelessTransactionManager` for meta-data and a `JdbcTransactionManager` for business data.\n\nI will plan to clarify the docs with a note about this."
+      },
+      {
+        "author": "quaff",
+        "created_at": "2025-05-30T01:23:49Z",
+        "body": "> > Spring Batch could create `DataSourceTransactionManager()` as default, correct me if I'm wrong.\n> \n> Spring Batch used to do that, but it was causing issues like [#816](https://github.com/spring-projects/spring-batch/issues/816).\n\n\nWe could use `@Bean(defaultCandidate = false)` now, it will not back off Spring Boot's auto-configured `PlatformTransactionManager`.\n\n"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-19T10:27:11Z",
+        "body": "> We could use `@Bean(defaultCandidate = false)` now, it will not back off Spring Boot's auto-configured `PlatformTransactionManager`.\n\nFor now, there is no plan to make Spring Batch define a transaction manager this way, but I will update the docs to elaborate the usage of this component (the fact that it is optional and that it does not necessarily have to be the same in the step and the job repository).\n\n"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4e5b7d26d802afaadac4c4d00e50f71883423e41"
+      ]
+    }
+  },
+  {
+    "number": 4791,
+    "title": "Unclear reference to example about job parameters in reference documentation",
+    "state": "closed",
+    "created_at": "2025-03-26T01:35:54Z",
+    "updated_at": "2025-11-19T10:05:04Z",
+    "author": "quaff",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4791",
+    "body": "https://docs.spring.io/spring-batch/reference/domain.html#jobParameters\n\n>> In the preceding example, where there are two instances, one for January 1st and another for January 2nd, there is really only one Job, but it has two JobParameter objects: one that was started with a job parameter of 01-01-2017 and another that was started with a parameter of 01-02-2017. \n\nThe figure doesn't show two instances of 01-01-2017 and 01-02-2017.",
+    "labels": [
+      "in: documentation",
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-19T09:53:26Z",
+        "body": "I think the text references the preceding example from the previous section [JobInstance](https://docs.spring.io/spring-batch/reference/domain.html#jobinstance) to continue the explanation in the current section. Here is the text from the previous section:\n\n```\nFor example, there is a January 1st run, a January 2nd run, and so on. If the January 1st run fails the first time and is run again the next day, it is still the January 1st run. (Usually, this corresponds with the data it is processing as well, meaning the January 1st run processes data for January 1st). Therefore, each JobInstance can have multiple executions (JobExecution is discussed in more detail later in this chapter), and only one JobInstance (which corresponds to a particular Job and identifying JobParameters) can run at a given time.\n```\n\nThe text doesn't say \"In the preceding figure\" or \"In this figure, there are two instances\". I will update the text with a link to the previous section where the example is first introduced."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8020331dc0a0950f3f759bb520490c9a0ab611fc"
+      ]
+    }
+  },
+  {
+    "number": 4859,
+    "title": "Clarify MongoDB job repository configuration in reference documentation",
+    "state": "closed",
+    "created_at": "2025-06-03T22:34:58Z",
+    "updated_at": "2025-11-19T10:05:03Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4859",
+    "body": "As of v5.2, the prerequisite for using MongoDB as a job repository is not documented in details in the [Configuring a JobRepository](https://docs.spring.io/spring-batch/reference/job/configuring-repository.html) section. There is a note about that in the [What’s new in Spring Batch 5.2](https://docs.spring.io/spring-batch/reference/whatsnew.html#mongodb-job-repository-support) section but that is not clear enough.\n\nThe reference documentation should clarify the DDL script to execute against MongoDB before running jobs as well any other necessary configuration for things to work correctly (thinking about the `MapKeyDotReplacement` that has to be defined in the mongo converter for instance).",
+    "labels": [
+      "in: documentation",
+      "type: bug",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "17bc8f70087e9e264c65551f47c1ea6601c53905"
+      ]
+    }
+  },
+  {
+    "number": 4916,
+    "title": "RecordFieldExtractor in FlatFileItemWriterBuilder doesn't reflect names() setting",
+    "state": "closed",
+    "created_at": "2025-07-18T12:09:55Z",
+    "updated_at": "2025-11-14T09:42:35Z",
+    "author": "kyb4312",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4916",
+    "body": "This is related to [spring-projects/spring-batch#4908](https://github.com/spring-projects/spring-batch/issues/4908), which points out that using names() with a record type and sourceType() might seem redundant. While that discussion raises a valid concern, this issue is coming from a slightly different angle: it would be helpful if the names() setting actually worked when a record is used with sourceType(). That way, developers wouldn't be surprised when their field selections are silently ignored.\n\n---\n### **Bug description**\nWhen using FlatFileItemWriterBuilder’s build() method with sourceType() set to a record class and specifying field names via names(), the RecordFieldExtractor used internally ignores the names() configuration.\nIn contrast, when sourceType() is not specified, the BeanWrapperFieldExtractor honors the names() configuration as expected.\n\nThis inconsistency can cause confusion, as the same record type behaves differently depending on whether sourceType() is provided.\n\n---\n### **Steps to reproduce**\n```\npublic record MyRecord(String name, int age, String address) {}\n\nFlatFileItemWriter<MyRecord> writer = new FlatFileItemWriterBuilder<MyRecord>()\n    .name(\"myRecordWriter\")\n    .resource(new FileSystemResource(\"output.csv\"))\n    .sourceType(MyRecord.class)  // triggers RecordFieldExtractor\n    .names(\"name\", \"age\")        // currently ignored\n    .delimited()\n    .build();\n```\nExpected output: name, age\nActual output: name, age, address\n\n---\n### **Suggested Fix**\n\nUpdate the builder to pass names into RecordFieldExtractor:\n\nFlatFileItemWriterBuilder.build()\n\nBefore:\n```\nif (this.sourceType != null && this.sourceType.isRecord()) {\n    this.fieldExtractor = new RecordFieldExtractor<>(this.sourceType);\n}\n```\n\nAfter:\n```\nif (this.sourceType != null && this.sourceType.isRecord()) {\n    RecordFieldExtractor<T> extractor = new RecordFieldExtractor<>(this.sourceType);\n    extractor.setNames(this.names.toArray(new String[this.names.size()]));\n    this.fieldExtractor = extractor;\n}\n```\nThis would make the behavior consistent and avoid surprises.\n\n---\nLet me know if you'd like a pull request with this change - I'd be happy to help!\n\npowerd by KILL-9 💀",
+    "labels": [
+      "in: infrastructure",
+      "type: bug",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [
+      {
+        "author": "LeeHyungGeol",
+        "created_at": "2025-10-04T05:14:43Z",
+        "body": "Hello @fmbenhassine.\n\nWould it be okay if i give it a try on this issue?"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-10-04T05:27:48Z",
+        "body": "@LeeHyungGeol Sure! thank you for your offer to help 🙏"
+      },
+      {
+        "author": "LeeHyungGeol",
+        "created_at": "2025-10-04T08:53:00Z",
+        "body": "@fmbenhassine \n\nI've created a PR https://github.com/spring-projects/spring-batch/pull/5009 to address this issue. Could you please assign this issue to me?\n\nAlso, I noticed this issue is closely related to https://github.com/spring-projects/spring-batch/issues/4908. I'd greatly appreciate it if you could review them together.\n\nThank you!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8f56f9379149ee3d8ac08910be2cdf3125cc1d0f",
+        "0eeacd583ffbb2d47dd6ed9bc76f914fd320b496"
+      ]
+    }
+  },
+  {
+    "number": 4983,
+    "title": "Add migration scripts for v6",
+    "state": "closed",
+    "created_at": "2025-09-23T18:35:11Z",
+    "updated_at": "2025-11-18T15:10:37Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4983",
+    "body": "Currently, here are the issues that might require a migration script:\n\n- #4977",
+    "labels": [
+      "type: task"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2c30f147c2ea3e741fb0a262fd03b90eecaaa16b"
+      ]
+    }
+  },
+  {
+    "number": 5026,
+    "title": "Document requirements of CommandLineJobOperator in the reference docs",
+    "state": "closed",
+    "created_at": "2025-10-15T07:48:41Z",
+    "updated_at": "2025-11-19T10:05:03Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5026",
+    "body": "Hello Spring Batch team,\n\nThank you for all your great work on Spring Batch 6! I've been testing the milestone releases and came across what might be an issue or a documentation gap regarding `CommandLineJobOperator` and `JobRegistry` configuration.\n\n\n**Bug description**\nAfter [#4971](https://github.com/spring-projects/spring-batch/issues/4971), `JobRegistry` was made optional and is no longer automatically registered as a bean in Spring Batch configuration. \n\nHowever, `CommandLineJobOperator` (introduced in [#4899](https://github.com/spring-projects/spring-batch/issues/4899)) explicitly requires a `JobRegistry` bean from the `ApplicationContext`, causing it to fail with both `@EnableBatchProcessing` and `DefaultBatchConfiguration`.\n\n**Environment**\n- Spring Batch version: 6.0.0-M4\n\n\n**Steps to reproduce** / **Minimal Complete Reproducible example**\n**With `DefaultBatchConfiguration`:**\n```java\n@Configuration\npublic class BatchConfig extends DefaultBatchConfiguration {\n    // No JobRegistry bean\n}\n```\n\n**Or with `@EnableBatchProcessing`:**\n```java\n@Configuration\n@EnableBatchProcessing\npublic class BatchConfig {\n    // No JobRegistry bean\n}\n```\n\n**Then run:**\n```bash\njava CommandLineJobOperator my.package.BatchConfig start myJob\n```\n\n**Result:** Application fails with error.\n\n**Expected behavior**\n`CommandLineJobOperator` should work with the default Spring Batch configuration, or the documentation should clearly state that manual `JobRegistry` bean registration is required.\n\n**Actual behavior**\nApplication fails with:\n```\nA required bean was not found in the application context: \nNo qualifying bean of type 'org.springframework.batch.core.configuration.JobRegistry' available\n```\n\n**Error location:**\nThe error occurs in `CommandLineJobOperator.main()` at line 314:\n```java\npublic static void main(String[] args) {\n    ...\n    jobRegistry = context.getBean(JobRegistry.class);  // ← Fails here (line 314)\n    ...\n}\n\n**Current Workaround**\nUsers must manually register `JobRegistry` as a bean:\n\n**With `DefaultBatchConfiguration`:**\n```java\n@Configuration\npublic class BatchConfig extends DefaultBatchConfiguration {\n    \n    @Bean\n    public JobRegistry jobRegistry() {\n        return new MapJobRegistry();\n    }\n    \n    @Override\n    protected JobRegistry getJobRegistry() {\n        return applicationContext.getBean(JobRegistry.class);\n    }\n}\n```\n\n**Question**\nIs this the intended behavior? Since #4971 made `JobRegistry` optional, we're wondering if `CommandLineJobOperator` is expected to require manual `JobRegistry` bean registration, or if this is an unintended side effect.\n\nIf manual registration is the intended approach, it would be very helpful to have this documented with examples for both configuration styles (`@EnableBatchProcessing` and `DefaultBatchConfiguration`).\n\nwould appreciate any clarification on the expected usage pattern. Thank you!\n",
+    "labels": [
+      "in: documentation",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-17T14:18:15Z",
+        "body": "Thank you for reporting this issue. I think this is documented in the Javadoc of the class, here is an excerpt:\n\n```\nThis utility requires a Spring application context to be set up with the necessary batch infrastructure, including a `JobOperator`, a `JobRepository`, and a `JobRegistry` populated with the jobs to operate.\n```\n\nWhen the job registry bean is not defined in the context, the user should get this message (see [here](https://github.com/spring-projects/spring-batch/blob/4646a4479a44ae1d836f7053c41c4af09f7a9e1a/spring-batch-core/src/main/java/org/springframework/batch/core/launch/support/CommandLineJobOperator.java#L319-L330)):\n\n```\nA required bean was not found in the application context: [...]\n```\n\n\n\n> I've been testing the milestone releases and came across what might be an issue or a documentation gap regarding `CommandLineJobOperator` and `JobRegistry` configuration.\n\nSo I guess this is not an issue but a documentation gap, we need to update the reference docs in addition to the javadoc. I will turn this into a documentation enhancement."
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-11-17T14:22:34Z",
+        "body": "Thank you for your clear response.\n\nI agree with your assessment that this is a documentation gap rather than a technical issue, and I appreciate you turning it into a documentation enhancement ticket!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "acc48a3a3bc76ae85e0d936f260e5e6594c7ba9a"
+      ]
+    }
+  },
+  {
+    "number": 5057,
+    "title": "`CommandLineJobOperator` improve state validation for restart/abandon and enhance logging",
+    "state": "closed",
+    "created_at": "2025-10-29T05:49:58Z",
+    "updated_at": "2025-11-17T06:23:01Z",
+    "author": "ch200203",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5057",
+    "body": "\n### Expected Behavior\n- **Abandon**: Only allow when execution is **STOPPED**; otherwise log the current status and return a generic error exit code.\n- **Restart**: Only allow when execution is **FAILED** or **STOPPED**; otherwise log the current status and return a generic error exit code.\n- Resolve the TODOs in `CommandLineJobOperator` by performing explicit precondition checks at the CLI layer without relying on deprecated exceptions.\n\n### Current Behavior\n- `abandon(jobExecutionId)`: Delegates to `JobOperator#abandon` without enforcing **STOPPED** at the CLI level. A TODO mentions throwing `JobExecutionNotStoppedException`, but that exception is deprecated.\n- `restart(jobExecutionId)`: Contains a TODO to check/log when the job execution “did not fail,” but does not enforce valid restart states at the CLI level.\n\n### Context\n- **Motivation**: Align CLI precondition checks with Spring Batch semantics and the inline TODOs, prevent invalid operations earlier, and improve observability with clear error logs that include the current status.\n- **Alternative considered**: Throwing `JobExecutionNotStoppedException`, but it is deprecated; the CLI should use exit codes and logging instead.\n- **Compatibility**: No API change; behavior becomes explicit and predictable. Invalid operations return `JVM_EXITCODE_GENERIC_ERROR` rather than relying on downstream exceptions.\n\n### Proposed Change\n- In `spring-batch-core/src/main/java/org/springframework/batch/core/launch/support/CommandLineJobOperator.java`:\n    - `restart(long jobExecutionId)`: Enforce `FAILED` or `STOPPED`; otherwise log current status and return generic error.\n    - `abandon(long jobExecutionId)`: Enforce `STOPPED`; otherwise log current status and return generic error.\n\n### Previous Code (before change)\n- `restart(long jobExecutionId)`: Only TODO present; no state check; directly delegates to `jobOperator.restart(jobExecution)`.\n\n```java\n// TODO should check and log error if the job execution did not fail\nJobExecution restartedExecution = this.jobOperator.restart(jobExecution);\nreturn this.exitCodeMapper.intValue(restartedExecution.getExitStatus().getExitCode());\n```\n\n- `abandon(long jobExecutionId)`: Only TODO present; no state check; directly delegates to `jobOperator.abandon(jobExecution)`.\n\n```java\n// TODO should throw JobExecutionNotStoppedException if the job execution is\n// not stopped\nJobExecution abandonedExecution = this.jobOperator.abandon(jobExecution);\nreturn this.exitCodeMapper.intValue(abandonedExecution.getExitStatus().getExitCode());\n```\n\nA corresponding pull request has been carefully prepared to demonstrate this improvement.  \nI would appreciate it if the team could review and provide feedback when possible.",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-17T06:23:01Z",
+        "body": "Resolved with #5058"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5064,
+    "title": "SQL Server DDL for metadata tables should use NVARCHAR to prevent performance degradation and deadlocks from implicit conversion",
+    "state": "closed",
+    "created_at": "2025-10-30T05:00:29Z",
+    "updated_at": "2025-11-14T08:02:40Z",
+    "author": "Chienlin1014",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5064",
+    "body": " Hello Spring Batch Team,\n\n  I'm reporting a significant performance issue and a potential for deadlocks when using Spring Batch with a SQL Server database. The root cause is a data type mismatch between the default\n   Spring Batch schema and the default behavior of the Microsoft JDBC driver.\n\n  The Problem\n\n  The default DDL for SQL Server metadata tables (e.g., BATCH_JOB_INSTANCE's JOB_NAME, JOB_KEY) defines these columns as VARCHAR. However, the Microsoft JDBC Driver for SQL Server sends\n  string parameters as NVARCHAR by default.\n\n  This mismatch forces SQL Server to perform an implicit data type conversion (CONVERT_IMPLICIT) on the VARCHAR column for every comparison.\n\n  Impact: Performance Degradation and Deadlocks\n\n  This implicit conversion prevents efficient index usage. The query optimizer, despite showing an Index Seek operation, actually performs a costly range scan due to the CONVERT_IMPLICIT\n  in the WHERE clause and the use of GetRangeThroughConvert to define a search range. This behavior leads to substantial performance degradation that worsens linearly with data growth.\n\n  This severe performance degradation causes transactions to hold locks for much longer. Under high concurrency, this dramatically increases lock contention and the risk of deadlocks. We\n  have confirmed these deadlocks occur even at the READ COMMITTED isolation level, as the range scan acquires broader range locks, leading to mutual waiting during INSERT attempts.\n\n  Proposed Solution\n\n  To resolve this at its root, I propose updating the schema-sqlserver.sql file to change all relevant string columns in the metadata tables from `VARCHAR` to `NVARCHAR`. This aligns the\n  database schema with the JDBC driver's default behavior, ensuring efficient index usage and preventing these performance and deadlock issues.\n\n  Thank you for your consideration.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "related-to: ddl-scripts"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ee050d66b0f00f7e03365835f160d4a3f133bda1",
+        "525d9b0ee640898a6cf11f844e365adfb19b6dee"
+      ]
+    }
+  },
+  {
+    "number": 5072,
+    "title": "Document how to migrate usage of EnableBatchProcessing(modular = true) to v6",
+    "state": "closed",
+    "created_at": "2025-11-02T15:51:07Z",
+    "updated_at": "2025-12-10T10:35:02Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5072",
+    "body": "This is related to #4866. The goal is to document how to migrate the use of `EnableBatchProcessing(modular = true)` to  Spring's context hierarchies and `GroupAwareJob`s (as mentioned in the javadoc of `EnableBatchProcessing`).\n\ncc @kzander91 (who provided a starting point in https://github.com/spring-projects/spring-batch/issues/4866#issuecomment-3478015935, thank you for that!)\n",
+    "labels": [
+      "in: documentation",
+      "type: task"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-19T16:29:25Z",
+        "body": "Added example here: https://github.com/spring-projects/spring-batch/wiki/Spring-Batch-6.0-Migration-Guide#changes-related-to-the-modular-batch-configurations-through-enablebatchprocessingmodular--true"
+      },
+      {
+        "author": "kzander91",
+        "created_at": "2025-11-25T12:58:46Z",
+        "body": "@fmbenhassine I just had a chance to take a look at the example, and I find it a bit lacking:\n* The old, modular implementation was also managing the lifecycle of the child contexts, properly shutting everything down when the parent context was closed. I would now have to reimplement that myself.\n* Previously, through the parent context's `JobLocator`, I was able to retrieve the child context's `Job` by name. This is now no longer possible and my logic that is launching jobs would somehow need to get a hold of the child contexts... Especially this issue is I believe also relevant for @marbon87's [case in their app](https://github.com/spring-projects/spring-batch/issues/4866#issuecomment-3575452892).\n\nI feel like the only proper migration path for all but the simplest of apps is either to _not_ use separate contexts and define all Job's in a shared context (likely they way I will be going), or to copy-paste Spring Batch's implementation from the previous version."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-08T07:44:13Z",
+        "body": "@kzander91 Thank you looking into that and for your feedback!\n\n> * The old, modular implementation was also managing the lifecycle of the child contexts, properly shutting everything down when the parent context was closed. I would now have to reimplement that myself.\n\nThat feature is already implemented in Spring Boot and was duplicated in Spring Batch for no reason. Have you tried `new SpringApplicationBuilder(ParentConfig.class).child(ChildConfig.class).run(args);` from Boot? This will handle the lifecycle of the contexts for you.\n\n>  Previously, through the parent context's JobLocator, I was able to retrieve the child context's Job by name. This is now no longer possible and my logic that is launching jobs would somehow need to get a hold of the child contexts\n\nI think that that was due to #5122 which I already fixed and planned for the upcoming v6.0.1. With that fix in place, the `MapJobRegistry` can be populated with jobs from all contexts and the registration will be based on the job names (which should be globally unique anyway) and not the bean name (which could be the same in child contexts).\n\n---\n\nAnother option I forgot about is using Spring profiles. I believe this is suitable for this kind of setup. Have you tried that approach? I can help with an example here as well. Just let me know if you need support on that.\n"
+      },
+      {
+        "author": "kzander91",
+        "created_at": "2025-12-08T08:22:57Z",
+        "body": "> Have you tried new `SpringApplicationBuilder(ParentConfig.class).child(ChildConfig.class).run(args);` from Boot?\n\nI have, but that doesn't really work in my scenario, because I'm running an embedded Tomcat in my parent context, which Spring Boot doesn't support: https://github.com/spring-projects/spring-boot/blob/1c0e08b4c434b0e77a83098267b2a0f5a3fc56d7/core/spring-boot/src/main/java/org/springframework/boot/builder/SpringApplicationBuilder.java#L207-L210\nNow I _could_ put the rest of my project in another child context, but again in both of these cases I wouldn't be able to see the Job beans from the child or sibling contexts (I'm launching jobs by name from a central service bean, and that bean thus needs to know all Jobs).\n\n> With that fix in place, the `MapJobRegistry` can be populated with jobs from all contexts\n\nI don't think that's true. Parent contexts are not aware of their child contexts, it's a unidirectional relationship (unless I'm missing something). `MapJobRegistry` _could_ get Job beans from its own _and its parent context(s)_, but it isn't because it's using `getBeansOfType()` which isn't considering beans from parent contexts: https://github.com/spring-projects/spring-batch/blob/088487bb803c6a7a9139228ea973035a1698d864/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/support/MapJobRegistry.java#L63-L66\nDocs of `getBeansOfType()`: https://github.com/spring-projects/spring-framework/blob/b038beb85490c8a80711b1a6c8cfffbb21276b3e/spring-beans/src/main/java/org/springframework/beans/factory/ListableBeanFactory.java#L267-L269\nBut in any case: This would only find beans from the context that `MapJobRegistry` is running in and its parent(s), but not children/siblings.\n\n> Another option I forgot about is using Spring profiles.\n\nAre you talking about putting all beans in a single context and guarding each job's configuration with a profile? 🤔 I don't really see how this would help. At runtime, my app needs to know all Jobs anyways and so would need to enable all these profiles..."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-09T20:58:43Z",
+        "body": "> that doesn't really work in my scenario, because I'm running an embedded Tomcat in my parent context, which Spring Boot doesn't support\n\nOK I see. The fact that you are embedding Tomcat in the parent context is an important detail, which was not mentioned in your initial request nor present in the minimal example you shared (all my previous answers were based on the assumption that you have a non-web setup). But no problem, I will provide guidance for your case.\n\nFirst thing: modularisation of Spring contexts to avoid bean name clashes is definitely NOT a Spring Batch concern. Trying to do this in Spring Batch with `EnableBatchProcessing(modular = true)` or any other way would definitely lead to an overly complex code to maintain or at best, worse than any solution provided by Spring Framework or Spring Boot. And BTW, this problem is not specific to Spring Batch per se, and could be encountered in any other project where users can define project-specific named artefacts as Spring beans (Like integration flows in Spring Integration or shell commands in Spring Shell, etc).\n\nNow the fact that Spring Boot does not support your use case becomes a Spring Boot issue, not a Spring Batch issue. And more importantly, I believe it is this setup of running several batch jobs in a servlet container within a single JVM that makes things difficult (I personally never recommended that setup, and always promoted the \"single job per context per jar\" packaging/deployment model). That monolithic model was used in Spring Batch Admin which had several issues that led the project to be deprecated in favor of the modular approach in SCDF (see issues and migration recommendations [here](https://github.com/spring-attic/spring-batch-admin/blob/master/MIGRATION.md)).\n\nThat said, you can still continue to use the web model you have, but you definitely need a smarter job registry than the one provided by Spring Batch. \n\n> Parent contexts are not aware of their child contexts, it's a unidirectional relationship (unless I'm missing something). MapJobRegistry could get Job beans from its own and its parent context(s), but it isn't because it's using getBeansOfType() which isn't considering beans from parent contexts\n\nI am open to making `MapJobResgitry` smarter to handle bidirectional relationships if this does not break things for most typical use cases. But if this will make the code on the framework side overly complex for a very specific use case, then I would leave that to users to provide their own custom smart registry. I always try to control how much accidental complexity goes in the framework (which is one of the main themes of v6 BTW).\n\n> Are you talking about putting all beans in a single context and guarding each job's configuration with a profile? 🤔 I don't really see how this would help. At runtime, my app needs to know all Jobs anyways and so would need to enable all these profiles...\n\nPlease forget about profiles for your use case, it won't work with a web setup. As mentioned, I was assuming a non-web setup and thought you would spin up each job in its own context/JVM, and in which case you would specify the profile at startup to only load the bean definitions for that specific job.\n\n---\n\nLooking forward to your feedback and if I can help further.\n"
+      },
+      {
+        "author": "kzander91",
+        "created_at": "2025-12-10T10:30:37Z",
+        "body": "Thank you for your continued input and your explanations! 🙏\n\n> The fact that you are embedding Tomcat in the parent context is an important detail, which was not mentioned in your initial request nor present in the minimal example you shared\n\nTrue, sorry about that. I wasn't aware that this particular detail would be an issue (and therefore relevant), I just found out about that limitation when trying your suggestion with Boot's `SpringApplicationBuilder#child`.\n\n> Looking forward to your feedback\n\nGiven the additional context and reasoning you provided I can understand better _why_ you have decided to remove that support. Before, it just seemed that a feature that was working perfectly fine (and on the surface didn't appear to be _that_ complex) was \"just\" removed to reduce complexity.\n\nRegarding the other points, I want to say again (see https://github.com/spring-projects/spring-batch/issues/5126#issuecomment-3611770749) that I have already refactored my app to define all jobs in a single context.\nThus, I _personally_ have no further need for migration help regarding the removed support for modularized contexts and am fine with stopping things here.\n\nFor others that are considering doing the same: I basically just removed my `ApplicationContextFactory` beans and adjusted my root component scan to include all my job configurations.\nInside those, I renamed beans to ensure that no bean name clashes exist.\nA few additional adjustments were needed in some places that are specific to my particular app, so YMMV."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5077,
+    "title": "ChunkOrientedStepBuilder: Default SkipPolicy should be NeverSkipItemSkipPolicy when only retry is configured (not AlwaysSkipItemSkipPolicy)",
+    "state": "closed",
+    "created_at": "2025-11-06T12:10:48Z",
+    "updated_at": "2025-11-13T18:11:53Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5077",
+    "body": "Hi Spring Batch team,\n\nI think I've found an unexpected behavior change in Spring Batch 6 regarding the default skip policy when only retry is configured.\n\n\n**Bug description**\n\nWhen configuring only retry settings without any skip configuration, the default `SkipPolicy` is set to `AlwaysSkipItemSkipPolicy`. This causes all items that fail after exhausting retry attempts to be silently skipped instead of failing the step, which seems unintended.\n\n\n**Environment**\n\n- Spring Batch version: 6.0.0-RC2\n\n\n**Steps to reproduce**\n1. Configure a chunk-oriented step with retry but WITHOUT skip configuration:\n\n\n2. Throw an exception from processor that exceeds retry limit\n\n4. Observe that the item is skipped instead of failing the step\n\n\n**Expected behavior**\nWhen only retry is configured without any skip settings, items that fail after exhausting all retry attempts should **fail the step**, not be skipped.\n\nThe default `SkipPolicy` should be `NeverSkipItemSkipPolicy` (or equivalent) when skip is not explicitly configured.\n\n**Root cause **\n\nIn `ChunkOrientedStepBuilder`:\n```java\nif (this.skipPolicy == null) {\n    if (!this.skippableExceptions.isEmpty() || this.skipLimit > 0) {\n        this.skipPolicy = new LimitCheckingExceptionHierarchySkipPolicy(this.skippableExceptions, this.skipLimit);\n    }\n    else {\n        this.skipPolicy = new AlwaysSkipItemSkipPolicy(); // ← This seems wrong\n    }\n}\n```\n\nWhen neither `skippableExceptions` nor `skipLimit` is configured, it defaults to `AlwaysSkipItemSkipPolicy`, causing unexpected skip behavior.\n\n\n**Comparison with Spring Batch 5**\n\nIn Spring Batch 5's `FaultTolerantStepBuilder`:\n```java\nif (skipPolicy == null) { // default == null\n    if (skippableExceptionClasses.isEmpty() && skipLimit > 0) {\n        logger.debug(String.format(\n            \"A skip limit of %s is set but no skippable exceptions are defined.\",\n            skipLimit));\n    }\n    skipPolicy = limitCheckingItemSkipPolicy; \n}\n```\n\nThis would result in step failure when retry is exhausted without skip configuration.\n\n\n**Suggested fix**\nChange the default `SkipPolicy` to `NeverSkipItemSkipPolicy` when skip is not configured:\n```java\nif (this.skipPolicy == null) {\n    if (!this.skippableExceptions.isEmpty() || this.skipLimit > 0) {\n        this.skipPolicy = new LimitCheckingExceptionHierarchySkipPolicy(this.skippableExceptions, this.skipLimit);\n    }\n    else {\n        this.skipPolicy = new NeverSkipItemSkipPolicy(); // ← Should be this\n    }\n}\n```\n\n**Minimal Complete Reproducible example**\n@Slf4j\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(\n            JobRepository jobRepository\n    ) {\n        return new StepBuilder(jobRepository)\n                .<String, String>chunk(3)\n                .reader(issueReproductionReader())\n                .processor(issueReproductionProcessor())\n                .writer(issueReproductionWriter())\n                .faultTolerant()\n                .retry(ProcessingException.class)\n                .retryLimit(2)\n                // No skip configuration - expecting step to fail after retry exhausted\n                .build();\n    }\n\n    @Bean\n    public ItemReader<String> issueReproductionReader() {\n        return new ListItemReader<>(List.of(\"Item_1\", \"Item_2\", \"Item_3\"));\n    }\n\n    @Bean\n    public ItemProcessor<String, String> issueReproductionProcessor() {\n        return item -> {\n            if (\"Item_3\".equals(item)) {\n                log.error(\"Exception thrown for: {}\", item);\n                throw new ProcessingException(\"Processing failed for \" + item);\n            }\n\n            log.info(\"Successfully processed: {}\", item);\n            return item;\n        };\n    }\n\n    @Bean\n    public ItemWriter<String> issueReproductionWriter() {\n        return items -> {\n            log.info(\"Writing items: {}\", items.getItems());\n            items.getItems().forEach(item -> log.info(\"Written: {}\", item));\n        };\n    }\n\n    public static class ProcessingException extends RuntimeException {\n        public ProcessingException(String message) {\n            super(message);\n        }\n    }\n\n}\n\n**Actual behavior **\n\n```bash\nExecuting step: [issueReproductionStep]\nSuccessfully processed: Item_1\nSuccessfully processed: Item_2\nException thrown for: Item_3\nException thrown for: Item_3\nException thrown for: Item_3\nWriting items: [Item_1, Item_2]\nWritten: Item_1\nWritten: Item_2\nStep: [issueReproductionStep] executed in 2s13ms\n```\n\nCould you please review this behavior? If you have any questions or need additional information, please feel free to let me know.\n\nThank you for your time and consideration!\n\n\n\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-13T18:11:53Z",
+        "body": "That's correct, by default we should never skip items until explicitly requested by the user. Should be fixed now. Thank you for raising this!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ce7e03acf9766983019be34e3b2a633756b5669f",
+        "e77e21cb7926f4689b9903bb65ae81bc80a56e7a"
+      ]
+    }
+  },
+  {
+    "number": 5078,
+    "title": "ChunkOrientedStepBuilder: All Throwables (including Errors) are retried when only retryLimit() is configured without retry()",
+    "state": "closed",
+    "created_at": "2025-11-06T12:33:42Z",
+    "updated_at": "2025-11-13T19:33:06Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5078",
+    "body": "Hello Spring Batch team,\nFollowing up on previous issue #5068, I discovered a related but opposite scenario that poses a potential risk.\n\nWhile reviewing the fix for #5068, I realized that when `retryLimit()` is configured **without** `retry()`, all Throwables (including critical Errors like `OutOfMemoryError`, `StackOverflowError`) become retryable. It would have been great to catch this alongside the previous issue.\n\n\n**Bug description**\nWhen configuring `retryLimit()` without specifying `retry()` in Spring Batch 6, the retry mechanism attempts to retry **all Throwables**, including critical JVM Errors. This occurs because `ExceptionTypeFilter`(used by `DefaultRetryPolicy`) uses `matchIfEmpty = true` when both `includes`(configured by retry()) and `excludes` are empty.\n\n\n**Environment**\n- Spring Batch version: 6.0.0-RC2\n\n\n**Steps to reproduce**\n1. Configure a chunk-oriented step with `retryLimit()` but WITHOUT `retry()`:\n@Bean\npublic Step step() {\n    return new StepBuilder(\"step\", jobRepository)\n        .chunk(10, transactionManager)\n        .reader(reader())\n        .processor(processor())\n        .writer(writer())\n        .faultTolerant()\n        .retryLimit(3)\n        // No retry() configuration\n        .build();\n}\n\n2. Throw a critical Error (e.g., `OutOfMemoryError`) from any component(ItemReader or ItemProcessor etc)\n3. Observe that even critical Errors are being retried\n\n\n\n**Expected behavior**\nWhen only `retryLimit()` is configured without `retry()`:\n- Either no exceptions should be retried\n- Or only `Exception` and its subclasses should be retried (excluding `Error`)\n\n**Actual behavior**\nAll Throwables (including Errors) are retried due to `matchIfEmpty = true`.\n\n**Minimal Complete Reproducible example**\n```java\n@Slf4j\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(JobRepository jobRepository) {\n        return new StepBuilder(jobRepository)\n                .chunk(3)\n                .reader(issueReproductionReader())\n                .processor(issueReproductionProcessor())\n                .writer(issueReproductionWriter())\n                .faultTolerant()\n                .retryLimit(2)\n                // No retry() - expecting no retry or Exception-only retry\n                .build();\n    }\n\n    @Bean\n    public ItemReader issueReproductionReader() {\n        return new ListItemReader<>(List.of(\"Item_1\", \"Item_2\", \"Item_3\"));\n    }\n\n    @Bean\n    public ItemProcessor issueReproductionProcessor() {\n        return item -> {\n            if (\"Item_3\".equals(item)) {\n                log.error(\"OutOfMemoryError thrown for: {}\", item);\n                throw new OutOfMemoryError(\"Processing failed for \" + item);\n            }\n\n            log.info(\"Successfully processed: {}\", item);\n            return item;\n        };\n    }\n\n    @Bean\n    public ItemWriter issueReproductionWriter() {\n        return items -> {\n            log.info(\"Writing items: {}\", items.getItems());\n            items.getItems().forEach(item -> log.info(\"Written: {}\", item));\n        };\n    }\n}\n```\n\n\n**Actual output:**\n```\nSuccessfully processed: Item_1\nSuccessfully processed: Item_2\nOutOfMemoryError thrown for: Item_3\nOutOfMemoryError thrown for: Item_3  ← Retry 1\nOutOfMemoryError thrown for: Item_3  ← Retry 2\nWriting items: [Item_1, Item_2] ← Item_3 is skipped and writer proceeds (reported separately in #5077)\nWritten: Item_1\nWritten: Item_2\n\n\nThe `OutOfMemoryError` is retried 2 times, which could worsen the system state.\n\n**Root cause analysis**\nIn `ChunkOrientedStepBuilder`:\n```java\nif (this.retryPolicy == null) {\n    if (!this.retryableExceptions.isEmpty() || this.retryLimit > 0) {\n       this.retryPolicy = RetryPolicy.builder()\n          .maxAttempts(this.retryLimit)\n          .includes(this.retryableExceptions)  // ← Empty set!\n          .build();\n    }\n    else {\n       this.retryPolicy = throwable -> false;\n    }\n}\n\nWhen `retryableExceptions` is empty, `DefaultRetryPolicy` uses `ExceptionTypeFilter` with both `includes` and `excludes` empty.\nIn `ExceptionTypeFilter.matchTraversingCauses()`:\n```java\nprivate boolean matchTraversingCauses(Throwable exception) {\n    boolean emptyIncludes = super.includes.isEmpty();\n    boolean emptyExcludes = super.excludes.isEmpty();\n\n    if (emptyIncludes && emptyExcludes) {\n        return super.matchIfEmpty;  // ← Returns true!\n    }\n    // ...\n}\n```\n\nSince `matchIfEmpty = true`, **all Throwables match**, including critical Errors.\n\n**Suggested fix**\n\nWhen `retryLimit()` is configured without `retry()`, default to `Exception.class` to exclude Errors:\n```java\nif (this.retryPolicy == null) {\n    if (!this.retryableExceptions.isEmpty() || this.retryLimit > 0) {\n       Set<Class> exceptions = this.retryableExceptions.isEmpty()\n             ? Set.of(Exception.class)\n             : this.retryableExceptions;\n\n       this.retryPolicy = RetryPolicy.builder()\n          .maxAttempts(this.retryLimit)\n          .includes(exceptions)\n          .build();\n    }\n    else {\n       this.retryPolicy = throwable -> false;\n    }\n}\n```\n\nThis ensures:\n- Only `Exception` and its subclasses are retried by default\n- Critical JVM Errors are not retried\n- Users can still explicitly include specific exceptions via `retry()`\n\n\n\nCould you please review this behavior? This seems like a potential risk when users configure retry limits without specifying which exceptions to retry.\n\nThank you for your time and consideration!",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4d6a5fa39b223226a73330498024857cb34d6046",
+        "638c1834fa1e88ed5017c3081f94e61205289e92",
+        "f606e6f31c9ce6334183384485f14422e124a685",
+        "8ed93d1900b5a6d0a17e8a1ad1355c1d30e5c918"
+      ]
+    }
+  },
+  {
+    "number": 5079,
+    "title": "ChunkOrientedStep does not throw exception when skipPolicy.shouldSkip() returns false",
+    "state": "closed",
+    "created_at": "2025-11-07T11:03:07Z",
+    "updated_at": "2025-11-14T07:42:17Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5079",
+    "body": "Hi Spring Batch team,\n\nI think, I’ve discovered a bug in `ChunkOrientedStep` where failed items are silently discarded when the skip policy rejects skipping.\n\n## Bug description\n\nWhen retry is exhausted in fault-tolerant mode, `ChunkOrientedStep` calls `skipPolicy.shouldSkip()` to determine whether the failed item should be skipped. However, when `skipPolicy.shouldSkip()` returns `false` (meaning the item should NOT be skipped), the code does not throw an exception. This causes the failed item to be silently lost, and the job continues as if nothing happened.\n\nThis affects three methods in `ChunkOrientedStep`:\n- `doSkipInRead()` (line 528)\n- `doSkipInProcess()` (line 656)\n- `scan()` (line 736)\n\n## Environment\n\n- Spring Batch version: 6.0.0-RC2\n\n## Steps to reproduce\n1. Configure a fault-tolerant step with a skip policy that always returns `false` (never skip)\n2. Configure retry with a limited number of attempts (e.g., retryLimit = 2)\n3. Process items where one item consistently fails\n4. After retry exhaustion, observe that the failed item is silently discarded instead of causing the job to fail\n\n## Expected behavior\n\nWhen `skipPolicy.shouldSkip()` returns `false`, the exception should be re-thrown to:\n- Roll back the transaction\n- Mark the step as FAILED\n- Prevent silent data loss\n\nThe job should fail with a clear error indicating that the skip limit was exceeded or skip policy rejected skipping.\n\n## Minimal Complete Reproducible example\n```java\n\n@Slf4j\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(JobRepository jobRepository) {\n        return new StepBuilder(jobRepository)\n                .<String, String>chunk(3)\n                .reader(issueReproductionReader())\n                .processor(issueReproductionProcessor())\n                .writer(issueReproductionWriter())\n                .faultTolerant()\n                .retryLimit(2)\n                .skipPolicy(new NeverSkipItemSkipPolicy())  \n                .build();\n    }\n\n    @Bean\n    public ItemReader<String> issueReproductionReader() {\n        return new ListItemReader<>(List.of(\"Item_1\", \"Item_2\", \"Item_3\"));\n    }\n\n    @Bean\n    public ItemProcessor<String, String> issueReproductionProcessor() {\n        return item -> {\n            if (\"Item_3\".equals(item)) {\n                log.error(\"Exception thrown for: {}\", item);\n                throw new ProcessingException(\"Processing failed for \" + item);\n            }\n\n            log.info(\"Successfully processed: {}\", item);\n            return item;\n        };\n    }\n\n    @Bean\n    public ItemWriter<String> issueReproductionWriter() {\n        return items -> {\n            log.info(\"Writing items: {}\", items.getItems());\n            items.getItems().forEach(item -> log.info(\"Written: {}\", item));\n        };\n    }\n\n    public static class ProcessingException extends RuntimeException {\n        public ProcessingException(String message) {\n            super(message);\n        }\n    }\n}\n```\n\n**Actual output:**\nStep COMPLETED\n\n```\nJob: [SimpleJob: [name=issueReproductionJob]] launched with the following parameters: [{}]\nExecuting step: [issueReproductionStep]\nSuccessfully processed: Item_1\nSuccessfully processed: Item_2\nException thrown for: Item_3\nException thrown for: Item_3\nException thrown for: Item_3\nWriting items: [Item_1, Item_2]\nWritten: Item_1\nWritten: Item_2\nStep: [issueReproductionStep] executed in 2s18ms\nJob: [SimpleJob: [name=issueReproductionJob]] completed with the following parameters: [{}] and the following status: [COMPLETED] in 2s20ms\n```\n\nAs you can see, `Item_3` failed 3 times (initial attempt + 2 retries), but was silently discarded. The job completed successfully with status `COMPLETED`, even though `NeverSkipItemSkipPolicy` should have rejected skipping.\n\n**Expected output:**\nThe job should fail with status `FAILED` because the skip policy does not allow skipping the failed item.\n\n---\n\n**Proposed fix:**\n\nThe three affected methods should throw an exception when `skipPolicy.shouldSkip()` returns `false`:\n```java\nprivate void doSkipInRead(RetryException retryException, StepContribution contribution) {\n    Throwable cause = retryException.getCause();\n    if (this.skipPolicy.shouldSkip(cause, contribution.getStepSkipCount())) {\n        this.compositeSkipListener.onSkipInRead(cause);\n        contribution.incrementReadSkipCount();\n    } else {\n        throw new NonSkippableReadException(\"Skip policy rejected skipping\", cause);\n    }\n}\n```\n\nSimilar changes should be applied to `doSkipInProcess()` and the catch block in `scan()`.\n\nThank you for your attention to this issue!",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "JunggiKim",
+        "created_at": "2025-11-08T04:22:11Z",
+        "body": "Created pull request #5081 to fix this issue"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-13T22:35:10Z",
+        "body": "I think I misunderstood this bug report when I reacted with 👍 on the issue description.\n\n> when `skipPolicy.shouldSkip()` returns `false` (meaning the item should NOT be skipped), the code does not throw an exception\n\nWhy should it throw an exception in that case? That is not an exceptional behaviour. Skipping an item means calling the `SkipListener` for it. Not skipping an item means discarding it (ie ignore it without calling the `SkipListener` for it).\n\nThe example you shared uses a `NeverSkipItemSkipPolicy`, which means never call `SkipListener` for any item that exhausted the retry policy, which effectively means ignore all these items (it is not a data loss, it is an explicit ask to not skip items but rather to ignore them). \n\nTherefore, and unless I am missing something, I think the current behaviour is correct. Do you agree?\n\n"
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-11-14T05:46:44Z",
+        "body": "@fmbenhassine \n\nBased on my understanding of Spring Batch 5’s FaultTolerantChunkProvider and FaultTolerantChunkProcessor, \n\nthe behavior was as follows:\n- With skipping off, exceptions in ItemReader / ItemProcessor / ItemWriter are propagated to the step, causing it to fail.\n- With skipping on, if the SkipPolicy allows skipping, the exception is swallowed for that item only, and processing continues.\n- With skipping on, if the SkipPolicy disallows skipping, the exception is propagated(actually wrapped in a RetryException), causing the step to fail.\n\nThis aligns with my expectation when raising this issue (even in Batch 5, non-skippable exceptions could be ignored only by explicitly using the noRollback() method on the FaultTolerantStepBuilder).\n\nIn Batch 6, while changes to the behavior are understandable as a design decision, I am concerned that failed items may be silently discarded when the SkipPolicy disallows skipping, potentially causing data loss. I would expect the step to fail in such cases, consistent with Batch 5 behavior."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-14T06:43:16Z",
+        "body": "Thank you for the clarification! I previously said \"unless I am missing something, I think the current behaviour is correct\", and indeed I was missing an important detail: the skip policy contract clearly mentions that when the method `shouldSkip` returns false, the processing should NOT continue (ie the step should fail):\n\n```\n@FunctionalInterface\npublic interface SkipPolicy {\n\n\t/**\n\t * Returns true or false, indicating whether or not processing should continue with the given throwable. \n\t * [...]\n\t * @return true if processing should continue, false otherwise.\n         [...]\n\t */\n\tboolean shouldSkip(Throwable t, long skipCount) throws SkipLimitExceededException;\n\n}\n```\n\nSo this is a valid issue and should be fixed. The PR #5081 LGTM and I will merge it for the GA.\n\nThank you for your feedback!\n\n"
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-11-14T06:54:10Z",
+        "body": "Thank you for the quick feedback! I’m glad my report could be of some help, even in the few days remaining before the GA. I really appreciate your time and attention on this."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "946f78825414b872f3d27110ff53347a86d362e5",
+        "97065fc40256ac18388f8ebdd157e7c744bc1a6a"
+      ]
+    }
+  },
+  {
+    "number": 5084,
+    "title": "ChunkOrientedStep: Regression from #5048 - breaks on skip in fault-tolerant mode",
+    "state": "closed",
+    "created_at": "2025-11-11T05:20:50Z",
+    "updated_at": "2025-11-13T15:53:50Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5084",
+    "body": "Hi Spring Batch team, Thank you for the great work on Spring Batch 6.\n\n\n**Bug description**\nWhen Issue [#5048](https://github.com/spring-projects/spring-batch/issues/5048) was reported, I made a mistake in my proposed fix that added `else { break; } `to the read loop.\n\nThe fix didn't account for the distinction between two different scenarios where readItem() returns null:\n1) End-of-data (EOF): No more items available → Should break ✅\n2) Skip in fault-tolerant mode: Exception skipped → Should continue reading ❌\n\nThe current loop termination condition in readChunk() treats both cases identically, causing premature read loop termination when skips occur.\n\n**Example scenario:**\nChunk size: 3\nItem-2 throws exception → Skip occurs\nExpected: Skip Item-2 and continue reading Item-3 (2 items in chunk: Item-1, Item-3)\nActual: Read loop breaks after Item-1 (1 item in chunk)\n\n**Environment**\nSpring Batch version: 6.0.0-RC2 (after #5048 fix in commit 706add7)\n\n\n**Steps to reproduce**\nConfigure a chunk-oriented step with:\nChunk size: 3\nFault-tolerant: true\nSkip policy configured (e.g., AlwaysSkipItemSkipPolicy)\n\nUse an ItemReader that throws exception on the 2nd item\nRun the job and observe chunk sizes in the logs\n\n**Expected behavior**\nWhen a skip occurs during item reading in fault-tolerant mode:\n\nThe problematic item should be skipped\nThe read loop should continue to fill the chunk up to the configured chunk size\nExpected chunk: [Item-1, Item-3] (2 items, Item-2 skipped)\n\n\n**Expected console output:**\n```bash\n>>>> Read: Item-1\n>>>> EXCEPTION on Item-2!\n>>>> Skip occurred on reader\n>>>> Read: Item-3\n>>>> EOF: No more items\n>>>> Successfully processed: Item-1\n>>>> Successfully processed: Item-3\n>>>> Writing items: Item-1\n>>>> Writing items: Item-3\n```\n→ Both Item-1 and Item-3 processed in the same chunk\n\n**Actual behavior**\nWhen a skip occurs, the read loop terminates immediately:\nActual chunk 1: [Item-1] (1 item only)\nActual chunk 2: [Item-3] (remaining item in next chunk)\n\n**Actual console output:**\n```bash\n>>>> Read: Item-1\n>>>> EXCEPTION on Item-2!\n>>>> Skip occurred on reader\n>>>> Successfully processed: Item-1\n>>>> Writing items: Item-1\n>>>> Read: Item-3\n>>>> EOF: No more items\n>>>> Successfully processed: Item-3\n>>>> Writing items: Item-3\n```\n→ Item-1 and Item-3 processed in different chunks ❌\n\nMinimal Complete Reproducible example\n```java\n@Slf4j\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    \n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(JobRepository jobRepository, DataSource dataSource) {\n        return new StepBuilder(jobRepository)\n                .<TestItem, TestItem>chunk(3)\n                .reader(issueReproductionReader(dataSource))\n                .processor(issueReproductionProcessor())\n                .writer(issueReproductionWriter())\n                .faultTolerant()\n                .skipPolicy(new AlwaysSkipItemSkipPolicy())\n                .skipListener(skipListener())\n                .build();\n    }\n\n    @Bean\n    public ItemReader<TestItem> issueReproductionReader(DataSource dataSource) {\n        return new SkippableItemReader();\n    }\n\n    @Bean\n    public ItemProcessor<TestItem, TestItem> issueReproductionProcessor() {\n        return item -> {\n            log.info(\">>>> Successfully processed: {}\", item.getName());\n            return item;\n        };\n    }\n\n    @Bean\n    public ItemWriter<TestItem> issueReproductionWriter() {\n        return items -> {\n            for (TestItem item : items) {\n                log.info(\">>>> Writing items: {}\", item.getName());\n            }\n        };\n    }\n\n    private SkipListener<TestItem, TestItem> skipListener() {\n        return new SkipListener<>() {\n            @Override\n            public void onSkipInRead(Throwable t) {\n                log.info(\">>>> Skip occurred on reader\");\n            }\n        };\n    }\n\n    @Data\n    @NoArgsConstructor\n    @AllArgsConstructor\n    public static class TestItem {\n        private Long id;\n        private String name;\n        private String description;\n    }\n\n    @Slf4j\n    static class SkippableItemReader implements ItemReader<TestItem> {\n        private int count = 0;\n        private final List<TestItem> items = List.of(\n                new TestItem(1L, \"Item-1\", \"First item\"),\n                new TestItem(2L, \"Item-2\", \"Second item - will throw exception\"),\n                new TestItem(3L, \"Item-3\", \"Third item\")\n        );\n\n        @Override\n        public TestItem read() {\n            if (count >= items.size()) {\n                log.info(\">>>> EOF: No more items\");\n                return null;\n            }\n\n            TestItem item = items.get(count);\n            count++;\n\n            // Throw exception on 2nd item (Item-2)\n            if (count == 2) {\n                log.error(\">>>> EXCEPTION on Item-2!\");\n                throw new RuntimeException(\"Simulated read error on Item-2\");\n            }\n\n            log.info(\">>>> Read: {}\", item.getName());\n            return item;\n        }\n    }\n}\n```\n\n\n**Root Cause Analysis**\nIn readItem() method (lines ~508-545)\n\nWhen a skip occurs:\n```java\ncatch (Exception exception) {\n    this.compositeItemReadListener.onReadError(exception);\n    if (this.faultTolerant && exception instanceof RetryException retryException) {\n        doSkipInRead(retryException, contribution);\n        // ⚠️ Returns null, but chunkTracker.moreItems() is still true!\n    }\n    // ...\n}\nreturn item;  // Returns null for skip\n```\nThe chunkTracker.noMoreItems() is only called on actual end-of-data:\n```java\nitem = doRead();\nif (item == null) {\n    this.chunkTracker.noMoreItems();  // Only set on EOF\n}\n```\nSo we have two distinct null return cases:\nEOF: null returned + moreItems() == false\nSkip: null returned + moreItems() == true\n\n**In readChunk() method (lines ~478-487)**\nCurrent problematic code(my mistake):\n```java\nprivate Chunk<I> readChunk(StepContribution contribution) throws Exception {\n    Chunk<I> chunk = new Chunk<>();\n    for (int i = 0; i < chunkSize; i++) {\n        I item = readItem(contribution);\n        if (item != null) {\n            chunk.add(item);\n        } else {\n            break;  // ❌ Breaks on BOTH EOF and skip!\n        }\n    }\n    return chunk;\n}\n```\nThe `else { break; }` added in #5048 cannot distinguish between EOF and skip.\n\n**Proposed Fix**\nChange the break condition to check ChunkTracker state instead of blindly breaking on null:\n**Fix for readChunk():**\n```java\nprivate Chunk<I> readChunk(StepContribution contribution) throws Exception {\n    Chunk<I> chunk = new Chunk<>();\n    for (int i = 0; i < chunkSize; i++) {\n        I item = readItem(contribution);\n        if (item != null) {\n            chunk.add(item);\n        } else if (!chunkTracker.moreItems()) {  // ✅ Only break on actual EOF\n            break;\n        }\n        // else: skip occurred, continue to next item\n    }\n    return chunk;\n}\n```\n\n**Priority Note**\nWhile this issue affects chunk size, the step continues to function correctly - all items are processed successfully, just with more transactions than intended. This can be addressed at your convenience based on priority.\n\n**And**\nThe additional issue also exists in processChunkConcurrently() method\n\nIn concurrent processing mode, the same problem occurs but it was not addressed in the original #5048 fix.\n**In processChunkConcurrently() method (lines ~431-438)**\nCurrent code:\n```java\n// read items and submit concurrent item processing tasks\nfor (int i = 0; i < this.chunkSize; i++) {\n    I item = readItem(contribution);\n    if (item != null) {\n        Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> processItem(item, contribution));\n        itemProcessingTasks.add(itemProcessingFuture);\n    }\n    // ❌ No else clause - continues loop even after EOF, causing unnecessary read() calls\n}\n```\nThis method has TWO issues:\n1) Original #5048 issue: No break on EOF → unnecessary readItem() calls continue\n2) This issue: Even when fixed with else { break; }, it will break on skip (same as readChunk())\n\n\n**Fix for processChunkConcurrently():**\n```java\n// read items and submit concurrent item processing tasks\nfor (int i = 0; i < this.chunkSize; i++) {\n    I item = readItem(contribution);\n    if (item != null) {\n        Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> processItem(item, contribution));\n        itemProcessingTasks.add(itemProcessingFuture);\n    } else if (!chunkTracker.moreItems()) {  // ✅ Only break on actual EOF\n        break;\n    }\n    // else: skip occurred, continue to next item\n}\n```\nThis fix addresses both issues:\n- Prevents unnecessary reads after EOF (same with #5048 issue)\n- Allows chunk to continue filling after skip (this issue)\n\nIf you have any questions about this issue or need additional information, please let me know.\n\nThank you for your continued responsiveness to issues despite your busy schedule. Please feel free to address this at your convenience based on priority.\n",
+    "labels": [
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-13T09:25:40Z",
+        "body": "This is a valid issue. It was expected to have some bumps and edge cases in this new implementation of the chunk-oriented processing model, so thank you very much for reporting this issue (and others!) early in the RC phase 🙏 We clearly have a gap in our test suite for these edge cases and I will fix that for the GA."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-13T15:53:23Z",
+        "body": "> Change the break condition to check ChunkTracker state instead of blindly breaking on null:\n> **Fix for readChunk():**\n\nThank you for the suggested fix! This is actually equivalent to:\n\n```diff\nprivate Chunk<I> readChunk(StepContribution contribution) throws Exception {\n    Chunk<I> chunk = new Chunk<>();\n--    for (int i = 0; i < chunkSize; i++) {\n++    for (int i = 0; i < chunkSize && this.chunkTracker.moreItems(); i++) {\n        I item = readItem(contribution);\n        if (item != null) {\n            chunk.add(item);\n--        } else if (!chunkTracker.moreItems()) {  // ✅ Only break on actual EOF\n--           break;\n          }\n    }\n    return chunk;\n}\n```\n\nwhich I find easier to think about, and which actually fixes both issues (the one in #5048 and this one, #5084) Amazing how #5084 is a regression of #5048 😉. I added `testSkipInReadInSequentialMode` and `testSkipInReadInConcurrentMode` in `ChunkOrientedStepFaultToleranceIntegrationTests` to cover those cases.\n\n> The additional issue also exists in processChunkConcurrently() method\n\nI fixed that as well and added `ChunkOrientedStepTests#testReadNoMoreThanAvailableItemsInConcurrentMode` to cover that case (similar to `ChunkOrientedStepTests#testReadNoMoreThanAvailableItemsInSequentialMode` that was added in #5048 )\n\n---\n\nThanks again for reporting this issue!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4c9fe94bb12d6a9679848221abbadbbaa1b494f8"
+      ]
+    }
+  },
+  {
+    "number": 5085,
+    "title": "Missing Javadoc site for 6.0.0-RC2",
+    "state": "closed",
+    "created_at": "2025-11-11T22:03:01Z",
+    "updated_at": "2025-11-19T14:36:43Z",
+    "author": "scordio",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5085",
+    "body": "https://docs.spring.io/spring-batch/docs/6.0.0-RC2/api/ does not exist, while https://docs.spring.io/spring-batch/docs/6.0.0-RC1/api/ exists.\n",
+    "labels": [
+      "in: documentation",
+      "in: build",
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-12T16:14:09Z",
+        "body": "Thank you for reporting this, seems like a regression of c266075e5eb695da1316087c217264c302d277f8. This is not the first time I have issues with Javadocs.. apologies for the inconvenience 😔\n\nI will fix that for the GA planned for next week."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-18T12:52:22Z",
+        "body": "Hi @scordio ,\n\nFYI, the Javadocs for 6.0.0-RC2 are now available online: https://docs.spring.io/spring-batch/reference/6.0/api/index.html.\n\nHowever, notice the difference in the URL from now onwards:\n\n```\nBefore: https://docs.spring.io/spring-batch/docs/6.0.0-RC1/api/index.html\nAfter : https://docs.spring.io/spring-batch/reference/6.0/api/index.html\n```\nThe patch version number is not in the URL anymore, but can be picked up from the top left navigation menu of the home page. This change is related to our portfolio-wise goal to use Antora-based documentation process (centralised docs, SEO friendly URLs, multi-version search capabilities, etc). This URL change will be documented in the release notes."
+      },
+      {
+        "author": "scordio",
+        "created_at": "2025-11-18T14:32:00Z",
+        "body": "> The patch version number is not in the URL anymore\n\nI noticed that there is a redirection from https://docs.spring.io/spring-batch/reference/6.0.0-RC2/api/ to the new URL, which would allow me to still use the [`spring-batch.version`](https://github.com/spring-projects/spring-batch-extensions/blob/e4b2130053a442c5bfd7d062a6199013f0e41040/spring-batch-notion/pom.xml#L204) property from `spring-boot-dependencies`.\n\nHowever, `javadoc` considers the redirection to be a [warning](https://github.com/spring-projects/spring-batch-extensions/actions/runs/19467873075/job/55707152839?pr=191#step:4:460):\n\n```\n[WARNING] Javadoc Warnings\n[WARNING] warning: URL https://docs.spring.io/spring-batch/reference/6.0.0-RC2/api/element-list was redirected to https://docs.spring.io/spring-batch/reference/6.0/api/element-list -- Update the command-line options to suppress this warning.\n[WARNING] 1 warning\n```\n\nGiven that my build is configured to fail with javadoc warnings, I checked if I could suppress this one specifically, but I don't see such a granularity in the [DocLint groups](https://docs.oracle.com/en/java/javase/25/docs/specs/man/javadoc.html#groups), which leaves me with three options:\n* Remove failing in case of warnings (not really my preference)\n* Hardcode `6.0` in the URL\n* Fall back to the [Spring Batch Javadoc](https://javadoc.io/doc/org.springframework.batch/spring-batch-core/latest/index.html) hosted at [javadoc.io](https://javadoc.io/)\n\nFor now, I went with the last option at https://github.com/spring-projects/spring-batch-extensions/pull/191/commits/6bbcf83780bf1ae510ffad1685c7fec67fc199fc."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-19T11:09:21Z",
+        "body": "This server-side redirection is portfolio-wise and I don't see what we can do on the Spring Batch side, but I am open to suggestions."
+      },
+      {
+        "author": "scordio",
+        "created_at": "2025-11-19T12:32:57Z",
+        "body": "I see that the Framework still works with explicit RC or patch versions, for example:\n* https://docs.spring.io/spring-framework/docs/7.0.0-RC3/javadoc-api\n* https://docs.spring.io/spring-framework/docs/7.0.0/javadoc-api\n\nCould it be that they still need to migrate to the new way?"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-19T13:27:20Z",
+        "body": "Yes, it could be. I will ask the team and get back to you.\n\nBTW, the Boot javadocs have the redirection in place (similar to Batch):\n\nhttps://docs.spring.io/spring-boot/4.0.0-RC2/api/java/index.html redirects to\nhttps://docs.spring.io/spring-boot/4.0/api/java/index.html"
+      },
+      {
+        "author": "scordio",
+        "created_at": "2025-11-19T14:36:43Z",
+        "body": "Since the entire portfolio is moving in this direction, I'll ask on the [javadoc-dev](https://mail.openjdk.org/mailman/listinfo/javadoc-dev) mailing list how this use case should be addressed."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5087,
+    "title": "Proposal: Automatically register ItemHandler as StepListener instead of only StepExecutionListener in ChunkOrientedStepBuilder",
+    "state": "closed",
+    "created_at": "2025-11-14T12:49:34Z",
+    "updated_at": "2025-11-15T11:25:43Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5087",
+    "body": "Hello, Spring Batch team! I would like to submit a proposal regarding how item handlers are automatically registered as listeners on ChunkOrientedStepBuilder\n\n\n**Context**\nStarting from commit 52875e7, an ItemReader, ItemProcessor, or ItemWriter is automatically registered  to stepListeners(as a StepExecutionListener) only when it directly implements *StepExecutionListener*:\n\n```java\nif (this.reader instanceof StepExecutionListener listener) {\n    this.stepListeners.add(listener);\n}\nif (this.writer instanceof StepExecutionListener listener) {\n    this.stepListeners.add(listener);\n}\nif (this.processor instanceof StepExecutionListener listener) {\n    this.stepListeners.add(listener);\n}\n```\n\nIn Batch 5, however, these components were automatically registered as listeners if:\n\n1) they implemented *StepListener*, or\n2) they had methods annotated with any listener annotation defined in StepListenerMetaData\n(handled internally by `StepListenerFactoryBean.isListener(itemHandler)` in `SimpleStepBuilder#registerAsStreamsAndListeners()`)\n\nThis allowed ItemReader/ItemProcessor/ItemWriter to be detected as a listener even when implementing more specific listener interfaces (e.g., ItemReadListener, ItemProcessListener, etc.) or when using listener annotations such as @BeforeRead, @AfterRead, @OnReadError, etc.\n\n\n**Proposal**\nAlthough I haven’t personally used this pattern extensively, allowing item handlers that implement ItemReadListener/ItemProcessListener/ItemWriteListener to be automatically registered via the StepListener interface could increase their practical utility, as the listener could access internal state of the item handler directly.\n\n```java\nif (this.reader instanceof StepListener listener) {\n    this.stepListeners.add(listener);\n}\nif (this.writer instanceof StepListener listener) {\n    this.stepListeners.add(listener);\n}\nif (this.processor instanceof StepListener listener) {\n    this.stepListeners.add(listener);\n}\n```\n\nThank you for your time and consideration!",
+    "labels": [
+      "type: feature",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-14T14:45:59Z",
+        "body": "Thank you for the proposal! I think that was targeted at polymorphic objects, which act for example as an item reader and an item read listener at the same time. I have no objection to add this in v6 to reduce the gap with v5 and make migrations as smooth as possible."
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-11-15T11:25:43Z",
+        "body": "Thank you for the quick review and decision to include this in v6! I am happy that this change will help smooth out migrations for v5 users."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bf282b4eef318796b3295c1846d400208b395364"
+      ]
+    }
+  },
+  {
+    "number": 5088,
+    "title": "Potential parameter key collision in `.getUniqueJobParameters()`",
+    "state": "closed",
+    "created_at": "2025-11-16T10:20:12Z",
+    "updated_at": "2025-11-18T07:35:48Z",
+    "author": "PENEKhun",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5088",
+    "body": "**Expected Behavior**\n\n<!--- Tell us how it should work. Add a code example to explain what you think the feature should look like. This is optional, but it would help up understand your expectations. -->\n\nThe key used for the job parameter generated by getUniqueJobParameters() should never conflict with parameter names defined in a user’s job. Users should be able to call getUniqueJobParametersBuilder() and add any parameter name freely, without the risk of overwriting the framework-generated unique parameter.\n\n**Current Behavior**\n\nCurrently, `getUniqueJobParameters()` uses a hardcoded `\"random\"` key.\n\n```java\npublic JobParameters getUniqueJobParameters() {\n    return new JobParameters(Set.of(\n        new JobParameter<>(\"random\", this.secureRandom.nextLong(), Long.class)\n    ));\n}\n```\n\nThis creates a collision risk because\n\n```java\nJobParameters params = jobOperatorTestUtils.getUniqueJobParametersBuilder()\n    .addLong(\"random\", 12345L)  // Overwrites the unique parameter!\n    .toJobParameters();\n```\n\nThe current behavior makes it impossible to safely use getUniqueJobParametersBuilder() when a user’s job already defines a parameter named \"random\". In this case, the user-provided \"random\" parameter overwrites the framework-generated one, creating an unintended collision.\n\n**Context**\n\n<!--- \nHow has this issue affected you?\nWhat are you trying to accomplish?\nWhat other alternatives have you considered?\nAre you aware of any workarounds?\n-->\n\n- Q: What other alternatives have you considered?\n  - 1. **Use a namespaced key** (e.g., `spring.batch.test.unique`) instead `random` key.\n  - 2. **UUID as key + descriptive value** (e.g., `{UUID=\"Auto-generated by Spring Batch Test for unique job parameters\"}`)\n\n\n\n\n",
+    "labels": [
+      "in: documentation",
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-17T14:06:07Z",
+        "body": "> The key used for the job parameter generated by getUniqueJobParameters() should never conflict with parameter names defined in a user’s job.\n\nIt is the opposite: user defined parameter names should never conflict with those provided by the framework. The method `getUniqueJobParameters` mentions that it adds a random number but does not specify the parameter name (which is `random`). Two things:\n\n- Parameters provided by the framework should be prefixed with `batch.` (similar to execution context attributes)\n- The method `getUniqueJobParameters` should be updated to add the `batch.` prefix to the `random` parameter and mentions that clearly in the Javadoc."
+      },
+      {
+        "author": "PENEKhun",
+        "created_at": "2025-11-17T14:34:47Z",
+        "body": "> > The key used for the job parameter generated by getUniqueJobParameters() should never conflict with parameter names defined in a user’s job.\n> \n> It is the opposite: user defined parameter names should never conflict with those provided by the framework. The method `getUniqueJobParameters` mentions that it adds a random number but does not specify the parameter name (which is `random`). Two things:\n> \n> * Parameters provided by the framework should be prefixed with `batch.` (similar to execution context attributes)\n> * The method `getUniqueJobParameters` should be updated to add the `batch.` prefix to the `random` parameter and mentions that clearly in the Javadoc.\n\nI applied at https://github.com/spring-projects/spring-batch/pull/5089 . Thank you!"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-18T07:35:47Z",
+        "body": "Resolved in #5089. Thank you for your contribution 🙏"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5090,
+    "title": "JobLauncherTestUtils throws an NPE at getJobLauncher() in Batch 6 RC2",
+    "state": "closed",
+    "created_at": "2025-11-17T00:11:21Z",
+    "updated_at": "2025-11-17T20:39:02Z",
+    "author": "lucas-gautier",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5090",
+    "body": "**Bug description**\nThe just-deprecated JobLauncherTestUtils throws an NPE at getJobLauncher() in Batch 6 RC2 in unit tests.\nTests using JobLauncherTestUtils fail while tests using the new JobOperatorTestUtils work as expected in RC2.\n\n**Environment**\nSpring Boot 4.0.0 RC2\nSpring Batch 6.0.0 RC2\nMandrel/Temurin JDK 25.0.1+8\n\n**Steps to reproduce**\n1. Open \"batch-rc2\" reproducible example and run the tests `./gradlew test` to see the failing tests\n    - Stacktrace here: `build/reports/tests/test/index.html`\n2. Build the project skipping tests `./gradlew build -x test` and run the jobs specified in the example section\n3. Optionally, see the \"batch5\" project to see passing tests using JobLauncherTestUtils on boot 3.5.7 and batch 5.2.4.\n\n**Expected behavior**\nTests written using the deprecated JobLauncherTestUtils should still work correctly until removal in Batch 7.\n\n**Minimal Complete Reproducible example**\nThe \"batch6-rc2\" project contains the failing tests using JobLauncherTestUtils and passing tests using the new JobOperatorTestUtils.\nThe \"batch5\" project has passing tests using JobLauncherTestUtils.\n\nBoth projects have the same 2 jobs that be ran via the jar (skip tests in the batch6-rc2 project):\n```\njava -jar build/libs/*jar --spring.batch.job.name=HelloJob\njava -jar build/libs/*jar --spring.batch.job.name=GoodbyeJob\n```\n\n[batch5.tgz](https://github.com/user-attachments/files/23571876/batch5.tgz)\n[batch6-rc2.tgz](https://github.com/user-attachments/files/23571878/batch6-rc2.tgz)",
+    "labels": [
+      "in: test",
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-17T09:19:44Z",
+        "body": "That's a valid issue, thank you for reporting it! I will plan the fix for the upcoming GA."
+      },
+      {
+        "author": "lucas-gautier",
+        "created_at": "2025-11-17T20:39:02Z",
+        "body": "Thanks so much, Ben!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5b8051001475d4529239390820a419ff4aceb792"
+      ]
+    }
+  },
+  {
+    "number": 5091,
+    "title": "ChunkOrientedStep: Retry exhausted in ItemWriter always triggers Chunk Scanning regardless of skip eligibility",
+    "state": "closed",
+    "created_at": "2025-11-17T03:15:53Z",
+    "updated_at": "2025-11-17T13:25:55Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5091",
+    "body": "Hello Spring Batch team,\nfirst of all, thank you for your continued effort in maintaining and improving the project.\nI would like to report an issue in Spring Batch 6's ChunkOrientedStep fault-tolerant write flow.\n\n**Bug description**\nIn Spring Batch 6, when an exception occurs in the ItemWriter and the retry policy becomes exhausted (RetryException),\nChunkOrientedStep always performs a chunk scanning, regardless of whether the exception is skip-eligible.\n\nThe issue is that there is no preliminary SkipPolicy evaluation before entering the scan, meaning:\n- Even if the exception is not skippable, scan() is still invoked.\n- Normal (non-failing) items in the chunk get written again(by sacnning), resulting in unintended duplicate writes.\n- Ultimately, a NonSkippableWriteException is thrown inside the scan, but only after unintended writes have already been attempted.\n\nIn Spring Batch 5 (FaultTolerantChunkProcessor), this did not happen because the framework performed a SkipPolicy check before scanning the chunk, preventing unnecessary scanning for non-skippable exceptions.\nlike:\n```java\nRecoveryCallback<Object> recoveryCallback = context -> {\n\t\t\t\t/*\n\t\t\t\t * If the last exception was not skippable we don't need to do any\n\t\t\t\t * scanning. We can just bomb out with a retry exhausted.\n\t\t\t\t */\n\t\t\t\tif (!shouldSkip(itemWriteSkipPolicy, context.getLastThrowable(), -1)) {\n\t\t\t\t\tthrow new ExhaustedRetryException(\n\t\t\t\t\t\t\t\"Retry exhausted after last attempt in recovery path, but exception is not skippable.\",\n\t\t\t\t\t\t\tcontext.getLastThrowable());\n\t\t\t\t}\n\n\t\t\t\tinputs.setBusy(true);\n\t\t\t\tdata.scanning(true);\n\t\t\t\tscan(contribution, inputs, outputs, chunkMonitor, true);\n\t\t\t\treturn null;\n\t\t\t};\n```\n\nThis results in incorrect behavior and is a functional regression from Spring Batch 5.\n\n\n\n\n**Environment**\nSpring Batch version: 6.0.0-RC2\n\n\n\n**Minimal Complete Reproducible example**\n```java\n@Configuration\n@Slf4j\npublic class IssueReproductionJobConfiguration {\n\n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(JobRepository jobRepository) {\n        return new StepBuilder(jobRepository)\n                .<TestItem, TestItem>chunk(3)\n                .reader(issueReproductionReader())\n                .processor(issueReproductionProcessor())\n                .writer(issueReproductionWriter())\n                .faultTolerant()\n                .build();\n    }\n\n    @Bean\n    public ItemReader<TestItem> issueReproductionReader() {\n        return new SkippableItemReader();\n    }\n\n    @Bean\n    public ItemProcessor<TestItem, TestItem> issueReproductionProcessor() {\n        return item -> {\n            log.info(\">>>> Successfully processed: {}\", item.getName());\n            return item;\n        };\n    }\n\n    @Bean\n    public ItemWriter<TestItem> issueReproductionWriter() {\n        return items -> {\n            for (TestItem item : items) {\n                log.info(\">>>> Writing items: {}\", item.getName());\n                if (item.id == 2) {\n                    log.error(\">>>> EXCEPTION on Item-2!\");\n                    throw new RuntimeException(\"Simulated write error on Item-2\");\n                }\n            }\n        };\n    }\n\n    @Data\n    @AllArgsConstructor\n    @NoArgsConstructor\n    public static class TestItem {\n        private Long id;\n        private String name;\n        private String description;\n    }\n\n    static class SkippableItemReader implements ItemReader<TestItem> {\n        private int index = 0;\n        private final List<TestItem> items = List.of(\n                new TestItem(1L, \"Item-1\", \"First item\"),\n                new TestItem(2L, \"Item-2\", \"Second item - will throw exception\"),\n                new TestItem(3L, \"Item-3\", \"Third item\")\n        );\n\n        @Override\n        public TestItem read() {\n            if (index >= items.size()) return null;\n            return items.get(index++);\n        }\n    }\n}\n```\nThis example demonstrates the issue clearly:\nafter retry exhaustion, the framework enters chunk scan even though the thrown exception is not skippable, causing duplicate writes and an eventual NonSkippableWriteException\n\n\n**Expected behavior**\nException happens in writer\nRetry attempts exhausted\n\nEvaluate SkipPolicy for the exception\n\nIf skippable → proceed to scan\n\nIf not skippable → do not scan; fail immediately\n\nAvoid duplicate writes and unintended extra write attempts.\n\n**Actual behavior**\n```bash\n>>>> Read: Item-1\n>>>> Read: Item-2\n>>>> Read: Item-3\n>>>> Successfully processed: Item-1\n>>>> Successfully processed: Item-2\n>>>> Successfully processed: Item-3\n>>>> Writing items: Item-1\n>>>> Writing items: Item-2\n>>>> EXCEPTION on Item-2!\nChunkOrientedStep: Retry exhausted while attempting to write items, scanning the chunk\n\norg.springframework.core.retry.RetryException: Retry policy for operation 'Retryable write operation' exhausted; aborting execution\n\n...\n\n>>>> Writing items: Item-1\n>>>> Writing items: Item-2\n>>>> EXCEPTION on Item-2!\nChunkOrientedStep: Failed to write item: IssueReproductionJobConfiguration.TestItem(id=2, name=Item-2, description=Second item - will throw exception)\n\n...\n\njava.lang.RuntimeException: Simulated write error on Item-2\n...\n\nChunkOrientedStep   : Rolling back chunk transaction\n\norg.springframework.batch.core.step.skip.NonSkippableWriteException: Skip policy rejected skipping item\n\n...\n\nAbstractStep         : Encountered an error executing step issueReproductionStep in job issueReproductionJob\n\n...\n\n\n```\n\n**Proposed fix**\nTo prevent unnecessary chunk scanning,\nwriteChunk() should perform a pre-scan SkipPolicy check when a RetryException is thrown, similar to the legacy behavior of FaultTolerantChunkProcessor in Spring Batch 5.\n\nSpecifically, inside the catch block of writeChunk(), a SkipPolicy validation can be added before triggering scan():\n```java\ncatch (Exception exception) {\n    ...\n\n    if (this.faultTolerant && exception instanceof RetryException retryException) {\n\n        // 💡 Proposed pre-scan SkipPolicy check\n        if (!this.skipPolicy.shouldSkip(exception, -1)) {\n            // If the exception is not skippable, skip scanning and fail immediately\n            throw exception;\n        }\n\n        logger.info(\"Retry exhausted while attempting to write items, scanning the chunk\", retryException);\n\n        ChunkScanEvent chunkScanEvent = new ChunkScanEvent(\n            contribution.getStepExecution().getStepName(),\n            contribution.getStepExecution().getId()\n        );\n\n        chunkScanEvent.begin();\n        scan(chunk, contribution);\n        chunkScanEvent.skipCount = contribution.getSkipCount();\n        chunkScanEvent.commit();\n\n        logger.info(\"Chunk scan completed\");\n    }\n    else {\n        throw exception;\n    }\n}\n\n```\n\n\nThank you for reviewing this issue!",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-17T13:23:36Z",
+        "body": "> first of all, thank you for your continued effort in maintaining and improving the project.\n\nThank YOU for your continued effort in testing Spring Batch 6 and providing invaluable feedback to us! Amazing bug reporting BTW, really appreciated 🙏\n\nThis is a valid issue, I will plan the fix for the upcoming GA."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "cb55ccc44b30790385ed49f8ee1ed1b1f4978288"
+      ]
+    }
+  },
+  {
+    "number": 5093,
+    "title": "ChunkOrientedStepBuilder does not apply StepBuilderHelper properties (allowStartIfComplete, startLimit, stepExecutionListeners)",
+    "state": "closed",
+    "created_at": "2025-11-17T11:22:36Z",
+    "updated_at": "2025-11-17T14:00:16Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5093",
+    "body": "Hello Spring Batch team,\nI've found an issue where `ChunkOrientedStepBuilder` does not properly apply properties from its parent class `StepBuilderHelper` to the built step. I've searched existing issues but couldn't find a duplicate, so I'm reporting it here.\n\n**Bug description**\n\nWhen using `StepBuilder.chunk()`, properties set through `StepBuilderHelper` methods are not applied to the resulting `ChunkOrientedStep`. Specifically:\n- `allowStartIfComplete(boolean)`\n- `startLimit(int)`\n- `listener(StepExecutionListener)`\n\n\nThese properties are correctly stored in the parent class's `properties` object, but they are never transferred to the actual step instance.\n\n\n**Root cause**\n\nThe parent class `StepBuilderHelper` provides an `enhance(AbstractStep step)` method that applies all properties to a step:\n```java\nprotected void enhance(AbstractStep step) {\n    step.setJobRepository(properties.getJobRepository());\n\n    ObservationRegistry observationRegistry = properties.getObservationRegistry();\n    if (observationRegistry != null) {\n       step.setObservationRegistry(observationRegistry);\n    }\n\n    Boolean allowStartIfComplete = properties.allowStartIfComplete;\n    if (allowStartIfComplete != null) {\n       step.setAllowStartIfComplete(allowStartIfComplete);\n    }\n\n    step.setStartLimit(properties.startLimit);\n\n    List<StepExecutionListener> listeners = properties.stepExecutionListeners;\n    if (!listeners.isEmpty()) {\n       step.setStepExecutionListeners(listeners.toArray(new StepExecutionListener[0]));\n    }\n}\n```\n\nHowever, `ChunkOrientedStepBuilder.build()` does not call this `enhance()` method, nor does it manually set these properties on the step.\n\nThe builder should either:\n1. Call `enhance(step)` to apply all properties from `StepBuilderHelper`, OR\n2. Explicitly set `allowStartIfComplete`, `startLimit`, and `stepExecutionListeners` on the step (if avoiding `enhance()` for code organization reasons)\n\nCurrently, neither approach is implemented, resulting in these properties being silently ignored.\n\n\n**Environment**\n- Spring Batch version: 6.0.0-RC2\n\n**Steps to reproduce**\n1. Create a chunk-oriented step using `StepBuilder.chunk()`\n2. Set `allowStartIfComplete(true)` or `startLimit(5)` or add a `StepExecutionListener`\n3. Build and run the step\n4. Observe that these properties have no effect on the step's behavior\n\n\n**Expected behavior**\nProperties configured through `StepBuilderHelper` methods should be applied to the built step, regardless of the step type.\n\n\n**Minimal Complete Reproducible example**\n```java\n@Slf4j\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(JobRepository jobRepository) {\n        return new StepBuilder(jobRepository)\n                .chunk(3)\n                .reader(issueReproductionReader())\n                .processor(issueReproductionProcessor())\n                .writer(issueReproductionWriter())\n                .listener(new StepExecutionListener() {\n                    @Override\n                    public void beforeStep(StepExecution stepExecution) {\n                        System.out.println(\">>>> This message is NEVER printed\");\n                    }\n                    \n                    @Override\n                    public ExitStatus afterStep(StepExecution stepExecution) {\n                        System.out.println(\">>>> This message is NEVER printed either\");\n                        return stepExecution.getExitStatus();\n                    }\n                })\n                .build();\n    }\n\n    @Bean\n    public ItemReader issueReproductionReader() {\n        return new SkippableItemReader();\n    }\n\n    @Bean\n    public ItemProcessor issueReproductionProcessor() {\n        return item -> {\n            log.info(\">>>> Successfully processed: {}\", item.getName());\n            return item;\n        };\n    }\n\n    @Bean\n    public ItemWriter issueReproductionWriter() {\n        return items -> {\n            for(TestItem item: items) {\n                log.info(\">>>> Writing items: {}\", item.getName());\n            }\n        };\n    }\n\n    @Data\n    @NoArgsConstructor\n    @AllArgsConstructor\n    public static class TestItem {\n        private Long id;\n        private String name;\n        private String description;\n    }\n\n    @Slf4j\n    static class SkippableItemReader implements ItemReader {\n        private int count = 0;\n        private final List items = List.of(\n                new TestItem(1L, \"Item-1\", \"First item\"),\n                new TestItem(2L, \"Item-2\", \"Second item\"),\n                new TestItem(3L, \"Item-3\", \"Third item\")\n        );\n\n        @Override\n        public TestItem read() {\n            if (count >= items.size()) {\n                log.info(\">>>> EOF: No more items\");\n                return null;\n            }\n\n            TestItem item = items.get(count);\n            count++;\n\n            log.info(\">>>> Read: {}\", item.getName());\n            return item;\n        }\n    }\n}\n```\n\n**Actual output:**\n\n```\nJob: [SimpleJob: [name=issueReproductionJob]] launched with the following parameters: [{}]\nExecuting step: [issueReproductionStep]\n>>>> Read: Item-1\n>>>> Read: Item-2\n>>>> Read: Item-3\n>>>> Successfully processed: Item-1\n>>>> Successfully processed: Item-2\n>>>> Successfully processed: Item-3\n>>>> Writing items: Item-1\n>>>> Writing items: Item-2\n>>>> Writing items: Item-3\n>>>> EOF: No more items\nStep: [issueReproductionStep] executed in 2ms\n```\n\nNotice that the beforeStep() and afterStep() messages never appear.\n\n\nWorkaround\n\nFor StepExecutionListener, explicitly casting to StepListener works because it routes to the child class's listener(StepListener) method, which adds to stepListeners collection:\n\n```java\n.listener((StepListener) new StepExecutionListener() {\n    @Override\n    public void beforeStep(StepExecution stepExecution) {\n        System.out.println(\">>>> Now this IS printed!\");\n    }\n})\n```\n\nFor allowStartIfComplete and startLimit, there is currently no workaround via the builder API.\n\n\nProposed fix\n\nif there's a reason to avoid calling enhance(), explicitly set these properties:\n\n```java\npublic ChunkOrientedStep build() {\n\n    ChunkOrientedStep step = // ... create step ...\n    \n    // Manually apply StepBuilderHelper properties\n  this.stepListeners.addAll(properties.getStepExecutionListeners());\n\n    if (properties.allowStartIfComplete != null) {\n        step.setAllowStartIfComplete(properties.allowStartIfComplete);\n    }\n    step.setStartLimit(properties.startLimit);\n\n    …\n\n    return step;\n}\n```\n\nIt would resolve this issue and ensure that all StepBuilderHelper properties are properly applied to chunk-oriented steps.\n\nThank you for looking into this issue! Please let me know if you need any additional information.",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "2d5c7039e8d1f393c3616b0aeb0101956af31c97"
+      ]
+    }
+  }
+]
