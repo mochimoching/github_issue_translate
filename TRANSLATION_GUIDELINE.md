@@ -129,6 +129,27 @@ See issue #5093 for details.
 
 ---
 
+## 出力ディレクトリ
+
+翻訳結果は以下のディレクトリ構造で保存してください：
+
+```
+output/{repo}/{milestone}/{state}/current/markdown/issues_translated/
+```
+
+例：
+- 入力ファイル: `output/spring-framework/6.0.0-M5/closed/current/markdown/issues/issue_28298.md`
+- 出力ファイル: `output/spring-framework/6.0.0-M5/closed/current/markdown/issues_translated/issue_28298.md`
+
+### 出力ルール
+
+1. **ディレクトリ**: `issues` ディレクトリと同階層に `issues_translated` ディレクトリを作成
+2. **ファイル名**: 元のファイル名を維持（例: `issue_28298.md` → `issue_28298.md`）
+3. **形式**: Markdown形式で保存
+4. **エンコーディング**: UTF-8
+
+---
+
 ## AIシステム設定
 
 ### システムメッセージ
@@ -204,7 +225,7 @@ See issue #5093 for details.
 置換: [#$1](https://github.com/spring-projects/spring-batch/issues/$1)
 ```
 
-####問題: 翻訳が直訳すぎる/意訳すぎる
+#### 問題: 翻訳が直訳すぎる/意訳すぎる
 
 **対処法**: 翻訳スタイルを明示的に指定
 ```

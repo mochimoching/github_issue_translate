@@ -232,8 +232,6 @@ def main():
                 issue['comments'] = issue['comments'][:args.max_comments]
         
         # 出力ファイルパスの決定
-        now = datetime.now()
-        datetime_str = now.strftime('%Y%m%d-%H%M%S')
         milestone_name = args.milestone.replace('/', '_').replace('\\', '_') if args.milestone else "all"
         
         if args.output:
@@ -247,7 +245,7 @@ def main():
                 Config.get_repo_dirname(),
                 milestone_name,
                 args.state,
-                datetime_str,
+                "current",
                 "markdown"
             )
             os.makedirs(md_base_dir, exist_ok=True)
@@ -256,21 +254,21 @@ def main():
             md_output_dir = md_base_dir
         else:
             # 自動生成
-            # 基底ディレクトリ: output/{repo}/{milestone}/{state}/{timestamp}/
+            # 基底ディレクトリ: output/{repo}/{milestone}/{state}/current/
             base_output_dir = os.path.join(
                 Config.OUTPUT_DIR,
                 Config.get_repo_dirname(),
                 milestone_name,
                 args.state,
-                datetime_str
+                "current"
             )
             
-            # JSON: output/raw/{milestone}/{state}/{timestamp}/json/issues.json
+            # JSON: output/{repo}/{milestone}/{state}/current/json/issues.json
             json_output_dir = os.path.join(base_output_dir, "json")
             os.makedirs(json_output_dir, exist_ok=True)
             output_json_filepath = os.path.join(json_output_dir, "issues.json")
             
-            # Markdown: output/raw/{milestone}/{state}/{timestamp}/markdown/issues.md
+            # Markdown: output/{repo}/{milestone}/{state}/current/markdown/issues.md
             md_output_dir = os.path.join(base_output_dir, "markdown")
             os.makedirs(md_output_dir, exist_ok=True)
             output_md_filepath = os.path.join(md_output_dir, "issues.md")

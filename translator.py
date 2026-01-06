@@ -1,4 +1,5 @@
 """AI翻訳モジュール"""
+import os
 from typing import Dict, List, Optional
 from config import Config
 
@@ -6,14 +7,38 @@ from config import Config
 class Translator:
     """AI翻訳クラス"""
     
-    def __init__(self, translation_style: str = 'balanced'):
+    def __init__(self, translation_style: str = 'free', prompts_dir: str = 'prompts'):
         """
         Args:
             translation_style: 翻訳スタイル ('literal'=直訳, 'free'=意訳, 'balanced'=バランス型)
+            prompts_dir: プロンプトテンプレートファイルのディレクトリパス
         """
         self.provider = Config.get_ai_provider()
         self._client = None
         self.translation_style = translation_style
+        self.prompts_dir = prompts_dir
+        self._load_prompt_templates()
+    
+    def _load_prompt_templates(self):
+        """プロンプトテンプレートファイルを読み込み"""
+        # ベーステンプレートを読み込み
+        base_template_path = os.path.join(self.prompts_dir, 'translation_base.md')
+        with open(base_template_path, 'r', encoding='utf-8') as f:
+            self.base_template = f.read()
+        
+        # スタイル別の指示を読み込み
+        style_template_path = os.path.join(self.prompts_dir, f'style_{self.translation_style}.md')
+        with open(style_template_path, 'r', encoding='utf-8') as f:
+            self.style_instruction = f.read()
+        
+        # コードフォーマットルールを読み込み
+        code_format_title_path = os.path.join(self.prompts_dir, 'code_format_title.md')
+        with open(code_format_title_path, 'r', encoding='utf-8') as f:
+            self.code_format_title = f.read()
+        
+        code_format_body_path = os.path.join(self.prompts_dir, 'code_format_body.md')
+        with open(code_format_body_path, 'r', encoding='utf-8') as f:
+            self.code_format_body = f.read()
     
     def _get_client(self):
         """AIクライアントを取得（遅延初期化）"""
@@ -63,53 +88,21 @@ class Translator:
             return f"[翻訳エラー: {str(e)}]"
     
     def _build_translation_prompt(self, text: str, context: str = "", is_title: bool = False) -> str:
-        """翻訳用のプロンプトを構築"""
+        """翻訳用のプロンプトを構築（外部テンプレートを使用）"""
         
-        # 翻訳スタイルに応じた要件を設定
-        if self.translation_style == 'literal':
-            style_instruction = """翻訳スタイル: 直訳
-- 原文の構造と表現をできるだけ忠実に保つ
-- 原語の順序を尊重し、直接的な翻訳を行う
-- 意訳や意訳的な表現を避ける
-- 文字通りの翻訳を優先する"""
-        elif self.translation_style == 'free':
-            style_instruction = """翻訳スタイル: 意訳
-- 原文の意図とニュアンスを正確に伝える
-- 日本語として最も自然で読みやすい表現を使用
-- 必要に応じて文構造を変更しても良い
-- 日本語読者にとって理解しやすい表現を優先する"""
-        else:  # balanced
-            style_instruction = """翻訳スタイル: バランス型
-- 原文の意図を正確に伝えながら、自然な日本語を使用
-- 直訳と意訳のバランスを取る
-- 技術的な正確さと読みやすさを両立させる"""
+        # タイトルか本文かでコードフォーマットルールを選択
+        code_format_rule = self.code_format_title if is_title else self.code_format_body
         
-        # タイトルの場合はコードフォーマット不要
-        if is_title:
-            code_format_rule = "- クラス名やメソッド名もそのまま翻訳し、バッククォート(``)で囲まないこと"
-        else:
-            code_format_rule = """- クラス名、メソッド名、変数名、ファイル名などのプログラムコードは必ずバッククォート(``)で囲むこと
-  例: "JobRepository class" → "`JobRepository`クラス"
-  例: "the execute method" → "`execute`メソッド"
-  例: "StepExecution object" → "`StepExecution`オブジェクト\""""
+        # コンテキスト情報を追加
+        context_section = f"コンテキスト: {context}\n" if context else ""
         
-        base_prompt = f"""以下の英語のテキストを日本語に翻訳してください。
-
-{style_instruction}
-
-共通要件:
-- Spring Batchなどの固有名詞はそのまま保持すること
-- コードブロックやマークダウン記法はそのまま保持すること
-{code_format_rule}
-- 技術用語は適切な日本語訳を使用すること(例: "issue" → "課題"、"feature" → "機能")
-- 丁寧で読みやすい文章にすること
-
-"""
-        if context:
-            base_prompt += f"コンテキスト: {context}\n\n"
+        # テンプレートに変数を埋め込んでプロンプトを構築
+        prompt = self.base_template.replace('{STYLE_INSTRUCTION}', self.style_instruction)
+        prompt = prompt.replace('{CODE_FORMAT_RULE}', code_format_rule)
+        prompt = prompt.replace('{CONTEXT}', context_section)
+        prompt = prompt.replace('{TEXT}', text)
         
-        base_prompt += f"翻訳するテキスト:\n{text}\n\n翻訳結果のみを出力してください。"
-        return base_prompt
+        return prompt
     
     def _translate_openai(self, prompt: str) -> str:
         """OpenAI APIで翻訳"""

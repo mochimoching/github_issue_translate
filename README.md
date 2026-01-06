@@ -59,10 +59,13 @@ ISSUE_STATE=open  # open, closed, all
 python fetch.py --milestone "6.0.0" --state closed --max-issues 100
 
 # ステップ2: 取得したissueを翻訳
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translation-style free
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translation-style free
 ```
 
-**注意**: `fetch.py`（issue取得のみ）を使用する場合、AI APIキーは不要です。
+**注意**: 
+- `fetch.py`（issue取得のみ）を使用する場合、AI APIキーは不要です。
+- `fetch.py`は常にコメントも取得します（デフォルトで最大20件、`--max-comments`で変更可能）。
+- 出力先は`output/{repo}/{milestone}/{state}/current/`ディレクトリに統一されます。
 
 ## コマンドラインオプション
 
@@ -81,7 +84,7 @@ python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --transl
 | `--issue-number` | 整数 | なし | 特定のissue番号を指定して取得 |
 | `--milestone` | 文字列 | なし | マイルストーンで絞り込み<br>例: `"6.0.0"`, `"5.0.0-M1"`<br>`"*"`: 任意のマイルストーン<br>`"none"`: マイルストーンなし |
 | `--labels` | リスト | なし | ラベルで絞り込み（複数指定可能）<br>例: `enhancement`, `bug` |
-| `--max-comments` | 整数 | 20 | 取得する最大コメント数（コメントは常に取得されます） |
+| `--max-comments` | 整数 | 20 | 取得する最大コメント数（コメントは常に取得されます。デフォルト: 20） |
 | `--output` | 文字列 | 自動生成 | 出力ファイルパス（JSONファイル） |
 
 ### translate.py（Issue翻訳）のオプション
@@ -121,17 +124,20 @@ python translate.py --help
 ```powershell
 # 基本的な取得（コメントは自動的に含まれます）
 python fetch.py --milestone "6.0.0" --state closed --max-issues 100
+# 出力先: output/spring-batch/6.0.0/closed/current/json/issues.json
 
 # コメント数を制限して取得
 python fetch.py --milestone "6.0.0" --state closed --max-comments 50
 
 # 特定のissue番号を取得
 python fetch.py --issue-number 5183
+# 出力先: output/spring-batch/all/open/current/json/issues.json
 
 # ラベルで絞り込み
 python fetch.py --labels enhancement bug --state open --max-issues 20
 
-# 出力先を指定
+# 出力先を指定（カスタムJSONパスのみ）
+# 注：Markdown出力先は自動的にcurrent/markdownディレクトリに配置されます
 python fetch.py --milestone "6.0.0" --state closed --output "my_issues.json"
 ```
 
@@ -139,25 +145,29 @@ python fetch.py --milestone "6.0.0" --state closed --output "my_issues.json"
 
 ```powershell
 # 基本的な翻訳（バランス型）
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json
+# 出力先: output/6.0.0/closed/balanced/current/
 
 # 意訳スタイルで翻訳
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translation-style free
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translation-style free
+# 出力先: output/6.0.0/closed/free/current/
 
 # 直訳スタイルで翻訳
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translation-style literal
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translation-style literal
+# 出力先: output/6.0.0/closed/literal/current/
 
 # コメントも翻訳
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translate-comments
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translate-comments
 
 # 原文も含めて翻訳
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --include-original
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --include-original
 
 # 個別ファイルに分割して保存
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --separate-files
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --separate-files
+# 出力先: output/6.0.0/closed/balanced/current/translations/ (個別ファイル)
 
 # Markdown形式のみ出力
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --output-formats markdown
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --output-formats markdown
 ```
 
 ### 同じissueを複数スタイルで翻訳
@@ -165,15 +175,19 @@ python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --output
 ```powershell
 # 一度取得したissueを異なるスタイルで翻訳
 python fetch.py --milestone "6.0.0" --state closed --max-issues 50
+# 出力: output/spring-batch/6.0.0/closed/current/json/issues.json
 
 # 直訳版を生成
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translation-style literal
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translation-style literal
+# 出力: output/6.0.0/closed/literal/current/
 
 # 意訳版を生成
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translation-style free
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translation-style free
+# 出力: output/6.0.0/closed/free/current/
 
 # バランス型版を生成
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translation-style balanced
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translation-style balanced
+# 出力: output/6.0.0/closed/balanced/current/
 ```
 
 ### マイルストーンで絞り込み
@@ -213,43 +227,50 @@ python fetch.py --max-issues 5 --state open
 
 # マイルストーン6.0.0のclosedなissueを意訳で翻訳
 python fetch.py --milestone "6.0.0" --state closed
-python translate.py output/raw/6.0.0/closed/issues_20251229-223743.json --translation-style free --separate-files
+python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --translation-style free --separate-files
 
 # bugラベルのissueを直訳で翻訳、元の英語も含める
 python fetch.py --labels bug
-python translate.py output/raw/all/open/issues_20251229-223743.json --translation-style literal --include-original
+python translate.py output/spring-batch/all/open/current/json/issues.json --translation-style literal --include-original
 
 # 特定のissueをコメント付きで翻訳、全形式で出力
-python fetch.py --issue-number 5161 --max-comments 20
-python translate.py output/raw/all/open/issues_20251229-223743.json --translate-comments --max-comments 20
+python fetch.py --issue-number 5183 --max-comments 20
+python translate.py output/spring-batch/all/open/current/json/issues.json --translate-comments --max-comments 20
 ```
 
 ## 出力
 
 ### 取得結果（fetch.py）
-- `output/raw/{milestone}/{state}/issues_{YYYYMMDD-HHMMSS}.json` - 取得したissue（JSON形式）
-
-### 翻訳結果（translate.py）
-
-#### 出力ディレクトリ構造
 
 ```
 output/
-├── 6.0.0/                    # マイルストーン名
-│   ├── closed/               # issueの状態
-│   │   ├── free/             # 翻訳スタイル
-│   │   │   └── 20251226-180000/  # 日時
-│   │   │       ├── translations.json
-│   │   │       ├── translations.csv
-│   │   │       ├── translations.md  # 統合ファイル
-│   │   │       └── translations/    # 個別ファイル（--separate-files時）
-│   │   │           ├── issue_5090.md
-│   │   │           └── issue_5093.md
-│   │   ├── literal/
-│   │   └── balanced/
-│   └── open/
-├── 5.0.0/
-└── all/                      # マイルストーン指定なし
+└── {repo}/                       # リポジトリ名（例: spring-batch）
+    └── {milestone}/              # マイルストーン名（例: 6.0.0、マイルストーンなし: all）
+        └── {state}/              # issueの状態（open/closed/all）
+            └── current/          # 固定ディレクトリ名
+                ├── json/
+                │   └── issues.json       # JSON形式
+                └── markdown/
+                    ├── issues.md         # 統合Markdown
+                    └── issues/           # 個別Markdownファイル
+                        ├── issue_5106.md
+                        └── issue_5181.md
+```
+
+### 翻訳結果（translate.py）
+
+```
+output/
+└── {milestone}/              # マイルストーン名（例: 6.0.0）
+    └── {state}/              # issueの状態（open/closed）
+        └── {style}/          # 翻訳スタイル（literal/free/balanced）
+            └── current/      # 固定ディレクトリ名
+                ├── translations.json
+                ├── translations.csv
+                ├── translations.md       # 統合ファイル
+                └── translations/         # 個別ファイル（--separate-files時）
+                    ├── issue_5106.md
+                    └── issue_5181.md
 ```
 
 #### ファイル形式
@@ -355,15 +376,19 @@ GitHub API エラー: 403 Client Error
 
 ```
 github_issue_translate/
-├── fetch.py                # Issue取得スクリプト
-├── translate.py            # Issue翻訳スクリプト
-├── github_client.py        # GitHub API クライアント
-├── translator.py           # AI翻訳モジュール
-├── config.py              # 設定管理
-├── requirements.txt       # 依存パッケージ
-├── .env.example          # 環境変数サンプル
-├── README.md             # このファイル
-└── output/               # 翻訳結果の出力先
+├── fetch.py                   # Issue取得スクリプト
+├── translate.py               # Issue翻訳スクリプト
+├── github_client.py           # GitHub API クライアント
+├── translator.py              # AI翻訳モジュール
+├── config.py                  # 設定管理
+├── requirements.txt           # 依存パッケージ
+├── .env.example               # 環境変数サンプル
+├── README.md                  # プロジェクト説明
+├── SPECIFICATION.md           # 仕様書
+├── TRANSLATION_GUIDELINE.md   # 翻訳ガイドライン（Copilot用）
+├── SUMMARY_GUIDELINE.md       # 要約ガイドライン（Copilot用）
+├── prompts/                   # 翻訳プロンプトテンプレート（未使用）
+└── output/                    # 取得・翻訳結果の出力先
 ```
 
 ## トラブルシューティング

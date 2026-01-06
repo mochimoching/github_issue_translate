@@ -257,7 +257,7 @@ def main():
         else:
             # 入力ファイルのパスから情報を抽出
             # 例: output/spring-batch/6.0.0/closed/issues_20251229-223743.json
-            #  -> output/6.0.0/closed/free/20251229-223743
+            #  -> output/6.0.0/closed/free/current
             input_path_parts = args.input.replace('\\', '/').split('/')
             
             # milestone, state を抽出
@@ -266,21 +266,17 @@ def main():
                 repo_idx = input_path_parts.index(repo_dirname)
                 milestone_name = input_path_parts[repo_idx + 1]
                 state_name = input_path_parts[repo_idx + 2]
-                filename = os.path.basename(args.input)
-                # issues_20251229-223743.json -> 20251229-223743
-                datetime_str = filename.replace('issues_', '').replace('.json', '')
             except (ValueError, IndexError):
-                # 抽出できない場合は現在時刻を使用
+                # 抽出できない場合はデフォルト値を使用
                 milestone_name = "unknown"
                 state_name = "unknown"
-                datetime_str = datetime.now().strftime('%Y%m%d-%H%M%S')
             
             output_base_dir = os.path.join(
                 Config.OUTPUT_DIR,
                 milestone_name,
                 state_name,
                 args.translation_style,
-                datetime_str
+                "current"
             )
         
         os.makedirs(output_base_dir, exist_ok=True)

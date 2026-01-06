@@ -12,8 +12,8 @@ class Config:
     
     # GitHub設定
     GITHUB_TOKEN: Optional[str] = os.getenv('GITHUB_TOKEN', '').strip() or None
-    # GITHUB_REPO: str = "spring-projects/spring-batch"
-    GITHUB_REPO: str = "spring-projects/spring-framework"
+    # GITHUB_REPO: str = "spring-projects/spring-framework"
+    GITHUB_REPO: str = "spring-projects/spring-batch"
     
     # AI API設定
     OPENAI_API_KEY: Optional[str] = os.getenv('OPENAI_API_KEY')
