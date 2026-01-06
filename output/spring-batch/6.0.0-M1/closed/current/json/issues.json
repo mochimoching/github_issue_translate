@@ -1,0 +1,1034 @@
+[
+  {
+    "number": 4514,
+    "title": "Write Skip Count Not Updated in Chunk Processing",
+    "state": "closed",
+    "created_at": "2023-12-14T07:49:19Z",
+    "updated_at": "2025-07-20T21:01:57Z",
+    "author": "thilotanner",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4514",
+    "body": "**Bug description**\r\nIt seems, the write skip count is not incremented / updated if items are removed from chunks during write (in case an item cannot be successfully written)\r\n\r\n**Environment**\r\nSpring Batch 5.0.3 / Spring Boot 3.1.5 / Java 17\r\n\r\n**Steps to reproduce**\r\n```\r\npublic class MemberWriter implements ItemStreamWriter<String> {\r\n\r\n    @Override\r\n    public void write(Chunk<? extends String> memberChunk) {\r\n        Chunk<? extends String>.ChunkIterator iterator = memberChunk.iterator();\r\n        ...\r\n        iterator.remove(new RuntimeException());\r\n    }\r\n```\r\n\r\n\r\n**Expected behavior**\r\nAccording to documentation of class Chunk, the writeSkipCount in the corresponding StepExecution object should be incremented for every item removed from ChunkIterator:\r\n`Encapsulation of a list of items to be processed and possibly a list of failed items to be skipped. To mark an item as skipped clients should iterate over the chunk using the iterator() method, and if there is a failure call Chunk.ChunkIterator.remove() on the iterator. The skipped items are then available through the chunk.`\r\n\r\n**Workaround**\r\nIt's possible to circumvent the issue by creating a combined SkipListener / StepExecutionListener:\r\n\r\n```\r\npublic class SkipTestListener implements SkipListener<String, String>, StepExecutionListener {\r\n    private StepExecution stepExecution;\r\n\r\n    @Override\r\n    public void beforeStep(StepExecution stepExecution) {\r\n        this.stepExecution = stepExecution;\r\n    }\r\n\r\n    @Override\r\n    public void onSkipInWrite(String item, Throwable t) {\r\n        stepExecution.setWriteSkipCount(stepExecution.getWriteSkipCount() + 1);\r\n        log.warn(\"Skipped item: {}\", item);\r\n    }\r\n}\r\n```\r\nand register it accordingly in the step:\r\n```\r\n        SkipTestListener testListener = new SkipTestListener();\r\n\r\n        new StepBuilder(\"process-step\", jobRepository)\r\n                .<String, String>chunk(chunkSize, transactionManager)\r\n                .reader(reader)\r\n                .processor(processor)\r\n                .writer(writer)\r\n                .faultTolerant()\r\n                .listener((StepExecutionListener) testListener)\r\n                .listener((SkipListener<? super String, ? super String>) testListener)\r\n                .build();\r\n```",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "Hydrawisk793",
+        "created_at": "2024-10-12T10:06:14Z",
+        "body": "I think that a manual adjustment of write count should also be added in `onSkipInWrite` method of @thilotanner's workaround like this:\r\n\r\n```Java\r\n@Override\r\npublic void onSkipInWrite(String item, Throwable t) {\r\n    stepExecution.setWriteCount(stepExecution.getWriteCount() - 1);\r\n    stepExecution.setWriteSkipCount(stepExecution.getWriteSkipCount() + 1);\r\n    log.warn(\"Skipped item: {}\", item);\r\n}\r\n```"
+      },
+      {
+        "author": "florianhof",
+        "created_at": "2025-05-06T08:01:59Z",
+        "body": "In my experience (Spring Batch 3.4.3), the _write count_ correctly don't report skipped item. Only the _write skip count_ is not correct.\n\nI'm only a simple Spring Batch user, not a developer there. After a quick look, it seams `SimpleChunkProcessor.write` and `FaultTolerantChunkProcessor.write` should not only do `contribution.incrementWriteCount` but also `incrementWriteSkipCount`. "
+      },
+      {
+        "author": "florianhof",
+        "created_at": "2025-05-28T15:55:54Z",
+        "body": "Proposition of correction in pull request https://github.com/spring-projects/spring-batch/pull/4852"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "1fe91eb6fc80f79720c6036d1fc257d7217832ae",
+        "61d446e71f63c6b1d15826fb5e68aef7403b8702"
+      ]
+    }
+  },
+  {
+    "number": 4718,
+    "title": "improve experience when configuring an alternative `JobRepository` ",
+    "state": "closed",
+    "created_at": "2024-11-24T22:32:14Z",
+    "updated_at": "2025-06-11T09:23:35Z",
+    "author": "joshlong",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4718",
+    "body": "improve experience when configuring an alternative `JobRepository`, as the DefaultBatchConfiguration, upon which Spring Boot in turn relies, assumes only JDBC-based infrastructure. This means that, when using Spring Boot, you can't simply replace one bean of type `JobRepository` and have things work. Everything must be redone from scratch, as we used to do before Spring Boot existed.  \r\n\r\nThis will be a problem for users of Spring Batch who want to avail themselves of the new \"resourceless\" and MongoDB job repository alternatives.",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "api: breaking-change"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2024-12-03T13:53:30Z",
+        "body": "`@EnableBatchProcessing` (and in turn `DefaultBatchConfiguration`) was designed as the Java counterpart of the XML element `job-repository` from the batch namespace where a datasource is required:\r\n\r\n```xml\r\n<batch:job-repository id=\"jobRepository\" data-source=\"dataSource\" transaction-manager=\"transactionManager\"/>\r\n```\r\n\r\nSo yes, `@EnableBatchProcessing` assumes a JDBC infrastructure, and this should change now that we introduced the mongo job repository and the resourceless job repository.\r\n\r\nI have a couple ideas on how we can address this issue and of course I am open to any thoughts about this as well. I will share these ideas with the community when we start working on this design issue for the next major release. This comment is only to validate and acknowledge the issue. Thank you for reporting it, @joshlong !"
+      },
+      {
+        "author": "krewetka",
+        "created_at": "2025-03-10T16:48:40Z",
+        "body": "Hi @fmbenhassine as proper fix is planned for next major version is there any earlier workaround solution? 🤔 \n\nI mean especially to overcome shutdown problem. It is quite a  big deal to be honest for production usage and as fixing it not in 5.3 but in 6 seems like it will be not fixed for at least few years 🤔 \n\nUnless we simply are doing something wrong but we didn't manage to configure proper shutdown despite many attempts .\n\nWe moved from starting the job in regular container to starting it with AWS batch so at least regular CI/CD deployment is not breaking long running jobs but let's say it is only workaround we found."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-03-11T14:41:52Z",
+        "body": "@krewetka which shutdown problem are you referring to? How is that related to this issue? Please open a separate [discussion](https://github.com/spring-projects/spring-batch/discussions) to explain your problem and I will be happy to help there.\n\nFTR, v6 is planned for November this year and there is no plan for v5.3 at the moment. In the meantime and for those who want to use a non-jdbc job repository with v5.2, please check this [SO thread](https://stackoverflow.com/a/79492398/5019386) in which I attached a complete example."
+      },
+      {
+        "author": "krewetka",
+        "created_at": "2025-03-12T08:30:42Z",
+        "body": "Hi, sorry my bad. I am referring to https://github.com/spring-projects/spring-batch/issues/4728#issuecomment-2578356238 which was marked as duplicate of this issue.  Should I still open another one then?🤔\n\nWe have mongo setup running properly (but with H2 still there).\n\nWe did try to exclude DataSourceAutoConfiguration.class but then we were still facing some issues but let me try again one more time and see the exact results."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-03-12T11:39:17Z",
+        "body": "@krewetka \n\n> Should I still open another one then?\n\nYes please. The shutdown lifecycle issue is different than requiring h2 for a mongo setup."
+      },
+      {
+        "author": "krewetka",
+        "created_at": "2025-03-12T19:04:09Z",
+        "body": "Ok, will try to provide full example in new issue when it comes to shutdown. Maybe it will be solved when I manage to get rid of h2 in my code finally 🤞 \n\nBtw, I checked  [SO thread](https://stackoverflow.com/a/79492398/5019386)  and noticed it is not using `EnableBatchProcessing`\n\nWe have it in our code still and when we remove H2 we are facing:\n`Error creating bean with name 'jobExplorer': Cannot resolve reference to bean 'dataSource' while setting bean property 'dataSource'`\nwith added:`@SpringBootApplication(exclude = DataSourceAutoConfiguration.class)`\n\nI guess we need to not use `EnableBatchProcessing` then but still somehow setup somewhere almost all other piecies from it like `tablePrefix` , `isolationLevelForCreate` , `taskExecutorRef` etc.\n\nDo you have any recommendation for it how do to proper workaround for the time-being? \n\nI did copy of EnableBatchProcessing  with ` String dataSourceRef() default \"\";` and used this one but there are imports on not public packages  like `AutomaticJobRegistrarBeanPostProcessor` and  `BatchRegistrar` ( which then define `registerJobExplorer` ) etc. which I could not keep in custom version.\n\nI skiped them and it seems to work and the jobs are run but not sure if this is good idea as some important parts of sprint batch internal logic are not missing ( for example jobExplorer is not wired-up) 🤔 \n\nAfter doing it I realized that it can be even still with `String dataSourceRef() default \"dataSource\";` as it is not used anymore when there is no import of `BatchRegistrar` which is creating jobExplorer 😆 "
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-05-21T09:50:01Z",
+        "body": "@krewetka Thank you for your feedback, really appreciated! I understand, that's confusing. And I must admit that the default configuration of Spring Batch is not ideal, especially after the introduction of the resourceless job repository and the mongo job repository. I believe the introduction of these two new implementations has made the issues with previous design decisions more visible (ie the fact the default batch configuration assumes a JDBC infrastructure, the requirement of a `JobExplorer`, etc).\n\nI started working on the next major release and wanted to share a few things:\n\n- When using a `ResourcelessJobRepository`, there are no metadata to explore (there is no `ResourcelessJobExplorer`, this does not make sense). Therefore, the default batch configuration should not require a `JobExplorer`. This was fixed in https://github.com/spring-projects/spring-batch/issues/4825\n- With Spring Boot, using `ResourcelessJobRepository` or `MongoJobRepository` should not require the user to exclude `DataSourceAutoConfiguration` or have to add a dependency to H2 or HSQLDB. Therefore, I think the resourceless job repository is a better default than the JDBC one in Spring Boot. I will discuss that with the Boot team.\n- `EnableBatchProcessing` should not be tied to a JDBC infrastructure (this is historical, see my [previous comment](https://github.com/spring-projects/spring-batch/issues/4718#issuecomment-2514623019)). Therefore, all attributes related to the configuration of the JDBC job repository should be moved elsewhere. My idea is to follow the same approach of configuring Spring Security's session store with `@EnableJdbcHttpSession`, `@EnableRedisHttpSession`, etc. We could have the same for Spring Batch with `@EnableJdbcJobRepository`, `@EnableMongoJobRepository`, etc where each annotation have specific attributes to configure the metadata store.\n\nAnd more generally, and after gathering feedback from the community over the years, I believe we need to simplify the API \"surface\" that batch users have to deal with. Currently, there are many different APIs to do the same things, which is confusing. I will open a separate issue for that with more details."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "f7fcfaa4fdb1f762a3bc16c30750d646dc52a6ed"
+      ]
+    }
+  },
+  {
+    "number": 4757,
+    "title": "Enhancement : FlatFileItemReaderBuilder : raise check exception on build",
+    "state": "closed",
+    "created_at": "2025-02-03T16:54:42Z",
+    "updated_at": "2025-06-13T14:47:36Z",
+    "author": "frigaux",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4757",
+    "body": "### Given concrete use case (X as record class)\n`FlatFileItemReaderBuilder<X>()`\n`...`\n`.targetType(X::class.java)`\n`.fieldSetMapper(myFieldSetMapper)`\n`.build()`\n\n**Expected Behavior**\nWhen both **fieldSetMapper** and **targetType** are defined, a \"BuildCheckException\" should be raised in build method with \"you cannot define both FieldSetMapper and targetType\"\n\n**Current Behavior**\nFieldSetMapper is ignored and result in misunderstanding at runtime\n\nBest regard\n",
+    "labels": [
+      "in: infrastructure",
+      "type: bug",
+      "type: feature",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 4817,
+    "title": "Remove dependency to JobExplorer in SimpleJobOperator",
+    "state": "closed",
+    "created_at": "2025-04-28T09:18:21Z",
+    "updated_at": "2025-06-11T10:11:39Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4817",
+    "body": "As of v5, `SimpleJobRepository` requires a `JobExplorer` in addition to a `JobRepository`. However, since `JobExplorer` is designed to be a read-only version of `JobRepository`, then the dependency to a `JobExplorer` does not make sense. In other words, since `SimpleJobOperator` depends on a `JobRepository` (which has read/write access to the meta-data store), it should not have a dependency to the read-only API. Ideally, `JobRepository` should be an extension of `JobExplorer` to add write/update operations.\n\nThis issue is a pre-requisite to making the default batch configuration work with any job repository (and not assume/require a JDBC infrastructure).",
+    "labels": [
+      "type: enhancement",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "6992b79b8dc6f6e87f1dd75548328f9011ec699e"
+      ]
+    }
+  },
+  {
+    "number": 4819,
+    "title": "Remove deprecated APIs scheduled for removal in v6",
+    "state": "closed",
+    "created_at": "2025-04-29T06:53:54Z",
+    "updated_at": "2025-06-11T10:12:35Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4819",
+    "body": "This issue is to remove all deprecated APIs scheduled for removal in v6.",
+    "labels": [
+      "type: task",
+      "api: removal"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "43ac1f12cfd651abe68a94c3fdde235e3ca5135f"
+      ]
+    }
+  },
+  {
+    "number": 4821,
+    "title": "Redundant methods in JobExplorer/JobInstanceDao APIs",
+    "state": "closed",
+    "created_at": "2025-04-29T09:51:49Z",
+    "updated_at": "2025-06-11T10:12:12Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4821",
+    "body": "As of v5.2, the JobExplorer/JobInstanceDao APIs contain two similar methods:\n\n```java\nList<JobInstance> getJobInstances(String jobName, int start, int count);\n\nList<JobInstance> findJobInstancesByJobName(String jobName, int start, int count);\n```\n\nBoth methods return the same result. `findJobInstancesByJobName` is not used and should be deprecated in v6.0 for removal in v6.2.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bf53794d6a1f1ab08d3fbc18cc40e1048e376e9c"
+      ]
+    }
+  },
+  {
+    "number": 4824,
+    "title": "Make JobRepository extend JobExplorer",
+    "state": "closed",
+    "created_at": "2025-05-05T09:45:39Z",
+    "updated_at": "2025-06-11T09:25:58Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4824",
+    "body": "As of v5.2, `JobRepository` and `JobExplorer` have similar/same methods with different signatures/names doing the same thing (ie duplicate implementations). Here are some examples:\n\n| JobRepository | JobExplorer |\n|--------|--------|\n| findJobExecutions | getJobExecutions |\n| getLastJobExecution | getLastJobExecution |\n| getJobNames | getJobNames |\n| getJobInstance | getJobInstance |\n| findJobInstancesByName | findJobInstancesByJobName |\n\nMaintaining duplicate implementations is obviously not ideal. Moreover, `JobExplorer` is designed to be a read-only version of `JobRepository`, therefore `JobRepository` can technically be an extension of `JobExplorer`.\n\nFinally, this would also make the batch configuration easier for users as they would not need to configure an additional bean (the `JobExplorer`) once they configured a `JobRepository`, which is almost always needed anyway.\n\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b8c93d677ed86130262042fb8565ce30816c2270"
+      ]
+    }
+  },
+  {
+    "number": 4825,
+    "title": "Remove JobExplorer bean registration from the default batch configuration",
+    "state": "closed",
+    "created_at": "2025-05-05T15:23:51Z",
+    "updated_at": "2025-05-16T15:14:12Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4825",
+    "body": "After #4824 and #4817  , there is no need to auto-configure an additional `JobExplorer` in the default batch configuration since a `JobRepository` is already defined.\n\nThis is required to make the default batch configuration work with a `ResourcelessJobRepository` (where there is no meta-data to explore).",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ae2df5396baa25cc5abe68e43508f6d0981dcf68"
+      ]
+    }
+  },
+  {
+    "number": 4827,
+    "title": "Move core.explore package under core.repository",
+    "state": "closed",
+    "created_at": "2025-05-06T07:51:36Z",
+    "updated_at": "2025-06-11T10:12:50Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4827",
+    "body": "The package `org.springframework.batch.core.explore` is really about exploring the job repository and therefore should be under `org.springframework.batch.core.repository`.\n\nThis issue is to move that package without any functional modification.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d7e13fb7f50dd19a85f8ce76f765b45e39a54846"
+      ]
+    }
+  },
+  {
+    "number": 4829,
+    "title": "Rename JobRepositoryFactoryBean to JdbcJobRepositoryFactoryBean",
+    "state": "closed",
+    "created_at": "2025-05-06T14:42:24Z",
+    "updated_at": "2025-06-11T09:26:48Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4829",
+    "body": "After the introduction of `MongoJobRepositoryFactoryBean` in v5.2, `JobRepositoryFactoryBean` should be renamed to `JdbcJobRepositoryFactoryBean` to reflect the fact that it configures a JDBC-based job repository.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: deprecation"
+    ],
+    "comments": [
+      {
+        "author": "minkukjo",
+        "created_at": "2025-05-06T15:34:59Z",
+        "body": "@fmbenhassine \nIf it's just a name change, I'd like to work on it. Can I take it?"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-05-06T16:38:16Z",
+        "body": "@minkukjo Thank you for your offer to help! but this is already done. I just need to push the change set."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "46d42ab757941d6dd56dc32fd6e468b6eb347642"
+      ]
+    }
+  },
+  {
+    "number": 4832,
+    "title": "Make JobOperator extend JobLauncher",
+    "state": "closed",
+    "created_at": "2025-05-07T20:00:08Z",
+    "updated_at": "2025-06-11T10:14:22Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4832",
+    "body": "`JobOperator` is nothing more than a `JobLauncher` with more capabilities (it's `start` method uses `JobLauncher#run` behind the scenes). Therefore, it should technically be an extension of `JobLauncher`, adding stop/restart functionality on top of just running jobs.\n\nThis issue is to make `JobOperator` extend `JobLauncher`, which will greatly simplify the default batch configuration by removing the requirement to define two beans instead of one.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "fc4a66516ac7048e610065628793c62dcc646db5"
+      ]
+    }
+  },
+  {
+    "number": 4833,
+    "title": "Improve JobOperator by reducing its scope to job operations only",
+    "state": "closed",
+    "created_at": "2025-05-07T20:38:09Z",
+    "updated_at": "2025-06-11T09:25:14Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4833",
+    "body": "As of v5.2, the `JobOperator` interface is exposing functionality that is out of its initial scope (ie operating batch jobs like start/stop/restart, etc).\n\nSeveral methods like `getJobInstance`, `getExecutions` and similar methods have duplicate implementations in `JobRepository` and `JobExplorer` which is not ideal from a maintenance perspective . Moreover, some methods deal with job parameters conversion from string literals to domain objects which is not correct in a high-level API like `JobOperator` (those could be part of `CommandLineJobRunner` for example).\n\nThose methods should be deprecated in v6.0 and removed in v6.2 or later.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "afdd842bc3e6d599e475f597f8becc12cc685fbd"
+      ]
+    }
+  },
+  {
+    "number": 4834,
+    "title": "Rename SimpleJobOperator to TaskExecutorJobOperator",
+    "state": "closed",
+    "created_at": "2025-05-07T21:51:53Z",
+    "updated_at": "2025-06-11T09:27:04Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4834",
+    "body": "After #4832 , `SimpleJobOperator` should be renamed to `TaskExecutorJobOperator` to reflect the fact that it is based on a task executor for starting jobs.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "e5bda0d40ae4ae1dedaca4d9339b29488225db83"
+      ]
+    }
+  },
+  {
+    "number": 4844,
+    "title": "Update GraalVM runtime hints",
+    "state": "closed",
+    "created_at": "2025-05-22T13:06:35Z",
+    "updated_at": "2025-08-04T12:44:23Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4844",
+    "body": "Related to https://github.com/spring-projects/spring-framework/issues/33847, runtime hints for Spring Batch should be updated accordingly.\n\nSee https://github.com/spring-projects/spring-framework/wiki/Spring-Framework-7.0-Release-Notes#graalvm-native-applications",
+    "labels": [
+      "type: task",
+      "in: core",
+      "related-to: native"
+    ],
+    "comments": [
+      {
+        "author": "goafabric",
+        "created_at": "2025-08-04T10:53:35Z",
+        "body": "@fmbenhassine \nAs an fyi, while trying out boot 4.0.0-M1 in combination with GraalVM 24 (both local and paketo),\nthe native compile now breaks with the exception below.\nWith GraalVM 21 the compile works, but already with simple Spring Boot Apps, the Application wont start, due to another issue.\n\nWhile the build will work, when overriding the CoreRuntimeHints and escaping the curly braces \"\\\\{\", the compile works.\nThough i am not sure if this is the correct way to do it.\n\n\n--- cut ---\nError: Error: invalid glob patterns found:\nPattern ALL_UNNAMED/org/springframework/batch/core/schema-{h2,derby,hsqldb,sqlite,db2,hana,mysql,mariadb,oracle,postgresql,sqlserver,sybase}.sql : Pattern contains unescaped character {. Pattern contains unescaped character }. \n\n"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-08-04T11:14:16Z",
+        "body": "@goafabric Thank you for reporting this! I created #4937 to track this failure and planned to fix it in the upcoming 6.0.0-M2. FYI, I have planned to add a CI build against GraalVM to avoid this kind of issues (#3871)."
+      },
+      {
+        "author": "goafabric",
+        "created_at": "2025-08-04T12:44:23Z",
+        "body": "> [@goafabric](https://github.com/goafabric) Thank you for reporting this! I created [#4937](https://github.com/spring-projects/spring-batch/issues/4937) to track this failure and planned to fix it in the upcoming 6.0.0-M2. FYI, I have planned to add a CI build against GraalVM to avoid this kind of issues ([#3871](https://github.com/spring-projects/spring-batch/issues/3871)).\n\nthank you for the very fast reply and creating the issue !\ni was unsure at first if to report this, due to the milestone and how .. but its awesome that it was so easy"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "580bd307a31726fa5e119a86161f05a290b44cef",
+        "f6f31cacc779f06cafb9cac275720f2a46831086",
+        "369652cc73d227690de065d0fe3c16a14631774f"
+      ]
+    }
+  },
+  {
+    "number": 4845,
+    "title": "Improve JobOperator API by using domain types instead of primitive types",
+    "state": "closed",
+    "created_at": "2025-05-22T16:06:59Z",
+    "updated_at": "2025-06-11T09:29:54Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4845",
+    "body": "`JobOperator` is the main high-level API to operate batch jobs. However, it is currently designed as a low-level API by using primitive types in most method signatures. This makes implementations deal with concerns that should not addressed there in the first place.\n\nFor example, starting a job with `start(String jobName, Properties parameters)` requires finding a job from a `JobRegistry` and using a `JobParametersConverter` to convert properties to `JobParameters`. This design makes the implementation require two collaborators (`JobRegistry` and `JobParametersConverter`), which could have been avoided by using domain types in the method signature like `#start(Job job, JobParameters parameters)`.\n\nAnother example is `stop(long jobExecutionId)` which requires to find the job execution by id, from which get the job name, then get the job itself from the registry, to finally being able to stop the job. This can be avoided by using `stop(JobExecution jobExecution)` instead.\n\nParameters conversion, job retrieval and other concerns should be part of a low level APIs like `CommandLineJobLauncher` or `JmxConsoleAdapter`, but not `JobOperator`. Core domain APIs should be designed with domain types in method signatures.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: breaking-change",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8dde8529d36b646b33a1711219a1b1e8a046345a"
+      ]
+    }
+  },
+  {
+    "number": 4846,
+    "title": "Rename JobExplorerFactoryBean to JdbcJobExplorerFactoryBean",
+    "state": "closed",
+    "created_at": "2025-05-23T13:21:53Z",
+    "updated_at": "2025-06-11T09:27:45Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4846",
+    "body": "After the introduction of `MongoJobExplorerFactoryBean` in v5.2, `JobExplorerFactoryBean` should be renamed to `JdbcJobExplorerFactoryBean ` to reflect the fact that it configures a JDBC-based job explorer.\n",
+    "labels": [
+      "type: task",
+      "in: core",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d6ce07ba8359083a36cef4df2a578b1928ab8e63"
+      ]
+    }
+  },
+  {
+    "number": 4847,
+    "title": "Core API simplification",
+    "state": "closed",
+    "created_at": "2025-05-23T14:00:59Z",
+    "updated_at": "2025-06-12T08:54:50Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4847",
+    "body": "This issue is to try to simplify and reduce the API surface for a typical Spring Batch application. I have been collecting feedback from the community over the years and the common pain points are:\n\n### The API is too large and overwhelming\n\nThis has been raised several times in the past (#3242, #2901). A lot of accidental complexity has been added over the years for no real added value. The typical example is supporting modularity through `@EnableBatchProcessing(modular = true)` to avoid job name collisions in the `JobRegistry`. The amount of classes and interfaces needed for this feature (`JobFactory`, `ApplicationContextFactory`, `ApplicationContextJobFactory`, `ReferenceJobFactory`, `AbstractApplicationContextFactory` (with its two extensions), `JobLoader`, `JobFactoryRegistrationListener` and others) does not justify the real gain. This could have been left to the user by leveraging `GroupAwareJob`s or using a simple naming convention like `namespace.jobName`.\n\n### The need to define a lot of beans and configurations for a typical app\n\nFrom core infrastructure components to custom scopes to batch artefacts, the number of beans required to run a simple job is overwhelming. For example, there are two entry points to run a job: `JobOperator#start` and `JobLauncher#run` with different method signatures. `JobOperator` is sufficient, there is no need to have a functional interface to only run a job (and probably another one to stop a job, etc). `JobLauncher` is an example of unnecessary complexity (it was not retained in the Batch JSR for a good reason).\n\nSimilar case for `JobRepository` and `JobExplorer`. #4824 explains with details the confusion around these two beans. It is almost impossible to have a Spring Batch app without a `JobRepository` (unless it is a tool app to explore the meta-data). So having to define a `JobExplorer` *in addition* to a `JobRepository` is counter-intuitive. By the way, the `JobExplorer` concept is another example of unnecessary complexity (FTR, this too was not retained in the Batch JSR).\n\n### Several ways to do the same thing which can be confusing\n\nSome examples:\n\n- There are at least three ways to populate a `JobRegistry`: a `JobRegistryBeanPostProcessor` (recently replaced with `JobRegistrySmartInitializingBean`), `AutomaticJobRegistrar` and manual job registration.\n- There are two ways to launch a job: by using a `JobLauncher` or a `JobOperator` each with its own set of configurations and different method signatures.\n\nIdeally, there should be only one way to do things.\n\nSome of these issues have been addressed in v5.0 (like the removal of `JobBuilderFactory`, `StepBuilderFactory` and some other APIs), but there are still some duplicate functionalities. I believe the next major version is a good opportunity to address these issues.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c872a12ad5fdc191a2637ed04775160f8fe7632e",
+        "bfe487ccccfd2b5d7f82b07386094fdaaddd06c1",
+        "bcf4f724addc96c5beed2447ad9423008a3d6da8"
+      ]
+    }
+  },
+  {
+    "number": 4848,
+    "title": "Move DAOs implementations to separate packages",
+    "state": "closed",
+    "created_at": "2025-05-23T14:11:31Z",
+    "updated_at": "2025-06-11T09:26:24Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4848",
+    "body": "After the introduction of the MongoDB job repository in v5.2, the JDBC and Mongo DAOs implementations should be moved to dedicated packages.",
+    "labels": [
+      "type: task",
+      "in: core",
+      "related-to: job-repository",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9eafb31af4b5a0b019ca3d03a0dfb0278d378883"
+      ]
+    }
+  },
+  {
+    "number": 4849,
+    "title": "Move core partitioning APIs under org.springframework.batch.core.partition",
+    "state": "closed",
+    "created_at": "2025-05-23T14:39:54Z",
+    "updated_at": "2025-06-11T09:27:28Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4849",
+    "body": "Several core partitioning APIs like `Partitioner`, `StepExecutionAggregator` and `PartitionStep` are currently under the `org.springframework.batch.core.partition.support` package. Those are not \"support\" interfaces and classes and should be moved to the `org.springframework.batch.core.partition` package.\n",
+    "labels": [
+      "type: task",
+      "in: core",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "08c4cb16b854b773f974eeb2073a04c56a0eb6ab"
+      ]
+    }
+  },
+  {
+    "number": 4854,
+    "title": "Remove usage of JobFactory in JobRegistry",
+    "state": "closed",
+    "created_at": "2025-06-02T14:00:48Z",
+    "updated_at": "2025-06-02T16:30:30Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4854",
+    "body": "Along the lines of #4847 , this issue is to remove the usage of `JobFactory` from `JobRegistry` (and `MapJobRegistry`).\n\nThe API change is as follows:\n\n```diff\n-- void register(JobFactory jobFactory) throws DuplicateJobException;\n++ void register(Job job) throws DuplicateJobException;\n```\n\n`JobFactory` is not a public (but not \"user facing\") API, but is still used in a user facing API. To simplify things, registering a job in a registry should not be done through a factory.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ce5ef2f8b69ecd3bfe81ce218284b2710706a101",
+        "a7f090a45d1aa055e3bdfbc4fdfd06d02ed6d0ac"
+      ]
+    }
+  },
+  {
+    "number": 4855,
+    "title": "Make MapJobRegistry smart enough to auto register jobs defined in the application context",
+    "state": "closed",
+    "created_at": "2025-06-02T14:12:45Z",
+    "updated_at": "2025-06-02T16:30:30Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4855",
+    "body": "As of v5.2, it is required to populate the  job registry with a different component (like a bean post processor, or smart initializing bean or something similar) before being able to use it with the `JobOperator`.\n\nThis feature request is to make the `MapJobRegistry` smart enough to auto register jobs defined in the application context. This would remove the need for a distinct component to populate the registry and therefore simplifies the configuration. While this could be done by creating a `SmartMapJobRegistry` that extends `MapJobRegistry`, I would keep things simple along the lines of #4847 and make `MapJobRegistry` itself a `SmartInitializingSingleton`.\n\nOther jobs defined outside the application context could be registered manually by the user (same as before).",
+    "labels": [
+      "type: feature",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a7f090a45d1aa055e3bdfbc4fdfd06d02ed6d0ac"
+      ]
+    }
+  },
+  {
+    "number": 4856,
+    "title": "Deprecate JobRegistrySmartInitializingSingleton",
+    "state": "closed",
+    "created_at": "2025-06-02T14:27:09Z",
+    "updated_at": "2025-06-02T16:30:31Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4856",
+    "body": "`JobRegistrySmartInitializingSingleton` was introduced in v5.1.1 as an \"ad-hoc\" solution to #4519 and #4489.\n\nAfter #4855 , this component is redundant and should be deprecated for removal.\n",
+    "labels": [
+      "in: core",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a7f090a45d1aa055e3bdfbc4fdfd06d02ed6d0ac"
+      ]
+    }
+  },
+  {
+    "number": 4858,
+    "title": "Add ability to use bean names for jobs and steps",
+    "state": "closed",
+    "created_at": "2025-06-03T20:52:00Z",
+    "updated_at": "2025-06-03T20:58:52Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4858",
+    "body": "As of v5.2, both `AbstractJob` and `AbstractStep` implement `BeanNameAware`. So it could be possible to use the bean name as a default job/step name in order to avoid duplication:\n\n``` diff\n@Bean\npublic Job job(JobRepository jobRepository, Step step) {\n--\treturn new JobBuilder(\"job\", jobRepository)\n++\treturn new JobBuilder(jobRepository)\n                           .start(step)\n                           .build();\n}\n```\n\nObviously, the current constructor that takes the job/step name should remain to be able to specify a different name if needed.\n\ncc @joshlong",
+    "labels": [
+      "type: feature",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bb2440fea3a1a4685acba66261bebd49fa8c382d"
+      ]
+    }
+  },
+  {
+    "number": 4866,
+    "title": "Deprecate modular job configuration through EnableBatchProcessing",
+    "state": "closed",
+    "created_at": "2025-06-09T10:15:07Z",
+    "updated_at": "2025-12-09T20:04:02Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4866",
+    "body": "The support of job configuration modularity through `@EnableBatchProcessing(modular = true)` to avoid job name collisions in the `JobRegistry` requires an unnecessary amount of accidental complexity both in terms of APIs the user has to provide as well as implementation details. The amount of classes and interfaces needed for this feature (`JobFactory`, `ApplicationContextFactory`, `ApplicationContextJobFactory`, `ReferenceJobFactory`, `AbstractApplicationContextFactory` (with its two extensions), `JobLoader`, `JobFactoryRegistrationListener` and others) does not justify the real gain. This feature could be achieved by leveraging `GroupAwareJob`s or  by using a simple naming convention like `namespace.jobName`.\n\nThis feature should be deprecated in v6 and removed in 6.2 or later.",
+    "labels": [
+      "type: task",
+      "in: core",
+      "api: deprecation"
+    ],
+    "comments": [
+      {
+        "author": "kzander91",
+        "created_at": "2025-10-23T08:09:15Z",
+        "body": "@fmbenhassine Can we get some guidance on what `GroupAwareJob` is and how to use it? The reference documentation doesn't mention that at all, and searching through the source code didn't really tell me how to use that as well.\n\nI was using modular configuration to get some nice isolation between my jobs, where each job was running in it's own context and could use the same name for the various reader/writer beans and such.\n\nThe migration guide is not helpful here either, it basically just states to \"use `GroupAwareJob` or context hierarchies\", but doesn't give any hints on how that would work (particularly in a Spring Boot app, but I'm sure that non-Boot folks would appreciate that as well)."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-10-23T13:21:09Z",
+        "body": "Yes, I will update the migration guide with a practical example.\n\nCan you please share your use case with a code example? \n\nAlso, I personally never used that feature (and [seems like I am not the only one](https://github.com/spring-projects/spring-batch/discussions/4871)) so I am genuinely curious to have some feedback from real users of it. How would you address your requirement if Spring Batch did not provide that feature?"
+      },
+      {
+        "author": "kzander91",
+        "created_at": "2025-10-28T12:55:15Z",
+        "body": "> Yes, I will update the migration guide with a practical example.\n\nThank you 🙏\n\n> Can you please share your use case with a code example?\n\nSure. I have structured my app like this:\n```\ncom.acme/\n├── main/\n│   └── @SpringBootApplication(scanBasePackages= \"com.acme.config.common\")\n└── config/\n    ├── common/\n    │   ├── @Configuration SomeCommonConfiguration.java\n    │   ├── @Component SomeSharedComponent.java\n    │   └── @EnableBatchProcessing(modular = true) @Configuration JobContextsConfiguration.java\n    └── jobs/\n        ├── foojob/\n        │   ├── @ComponentScan @Configuration FooJobConfiguration.java\n        │   ├── @Component Reader.java\n        │   ├── @Component Processor.java\n        │   └── @Component Writer.java\n        └── barjob/\n            ├── @ComponentScan @Configuration BarJobConfiguration.java\n            ├── @Component Reader.java\n            ├── @Component Processor.java\n            └── @Component Writer.java\n```\n* Common configuration classes and components shared across all jobs reside in a `config.common` package that is being component-scanned.\n* Individual job configurations and beans specific for those jobs reside in their own packages and are not included in Spring Boot's component scan.\n* `JobContextsConfiguration` (included in Boot's component scan) defines one bean like this for each job:\n  ```java\n  @Bean\n  @Profile(\"!test\")\n  ApplicationContextFactory fooJobContextFactory() {\n      return new GenericApplicationContextFactory(FooJobConfiguration.class);\n  }\n  ```\n* The job-specific configuration classes (`FooJobConfiguration` and `BarJobConfiguration`) component-scan their package (and sub-packages).\n  Each of them also defines a single `Job` bean, so\n  ```java\n  @Bean Job fooJob() { ... }\n  ```\n* Most of my jobs are pretty simple and structured similarly: They mostly fetch data from one source, _maybe_ transform it slightly and then write it to a sink. My reader and writer bean definitions are thus very similar and simple bean names like `reader` and `writer` are used.\n* Because each job runs in its own application context, autowiring by type and using the same bean names just works and makes the entire setup pretty simple to understand and extend (new job? Just create a new package and define a new `ApplicationContextFactory`).\n\nAs you can see, I'm using the modular configuration mostly for convenience. As such _not_ having it wouldn't be the end of the world, but makes the effort to migrate to Spring Batch 6 way more involved than it would otherwise have been.\n\nThis structure also simplifies testing using `@SpringBatchTest`, because the `JobLauncherTestUtils` bean expects _a single_ `Job` bean. For example, the tests for the foo job use `@SpringBootTest @SpringBatchTest @ActiveProfiles(\"test\") @Import(FooJobConfiguration.class)`, to get the same context as the job itself, and since the `test` profile disables the `ApplicationContextFactory` beans, the resulting test context only knows a single `Job`, so `JobLauncherTestUtils` is happy."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-10-30T05:38:01Z",
+        "body": "Thank you for the feedback! I am really keen to help here. Can you please package that in a GitHub repo or a zip I can work on? I will create a diff patch to illustrate the migration path in a practical way. Many thanks upfront."
+      },
+      {
+        "author": "kzander91",
+        "created_at": "2025-11-02T14:43:43Z",
+        "body": "[demo9.zip](https://github.com/user-attachments/files/23290944/demo9.zip)\n\nThis is a project with a structure similar to what I have described above."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-02T15:53:23Z",
+        "body": "@kzander91 Thank you very much for providing a sample app! Since this ticket is closed, I created #5072 to track the documentation improvement. Let's continue there."
+      },
+      {
+        "author": "marbon87",
+        "created_at": "2025-11-12T12:05:54Z",
+        "body": "Hi @fmbenhassine,\n\nwe are also using the AutomaticJobRegistrar in our company internal framework for about 100 batch apps to create a separate context for each job with the same benefits @kzander91 already mentioned. \nCan you give some information why AutomaticJobRegistrar and the corresponding classes are deprecated?\nFrom my point of view it is a useful feature and i do not undestand why it should be removed.\n\nRegards,\nMark"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-19T20:53:52Z",
+        "body": "Hi @marbon87 ,\n\n> Can you give some information why AutomaticJobRegistrar and the corresponding classes are deprecated?\n\nThe rationale behind this decision is explained in the description of this issue: https://github.com/spring-projects/spring-batch/issues/4866#issue-3129848683\n\nFTR, I added an example of how to migrate this feature to v6 here: https://github.com/spring-projects/spring-batch/wiki/Spring-Batch-6.0-Migration-Guide#changes-related-to-the-modular-batch-configurations-through-enablebatchprocessingmodular--true. Using Spring's context hierarchies is more straightforward and way easier to think about than the ton of classes that are needed to implement and use that feature prior to v6. \n\nPlease let me know if you need support in migrating your Spring Batch jobs to v6, I would be happy to help!\n\nBest regards,\nMahmoud"
+      },
+      {
+        "author": "marbon87",
+        "created_at": "2025-11-25T12:39:13Z",
+        "body": "Hi @fmbenhassine ,\n\nthanks for your support. We have a webmvc-controller for starting jobs and use the jobregistry with a logic like this:\n```\n\t@NonNull\n\tpublic Optional<JobExecution> start(@NonNull String jobName,\n\t\t\t\t\t\t\t\t\t\t@NonNull JobParameters jobParameters)\n\t\tthrows JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersConversionException, JobRestartException, InvalidJobParametersException {\n\t\tJob job = jobRegistry.getJob(jobName);\n\t\tif (job == null) {\n\t\t\treturn Optional.empty();\n\t\t}\n\t\tJobParametersIncrementer jobParametersIncrementer = job.getJobParametersIncrementer();\n\t\tif (jobParametersIncrementer != null) {\n\t\t\tjobParameters = jobParametersIncrementer.getNext(jobParameters);\n\t\t}\n\t\treturn jobOperator.start(job, jobParameters);\n\t}\n```\n\nDo you have an advice how this can be implemented without AutomaticJobRegistrar and JobLoader.\n\nBest regards, Mark"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-25T12:55:35Z",
+        "body": "@marbon87 Since this ticket is closed, please open a \"Migration Support\" request in [GitHub Discussions](https://github.com/spring-projects/spring-batch/discussions/categories/migration-support) (with all the details and the code sample to migrate)  and I will help there. Thank you upfront."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-09T20:04:02Z",
+        "body": "@marbon87 I created #5154 for your support request here: https://github.com/spring-projects/spring-batch/issues/4866#issuecomment-3575452892. Let's continue there."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "bcf4f724addc96c5beed2447ad9423008a3d6da8"
+      ]
+    }
+  },
+  {
+    "number": 4867,
+    "title": "Move listener APIs under core.listener package",
+    "state": "closed",
+    "created_at": "2025-06-09T10:24:14Z",
+    "updated_at": "2025-06-09T10:33:09Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4867",
+    "body": "As of v5.2, all listeners APIs are defined under the `core` package while they should be under the (currently existing) `core.listener` package.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "90f7398222e22aef57b3207be3daa11f0b2fd668"
+      ]
+    }
+  },
+  {
+    "number": 4877,
+    "title": "Move core APIs in dedicated packages",
+    "state": "closed",
+    "created_at": "2025-06-12T08:43:52Z",
+    "updated_at": "2025-06-12T08:54:51Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4877",
+    "body": "As of v5.2, all APIs related to jobs and steps are mixed and defined under the same package `org.springframework.batch.core`, even though there are already sub-packages `core.job` and `core.step`.\n\nFor better consistency and cohesion, job/step related APIs should be moved to their dedicated sub-packages.",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d95397faf023ee3293ee10b41977231734a0f5d1"
+      ]
+    }
+  },
+  {
+    "number": 4886,
+    "title": "Remove unnecessary generic from JobKeyGenerator interface",
+    "state": "closed",
+    "created_at": "2025-06-13T14:08:03Z",
+    "updated_at": "2025-07-14T13:06:07Z",
+    "author": "patrickwinti",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4886",
+    "body": "The `JobKeyGenerator<T>` interface currently uses a generic type parameter `<T>` to represent the source used to generate a job key. However, in practice, the implementations and usages of this interface rely on JobParameters as the source type.\n\nSince the generic parameter is not providing meaningful flexibility and introduces unnecessary complexity (e.g., requiring casts or wildcard types in consumers), it would be cleaner to refactor the interface to:\n\n```\npublic interface JobKeyGenerator {\n    String generateKey(JobParameters source);\n}\n```\n",
+    "labels": [
+      "in: core",
+      "type: enhancement",
+      "api: breaking-change"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-07-14T12:55:02Z",
+        "body": "I agree, thank you for raising this!\n\nThis is a good candidate for a major release so I will plan it for v6."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-07-14T13:06:06Z",
+        "body": "Resolved with #4887."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 4899,
+    "title": "Introduce a modern command line batch operator",
+    "state": "closed",
+    "created_at": "2025-07-04T07:55:55Z",
+    "updated_at": "2025-07-14T10:28:03Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4899",
+    "body": "Spring Batch provided a `CommandLineJobRunner` since version 1. While this runner served its purpose well over the years, it started to show some limitations when it comes to extensibility and customisation. Many issues like static initialisation, non-standard way of handling options and parameters, lack of extensibility, etc have been reported like #1309 and #1666.\n\nMoreover, all these issues made it impossible to reuse that runner in Spring Boot, which resulted in duplicate code in both projects as well behaviour divergence (like job parameters incrementer behaviour differences) that is confusing to many users.\n\nThe goal of this issue is to create a modern version of CommandLineJobRunner that is customisable, extensible and updated to the new changes introduced in Spring Batch 6.",
+    "labels": [
+      "type: feature",
+      "in: core",
+      "status: for-internal-team"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "e6a80889cb74409105e5df4fd092ff52f994b527"
+      ]
+    }
+  },
+  {
+    "number": 4910,
+    "title": "Incorrect handling of job parameters when using a JobParametersIncrementer",
+    "state": "closed",
+    "created_at": "2025-07-16T09:51:18Z",
+    "updated_at": "2025-07-22T12:31:48Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4910",
+    "body": "The `JobParametersIncrementer` concept is a useful abstraction to use when there is a natural sequence of job instances (hourly, daily, etc). The goal of this abstraction is to bootstrap the initial set of job parameters and let the framework calculate the parameters of the next instance in the sequence. This was clear since the initial design of the `JobOperator#startNextInstance(String jobName)` method (notice the lack of job parameters in the signature). The concept is similar to database sequences that are initialized once by the user and incremented automatically by the database system (ie not altered by the user anymore).Therefore, it does not make sense to provide job parameters when using an incrementer.\n\nUnfortunately, this feature has been incorrectly used through the command line runners of Spring Batch and Spring Boot for many years and I have seen users messing with job parameters between sequences, which goes against the initial intent of the incrementer concept, and which in turn caused several confusing issues like #882, https://github.com/spring-projects/spring-boot/issues/22602 and https://github.com/spring-projects/spring-boot/issues/14484. If someone starts to modify the sequence's logic and altering job parameters in between instances, (s)he should not use an incrementer in the first place.\n\nv6 is a good opportunity to fix that. When a job parameters incrementer is attached to a job definition, the parameters of the next instance should be calculated by the framework, and any additional parameters supplied by the user should be ignored with a warning.",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "status: for-internal-team"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "72cd7bcbeec3097d2e5828dda6c2daf0b8b41d85",
+        "eb42128f448a4417600a96141b4299cbefe95eb5"
+      ]
+    }
+  },
+  {
+    "number": 4911,
+    "title": "Remove JobExplorer dependency in JobParametersBuilder",
+    "state": "closed",
+    "created_at": "2025-07-16T11:40:08Z",
+    "updated_at": "2025-07-16T18:25:00Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4911",
+    "body": "This is related to #4910 . The dependency to a JobExplorer in JobParametersBuilder is only used to calculate the next parameters of a job in the `getNextJobParameters(Job job)`.\n\nAs explained in #4910, the calculation of the job parameters of the next instance in a sequence should be based solely on the parameters of the previous instance. Therefore, the logic of that method should be moved to the `JobOperator#startNextInstance(Job)` method.",
+    "labels": [
+      "in: core",
+      "status: for-internal-team",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9209fb476d7c18d65716c92e5fa1431263b8f143"
+      ]
+    }
+  },
+  {
+    "number": 4914,
+    "title": "Incorrect warning when starting a job with an empty parameters set",
+    "state": "closed",
+    "created_at": "2025-07-18T08:31:13Z",
+    "updated_at": "2025-07-20T19:45:53Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4914",
+    "body": "After the introduction of #4910 , starting a job having an incrementer with an empty set of parameters results into an unnecessary  warning:\n\n```\n[main] WARN org.springframework.batch.core.launch.support.TaskExecutorJobOperator -  COMMONS-LOGGING Attempting to launch job 'job' which defines an incrementer with additional parameters={{}}. Those additional parameters will be ignored.\n```\n\nThis warning should be removed when the parameters set is empty.",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "980ff7b8d72bba7f8cfa0aa62fc057bc27a4aba0",
+        "e2dcee113dfe78627e1adbf12dfe2a91e89f306c"
+      ]
+    }
+  },
+  {
+    "number": 4917,
+    "title": "MessageChannelPartitionHandler not usable with non-jdbc job repository implementations",
+    "state": "closed",
+    "created_at": "2025-07-21T07:12:19Z",
+    "updated_at": "2025-07-21T09:03:59Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4917",
+    "body": "As of v5.2, in a remote partitioning setup with repository polling, the `MessageChannelPartitionHandler` is not usable with MongoDB as it requires a data source.\n\nThis handler should work against the job repository interface.",
+    "labels": [
+      "type: feature",
+      "in: integration",
+      "status: for-internal-team"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "61fc22652c9c1f3da38aea9b22cf80da4c5c7ea2"
+      ]
+    }
+  },
+  {
+    "number": 4918,
+    "title": "Replace usage of JobExplorer with JobRepository in StepExecutionRequestHandler",
+    "state": "closed",
+    "created_at": "2025-07-21T08:55:22Z",
+    "updated_at": "2025-07-21T09:04:00Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4918",
+    "body": "`StepExecutionRequestHandler` currently uses a `JobExplorer` which is now deprecated.\n\nThis issue is to replace the usage of `JobExplorer` with a `JobRepository`.",
+    "labels": [
+      "type: task",
+      "in: integration",
+      "status: for-internal-team",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "ce896128424e7673d1a9f2b884bb5866d296f8c4"
+      ]
+    }
+  },
+  {
+    "number": 4919,
+    "title": "Remove usage of JobExplorer in BatchIntegrationConfiguration",
+    "state": "closed",
+    "created_at": "2025-07-21T09:02:40Z",
+    "updated_at": "2025-07-21T09:04:00Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4919",
+    "body": "The configuration of the batch integration module (mainly the remote partitioning setup) programmatically and through `@EnableBatchIntegration` currently requires both a job repository and a job explorer.\n\nAfter #4824 , there is no need to configure a job explorer anymore. This issue is to remove the usage of `JobExplorer` in the `BatchIntegrationConfiguration` class and related APIs (`RemotePartitioningManagerStepBuilder[Factory]` and `RemotePartitioningWorkerStepBuilder[Factory]`).",
+    "labels": [
+      "type: task",
+      "in: integration",
+      "status: for-internal-team",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "9b7323f58000c3465f5a70afb9cbbc58612c2c2f"
+      ]
+    }
+  },
+  {
+    "number": 4920,
+    "title": "Rename JobLauncherTestUtils to JobOperatorTestUtils",
+    "state": "closed",
+    "created_at": "2025-07-21T10:43:15Z",
+    "updated_at": "2025-07-21T14:02:14Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4920",
+    "body": "After the deprecation of `JobLauncher` in favor of `JobOperator`, the utility `JobLauncherTestUtils` should be renamed to `JobOperatorTestUtils`.\n\nMethods starting with `launch*` should be renamed to `start*` to follow the name convention in the `JobOperator` interface.\n",
+    "labels": [
+      "in: test",
+      "type: task",
+      "status: for-internal-team",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "020c24a92925f108c038f464201ae868ed58b570"
+      ]
+    }
+  },
+  {
+    "number": 4921,
+    "title": "Deprecate StepRunner",
+    "state": "closed",
+    "created_at": "2025-07-21T14:43:15Z",
+    "updated_at": "2025-07-21T15:30:15Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4921",
+    "body": "`org.springframework.batch.test.StepRunner` has no added value except a single method to run a step in a surrounding \"fake\" single-step job. This class is not typically used by users, and contains similar/duplicate code found in `JobLauncherTestUtils` (`makeUniqueJobParameters()` vs `getUniqueJobParameters()`).\n\nIn the same spirit as #4847 , this class should be deprecated in v6 and marked for removal in v6.2.",
+    "labels": [
+      "in: test",
+      "type: task",
+      "status: for-internal-team",
+      "api: deprecation"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "0aae4e91089df70f6f9e9750c95a3c9c30a7ff73"
+      ]
+    }
+  },
+  {
+    "number": 4923,
+    "title": "Replace usage of JobLauncher with JobOperator in JobStep",
+    "state": "closed",
+    "created_at": "2025-07-22T06:12:43Z",
+    "updated_at": "2025-07-22T10:16:49Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4923",
+    "body": "After the deprecation of `JobLauncher`, `JobStep` should be updated to use a `JobOperator` instead.\n",
+    "labels": [
+      "type: task",
+      "in: core",
+      "status: for-internal-team",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "b105c8e422a8d8b7f86c56746c8533c2dcae6a20"
+      ]
+    }
+  },
+  {
+    "number": 4924,
+    "title": "Replace usage of JobLauncher with JobOperator in JobLaunchingGateway and JobLaunchingMessageHandler",
+    "state": "closed",
+    "created_at": "2025-07-22T06:22:53Z",
+    "updated_at": "2025-07-22T10:16:49Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4924",
+    "body": "After the deprecation of `JobLauncher`, `JobLaunchingGateway` and `JobLaunchingMessageHandler` should be updated to use `JobOperator` instead.",
+    "labels": [
+      "type: task",
+      "in: integration",
+      "status: for-internal-team",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "c34a1fc73d632bc9990169333c8ca47355c8b077"
+      ]
+    }
+  },
+  {
+    "number": 4927,
+    "title": "Replace usage of JobExplorer with JobRepository in SystemCommandTasklet",
+    "state": "closed",
+    "created_at": "2025-07-22T08:59:36Z",
+    "updated_at": "2025-07-22T10:16:50Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4927",
+    "body": "After the deprecation of `JobExplorer`, `SystemCommandTasklet` should be updated to use `JobRepository` instead.\n",
+    "labels": [
+      "type: task",
+      "in: core",
+      "status: for-internal-team",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a8e138cbf488596f48e9c8f49522fa7235a32943"
+      ]
+    }
+  },
+  {
+    "number": 4928,
+    "title": "Replace usage of JobExplorer with JobRepository in RemoteStepExecutionAggregator",
+    "state": "closed",
+    "created_at": "2025-07-22T09:02:23Z",
+    "updated_at": "2025-07-22T10:16:50Z",
+    "author": "fmbenhassine",
+    "url": "https://github.com/spring-projects/spring-batch/issues/4928",
+    "body": "After the deprecation of `JobExplorer`, `RemoteStepExecutionAggregator` should be updated to use `JobRepository` instead.",
+    "labels": [
+      "type: task",
+      "in: core",
+      "status: for-internal-team",
+      "api: breaking-change"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4b2586d90c3059045ebb7e2383f50f70cff1b23e"
+      ]
+    }
+  }
+]
