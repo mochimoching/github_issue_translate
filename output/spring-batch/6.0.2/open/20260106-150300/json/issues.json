@@ -1,0 +1,116 @@
+[
+  {
+    "number": 5106,
+    "title": "Intermittent OptimisticLockingFailureException when starting job using jobOperator.start() with asyncTaskExecutor",
+    "state": "open",
+    "created_at": "2025-11-25T03:07:33Z",
+    "updated_at": "2026-01-05T14:26:24Z",
+    "author": "scottgongsg",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5106",
+    "body": "**Bug description**\nIntermittent OptimisticLockingFailureException when starting job using jobOperator.start() with asyncTaskExecutor\n\n**Environment**\nSpring Boot 4.0.0\nSpring Batch 6.0.0\nJava 21\n\n**Steps to reproduce**\n1) Create a new Spring Boot project through the Initializr with Spring Batch and Spring Data Jpa selected.\n2) Create a configuration class and annotate it with @EnableBatchProcessing and @EnableJdbcJobRepository\n3) Implement a simple job and create jobOperator using asyncTaskExecutor \n4) Using jobOperator.start() to start the job \n5) Intermittent OptimisticLockingFailureException happend in the JdbcJobExecutionDao.updateJobExecution() \n6) Based on my debug, I found that Job instance is not inserted in the BATCH_JOB_EXECUTION table sometimes but job execution is launched in a new Thread using the asyncTaskExecutor (this is in the TaskExecutorJobLauncher class),  and unable to find the job execution record in table then OptimisticLockingFailureException is happend. \n\n**Expected behavior**\nJob should run without issue always. \n",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "has: votes",
+      "has: minimal-example"
+    ],
+    "comments": [
+      {
+        "author": "ahoehma",
+        "created_at": "2025-12-01T13:45:21Z",
+        "body": "Not exactly what I'm fighting with :-) But I will watch the feedback here as well.\n\n(I started this discussion: https://github.com/spring-projects/spring-batch/discussions/5121)"
+      },
+      {
+        "author": "phactum-mnestler",
+        "created_at": "2025-12-17T14:11:43Z",
+        "body": "We're seeing the same issue as described. I created a minimal reproducer here: https://github.com/phactum-mnestler/spring-batch-reproducer\nBased on the stacktrace, it appears the issue is a race condition between the async runnable of the `TaskExecutorJobLauncher` and the enclosing `finally` clause:\n```\norg.springframework.dao.OptimisticLockingFailureException: Attempt to update job execution id=1 with wrong version (0), where current version is 1\n\tat org.springframework.batch.core.repository.dao.jdbc.JdbcJobExecutionDao.updateJobExecution(JdbcJobExecutionDao.java:302) ~[spring-batch-core-6.0.1.jar:6.0.1]\n\tat org.springframework.batch.core.repository.support.SimpleJobRepository.update(SimpleJobRepository.java:152) ~[spring-batch-core-6.0.1.jar:6.0.1]\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]\n        ----- AOP traces skipped ---\n\tat jdk.proxy3/jdk.proxy3.$Proxy85.update(Unknown Source) ~[na:na]\n\tat org.springframework.batch.core.job.AbstractJob.updateStatus(AbstractJob.java:420) ~[spring-batch-core-6.0.1.jar:6.0.1]\n\tat org.springframework.batch.core.job.AbstractJob.execute(AbstractJob.java:289) ~[spring-batch-core-6.0.1.jar:6.0.1]\n\tat org.springframework.batch.core.launch.support.TaskExecutorJobLauncher$1.run(TaskExecutorJobLauncher.java:220) ~[spring-batch-core-6.0.1.jar:6.0.1]\n```\nThe `finally`-clause was not present in Spring Batch 5.x, which only updated the job execution if the `Runnable` wasn't able to be scheduled.\n\nWe're seeing this issue persist even with the newly released 6.0.1 version"
+      },
+      {
+        "author": "licenziato",
+        "created_at": "2025-12-17T15:35:10Z",
+        "body": "I saw the same issue and the same root cause, as workaround setting the `ThreadPoolTaskExecutor` used by `JobOperator` as a single thread executor solved the race condition, waiting for a proper fix:\n\n```\n    @Bean\n    public JobOperatorFactoryBean jobOperator(JobRepository jobRepository) {\n        ThreadPoolTaskExecutor taskExecutor = new ThreadPoolTaskExecutor();\n        taskExecutor.setCorePoolSize(1);\n        taskExecutor.setMaxPoolSize(1);\n        taskExecutor.afterPropertiesSet();\n\n        JobOperatorFactoryBean jobOperatorFactoryBean = new JobOperatorFactoryBean();\n        jobOperatorFactoryBean.setJobRepository(jobRepository);\n        jobOperatorFactoryBean.setTaskExecutor(taskExecutor);\n        return jobOperatorFactoryBean;\n    }\n\n```"
+      },
+      {
+        "author": "kizombaDev",
+        "created_at": "2025-12-19T13:19:53Z",
+        "body": "We are currently unfortunately running into the same problem with Spring Batch 6.0.1, MongoDB, and a `ThreadPoolTaskExecutor`.\n\nI start a job using `jobOperator.start(job, new JobParameters())` and immediately get a `DataIntegrityViolationException`.\n\nI can confirm that the problem is caused by the call to `this.jobRepository.update(jobExecution);` in the finally block of the method\n`org.springframework.batch.core.launch.support.TaskExecutorJobLauncher#launchJobExecution`.\n\nI created a reproducer with a mongoDB: https://github.com/kizombaDev/spring-batch-async-bug-reproducer"
+      },
+      {
+        "author": "banseok1216",
+        "created_at": "2025-12-21T08:45:36Z",
+        "body": "In TaskExecutorJobLauncher.launchJobExecution(..), consider removing the unconditional jobRepository.update(jobExecution) after successful submission to the TaskExecutor, and keep the update only in the TaskRejectedException path.\n\nFor accepted tasks, the job thread will update the JobExecution anyway; the extra launcher-thread update can race and avoid trigger OptimisticLockingFailureException.\n\n```java\ncatch (TaskRejectedException e) {\n    jobExecution.upgradeStatus(BatchStatus.FAILED);\n    if (ExitStatus.UNKNOWN.equals(jobExecution.getExitStatus())) {\n        jobExecution.setExitStatus(ExitStatus.FAILED.addExitDescription(e));\n    }\n    // keep this: the job thread will never run in this case\n    this.jobRepository.update(jobExecution);\n}\n\n// no unconditional update here: for accepted tasks, the job thread persists JobExecution updates\n```"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-21T13:21:29Z",
+        "body": "Thank you all for reporting this issue and for providing analysis / reproducer!\n\nThis seems like a regression in #3637. I will plan the fix for the next patch version 6.0.2."
+      },
+      {
+        "author": "StefanMuellerCH",
+        "created_at": "2026-01-05T14:26:24Z",
+        "body": "Same problem here, but the fix from [licenziato](https://github.com/licenziato) above did not help, as the `ThreadPoolTaskExecutor`, even with size 1, executes the job itself in another thread as the `TaskExecutorJobLauncher `calls the update. I had to switch to the `SyncTaskExecutor` for the bug to be solved:\n\n\n```\n@Bean\npublic JobOperatorFactoryBean jobOperator(JobRepository jobRepository) {\n  var taskExecutor = new SyncTaskExecutor();\n  var jobOperatorFactoryBean = new JobOperatorFactoryBean();\n  jobOperatorFactoryBean.setJobRepository(jobRepository);\n  jobOperatorFactoryBean.setTaskExecutor(taskExecutor);\n  return jobOperatorFactoryBean;\n}\n```\n\nUsing the SyncTaskExecutor has considerable drawbacks, we cannot use this for production, so we have to wait for the fix."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5181,
+    "title": "MetaDataInstanceFactory default values cause StepContext collision in StepScopeTestUtils when @SpringBatchTest is active",
+    "state": "open",
+    "created_at": "2025-12-23T07:20:59Z",
+    "updated_at": "2025-12-23T09:49:03Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5181",
+    "body": "## Bug description: \nThere is a logical collision in StepSynchronizationManager when using StepScopeTestUtils in a test environment managed by @SpringBatchTest.\n\nStepExecution determines equality based on stepName, jobExecutionId, and id. Since MetaDataInstanceFactory provides static default values for all these fields, multiple instances created by the factory are treated as identical keys in the SynchronizationManagerSupport.contexts map.\n\nThis prevents StepScopeTestUtils from registering a new context with custom JobParameters, as the computeIfAbsent logic finds the existing context registered by StepScopeTestExecutionListener (which is part of @SpringBatchTest).\n\n## Steps to reproduce:\nAnnotate a test class with @SpringBatchTest.\n\nInside a test method, use StepScopeTestUtils.doInStepScope() with a StepExecution created via MetaDataInstanceFactory.createStepExecution(jobParameters).\n\nThe Tasklet or ItemStream inside the scope will fail to see the jobParameters because it is bound to the listener's initial context.\n\n## Failing Example: \nexample job\n```java\n@Slf4j\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .incrementer(new RunIdIncrementer())\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(\n            JobRepository jobRepository,\n            Tasklet issueReproductionTasklet\n    ) {\n        return new StepBuilder(jobRepository)\n                .tasklet(issueReproductionTasklet)\n                .build();\n    }\n\n    @Bean\n    @StepScope\n    public Tasklet issueReproductionTasklet(@Value(\"#{jobParameters['testParam']}\") String testParam) {\n        return (contribution, chunkContext) -> {\n            contribution.getStepExecution().getExecutionContext().putString(\"result\", testParam);\n            return RepeatStatus.FINISHED;\n        };\n    }\n}\n```\n\ntest class\n```java\n@SpringBatchTest\n@SpringBootTest\n@ActiveProfiles(\"test\")\n@Import(TestBatchConfiguration.class)\npublic class IssueReproductionTest {\n    @Autowired\n    private Tasklet issueReproductionTasklet;\n\n    public StepExecution getStepExecution() throws IOException {\n        return MetaDataInstanceFactory.createStepExecution(\"dummy\", -1L);\n    }\n\n    @Test\n    @DisplayName(\"MetadataInstanceFactory ID collision causes JobParameter injection failure\")\n    void reproduceIdCollisionBug() throws Exception {\n        // Given\n        String expectedValue = \"HelloBatch\";\n        JobParameters jobParameters = new JobParametersBuilder()\n                .addString(\"testParam\", expectedValue)\n                .toJobParameters();\n\n        // MetadataInstanceFactory in 6.x / maybe after 5.2.3?? creates StepExecution with fixed ID 1234L\n        StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);\n\n        // When\n        StepScopeTestUtils.doInStepScope(stepExecution, () ->\n                Objects.requireNonNull(issueReproductionTasklet.execute(stepExecution.createStepContribution(), null))\n        );\n\n        // Then\n        String actualValue = stepExecution.getExecutionContext().getString(\"result\");\n\n        // This will FAIL because 'actualValue' will be null.\n        // The Tasklet retrieved the listener's context (which has no JobParameters)\n        // instead of the one passed via StepScopeTestUtils due to ID collision (1234L).\n        assertEquals(expectedValue, actualValue);\n    }\n}\n\n@TestConfiguration\npublic class TestBatchConfiguration extends DefaultBatchConfiguration {\n}\n```\n\napplication-test.yml\n```yaml\nspring:\n  batch:\n    job:\n      enabled: false\n```\ntest result:\n```bash\nValue for key=[result] is not of type: [class java.lang.String], it is [null]\njava.lang.ClassCastException: Value for key=[result] is not of type: [class java.lang.String], it is [null]\n```\n\n## Expected behavior:\nThe StepExecution and its corresponding StepContext created within StepScopeTestUtils.doInStepScope() should be correctly registered and accessible through the StepSynchronizationManager, even when @SpringBatchTest is active.\n\n(Note: Deciding on the best fix seems non-trivial to me, as it could involve changing the ID generation strategy in MetaDataInstanceFactory or adjusting how StepSynchronizationManager handles overlapping registrations in a test environment.)\nWorkaround: Users must manually provide a unique name or ID to bypass the equals/hashCode collision:\n\n## Workaround: \nTo bypass the current collision, users can explicitly define a getStepExecution() method within their test class. By returning a StepExecution with a unique name or a different ID (e.g., -1L), you can prevent the StepScopeTestExecutionListener from occupying the default ID (1234L), thus allowing StepScopeTestUtils to work as intended:\n\n```java\n/**\n * Workaround: Define getStepExecution() in the test class to avoid ID collision.\n * By providing a non-default ID or name, we ensure that the listener-registered \n * context does not conflict with the one created in StepScopeTestUtils.\n */\npublic StepExecution getStepExecution() {\n    return MetaDataInstanceFactory.createStepExecution(\"uniqueStep\", -1L);\n}\n```\n\ntest result:\n```bash\n> Task :test\nBUILD SUCCESSFUL in 3s\n```\n\nThanks for your time and for maintaining this great project!",
+    "labels": [
+      "in: test",
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5182,
+    "title": "ChunkOrientedStep updates ExecutionContext even when a chunk fails, leading to data loss on restart",
+    "state": "open",
+    "created_at": "2025-12-23T07:33:23Z",
+    "updated_at": "2025-12-23T09:48:08Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5182",
+    "body": "Hello Spring Batch Team!\n\n## Bug description: \nIn Spring Batch 6.x, the newly introduced ChunkOrientedStep calls itemStream.update() and jobRepository.updateExecutionContext() within a finally block in both processChunkSequentially and processChunkConcurrently. Unlike the traditional TaskletStep implementation.\n\nThis causes the ItemStream state (e.g., read count, current index) to be persisted even when a chunk transaction fails and rolls back. Consequently, upon restart, the step resumes from the \"failed\" offset, leading to silent data loss of the records within the failed chunk.\n\n\n## Code Comparison (The Root Cause)\n\n#### Spring Batch 5.x (TaskletStep.java)\nIn version 5, the state is updated only after the chunk is successfully processed and committed.\n\n```java\n\n// TaskletStep.java (Line 452)\n// This logic is inside the successful processing flow\nstream.update(stepExecution.getExecutionContext());\ngetJobRepository().updateExecutionContext(stepExecution);\nstepExecution.incrementCommitCount();\n```\n\n\n#### Spring Batch 6.x (ChunkOrientedStep.java)\nIn version 6, the update logic was moved to a finally block, forcing the update even during a rollback.\n```java\n// ChunkOrientedStep.java\nprivate void processChunkSequentially(...) {\n    try {\n        // chunk read/process/write logic\n    } catch (Exception e) {\n        // exception handling\n        throw e;\n    } finally {\n        // BUG: Always executed even if the transaction is rolled back!\n        this.compositeItemStream.update(stepExecution.getExecutionContext());\n        getJobRepository().updateExecutionContext(stepExecution);\n    }\n}\n```\n\n## Impact\nTransaction Inconsistency: The business data is rolled back, but the Batch Metadata (index/offset) is committed/updated.\n\nData Loss: On restart, the ItemReader resumes from the position after the failed chunk, meaning the records in the failed chunk are never re-processed.\n\n## Environment\nSpring Batch version: 6.0.1\nComponents: ChunkOrientedStep \n\n## Expected behavior\nExecutionContext and ItemStream state should only be updated if the chunk transaction is successful. If an exception occurs, the finally block should not persist the advanced state to the JobRepository.\n\n\n## Suggested Fix\nThe state update logic should be moved from the finally block of processChunkXXX methods to the doExecute method, specifically after the transaction has successfully completed.\n\nProposed change in ChunkOrientedStep.java:\n```java\n@Override\nprotected void doExecute(StepExecution stepExecution) throws Exception {\n    stepExecution.getExecutionContext().put(STEP_TYPE_KEY, this.getClass().getName());\n    \n    while (this.chunkTracker.get().moreItems() && !interrupted(stepExecution)) {\n       // process next chunk in its own transaction\n       this.transactionTemplate.executeWithoutResult(transactionStatus -> {\n          // process next chunk\n       });\n       getJobRepository().update(stepExecution);\n       \n       // FIX: Update ItemStream and ExecutionContext ONLY after successful transaction commit\n       this.compositeItemStream.update(stepExecution.getExecutionContext());\n       getJobRepository().updateExecutionContext(stepExecution);\n    }\n}\n```\nNote: The corresponding update calls inside processChunkSequentially and processChunkConcurrently's finally blocks must be removed to prevent duplicate or premature updates.\n\n\nThanks for your time and for maintaining this great project! If you need more details or sample please tell me!",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5183,
+    "title": "ScopeNotActiveException with @StepScope ItemProcessor in Multi-threaded ChunkOrientedStep",
+    "state": "open",
+    "created_at": "2025-12-23T07:46:16Z",
+    "updated_at": "2025-12-23T09:47:42Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5183",
+    "body": "Hello Spring Batch Team,\n\nI am reporting an issue regarding the new ChunkOrientedStep introduced in version 6.0. It appears that when a step is configured as multi-threaded, an ItemProcessor defined with @StepScope fails to resolve correctly within the worker threads.\n\n## Bug Description\nIn the ChunkOrientedStep implementation, specifically when using processChunkConcurrently, the StepContext does not seem to be propagated to the worker threads managed by the TaskExecutor.\n\nAs a result, when the worker thread attempts to invoke the ItemProcessor (which is a @StepScope proxy), it throws a ScopeNotActiveException because the StepSynchronizationManager on that specific thread has no active context.\n\n## Environment\nSpring Batch version: v6\nStep Implementation: ChunkOrientedStep\nConfiguration: TaskExecutor (e.g., SimpleAsyncTaskExecutor) + @StepScope ItemProcessor\n\n## Reproducible Configuration\n```java\n@Bean\npublic Step issueReproductionStep(\n        JobRepository jobRepository,\n        ItemReader<TestItem> reader,\n        ItemProcessor<TestItem, TestItem> itemProcessor, // @StepScope Bean\n        ItemWriter<TestItem> writer\n) {\n    return new StepBuilder(jobRepository)\n            .<TestItem, TestItem>chunk(1)\n            .reader(reader)\n            .processor(itemProcessor)\n            .writer(writer)\n            .taskExecutor(new SimpleAsyncTaskExecutor()) // Multi-threading enabled\n            .build();\n}\n\n@Bean\n@StepScope\npublic ItemProcessor<TestItem, TestItem> issueReproductionProcessor() {\n    return item -> {\n        log.info(\"[Thread: {}] Processing item: {}\", Thread.currentThread().getName(), item.getName());\n        return item;\n    };\n}\n```\n\n## Actual Result (Stacktrace)\nThe error occurs when the worker thread tries to access the scoped ItemProcessor:\n```bash\nCaused by: org.springframework.beans.factory.support.ScopeNotActiveException: Error creating bean with name 'scopedTarget.issueReproductionProcessor': Scope 'step' is not active for the current thread\n    at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:381)\n    ...\n    at jdk.proxy2/jdk.proxy2.$Proxy134.process(Unknown Source)\n    at org.springframework.batch.core.step.item.ChunkOrientedStep.doProcess(ChunkOrientedStep.java:655)\n    ...\nCaused by: java.lang.IllegalStateException: No context holder available for step scope\n    at org.springframework.batch.core.scope.StepScope.getContext(StepScope.java:167)\n```\n\n## Expected Behavior\nI am not certain whether this is an intended architectural change or an oversight in the new implementation. However, if this is a bug, the @StepScope ItemProcessor should function correctly within worker threads, as it did in previous versions.\n\n\n## Proposed change in ChunkOrientedStep.processChunkConcurrently:\n```java\n// Inside processChunkConcurrently method\nFuture<O> itemProcessingFuture = this.taskExecutor.submit(() -> {\n    try {\n        // Register step execution to the current worker thread's StepSynchronizationManager\n        StepSynchronizationManager.register(stepExecution);\n        return processItem(item, contribution);\n    } finally {\n        // Clear the context after processing to prevent memory leaks\n        StepSynchronizationManager.close();\n    }\n});\n```\n\nThanks for your time and for maintaining this project! Please let me know if you need any further information or a working reproduction repository!",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  }
+]

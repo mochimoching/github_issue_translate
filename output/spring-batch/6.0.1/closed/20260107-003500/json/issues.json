@@ -1,0 +1,630 @@
+[
+  {
+    "number": 5037,
+    "title": "Minor logging issue when a step or job completes instantly",
+    "state": "closed",
+    "created_at": "2025-10-20T14:09:47Z",
+    "updated_at": "2025-12-16T10:04:12Z",
+    "author": "janossch",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5037",
+    "body": "**Bug description**\nWe found such below log lines in our production environment, which misses the duration information at the end of the line.\n\n... `Job: [FlowJob: [name=...]] completed with the following parameters: [...] and the following status: [FAILED] in `\n\nDigging into a little bit of the code, I found that when a job is finished\nhttps://github.com/spring-projects/spring-batch/blob/11ec7f12e8e4477ae802a02ee72f69f78afbf25b/spring-batch-core/src/main/java/org/springframework/batch/core/launch/support/TaskExecutorJobLauncher.java#L221-L228\n\nan info level log entry gets emitted by the framework. However if the start and the end date is essentially the same, the `BatchMetrics.formatDuration` method returns an empty `String` because of the `duration.isZero()` condition.\n\nhttps://github.com/spring-projects/spring-batch/blob/11ec7f12e8e4477ae802a02ee72f69f78afbf25b/spring-batch-core/src/main/java/org/springframework/batch/core/observability/BatchMetrics.java#L69-L72\n\n**Environment**\nJava21 (temurin)\nSpring Batch 5.2.2\nFile based H2 DB is used\n\n**Steps to reproduce**\nStart a lot of batch jobs which completes fast.\n\n**Expected behavior**\nHonestly I don't know, but at least a `0ms` would be better than nothing. Something like this:\n`Job: [FlowJob: [name=...]] completed with the following parameters: [...] and the following status: [FAILED] in 0ms`\n\n**Minimal Complete Reproducible example**\n\nThe below test fails for 5.2.2:\n```\n    @Test\n    void testFormatDurationWhenCalculationReturnsZeroDuration() {\n        var startDate = LocalDateTime.now();\n        // create end date from the string representation of start date to ensure both dates are equal, but different references.\n        // In reality there is another LocalDateTime.now() call, but that could return a different time, which could cause flaky tests.\n        var endDate = LocalDateTime.parse(startDate.toString());\n        var calculateDuration = BatchMetrics.calculateDuration(startDate, endDate);\n        Assertions.assertNotNull(calculateDuration, \"Calculated duration is a null reference!\");\n        var formattedDurationString = BatchMetrics.formatDuration(calculateDuration);\n        Assertions.assertTrue(StringUtils.hasText(formattedDurationString), formattedDurationString);\n    }\n```\n",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "for: backport-to-5.2.x"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-21T21:32:17Z",
+        "body": "Thank you for reporting this!\n\n> **Expected behavior**\n> Honestly I don't know, but at least a `0ms` would be better than nothing.\n\nSure, makes sense. I planned the fix for the next patch release. Thank you for the PR as well 🙏"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "249330b2718492424c2df9b452279c9601c2802e",
+        "f3ccc7405c9d8f1c1f8a33fdfbbcbe143799e8f7",
+        "1d50d829907a580fe3aea5b6a17859a418e478b9"
+      ]
+    }
+  },
+  {
+    "number": 5099,
+    "title": "Partitioned step stops processing when first partition is finished in new chunk processing implementation",
+    "state": "closed",
+    "created_at": "2025-11-21T12:23:37Z",
+    "updated_at": "2025-12-04T13:21:28Z",
+    "author": "marbon87",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5099",
+    "body": "When using a step with local partitions, that have different amount of items, the step is finished when the first partition has done it's work. That lead's to unprocessed items in the other partitions.\n\nHere is an example with a step and a test, that is failing with the new chunk processing implementation:\n\n[partition-example.tar.gz](https://github.com/user-attachments/files/23675568/partition-example.tar.gz)\n\nIf you switch to the old chunk implemenation the test runs successfully.",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "has: minimal-example",
+      "status: for-internal-team"
+    ],
+    "comments": [
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-11-21T14:33:03Z",
+        "body": "I happened to come across this issue and did some digging.\n\nI'm not entirely sure if I've found the root cause, but here's what I observed:\nSince ChunkOrientedStep.doExecute(StepExecution) is executed for each partition, it gets called 3 times in total. However, ChunkTracker.noMoreItems() — which is called when there are no more items to read — is only invoked once across all executions.\n\nIt seems like each partition execution might need its own ChunkTracker instance.\n\nI could be wrong, so please verify this."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-11-24T08:13:49Z",
+        "body": "Thank you for reporting this issue and for providing an example! The sample uses a `ResourcelessJobRepository` (the default in Spring Batch 6 / Spring Boot 4). This job repository implementation is not suitable for use cases involving the execution context in any way (including local partitioning, see its javadoc as well as the [reference docs](https://docs.spring.io/spring-batch/reference/job/configuring-repository.html#_configuring_a_resourceless_jobrepository)).\n\nThat said, even with a JDBC job repository implementation there is an issue in `ChunkOrientedStep` as the chunk tracker is currently defined per instance while it should per thread (seems like we have a gap in our test suite as we currently test local partitioning with a simple tasklet and not with a chunk-oriented tasklet). I planned the fix for the next patch release."
+      },
+      {
+        "author": "zhaozhiguang",
+        "created_at": "2025-11-28T07:53:40Z",
+        "body": "I also encountered the same problem,When using Partitioner and JdbcPageItemReaderBuilder"
+      },
+      {
+        "author": "abstiger",
+        "created_at": "2025-11-28T08:28:01Z",
+        "body": "I don’t think switching to thread-local solves the problem. What if a job-step is executed twice in the same thread?\n\nI have encountered a similar issue. In a job, there is only one step, and the reader is JdbcCursorItemReader (which reads all users, assuming there are ten users), with a chunk size of 1.\n\nrun this job twice:\n\nThe first execution was successfully reading ten users and performing subsequent processing (at this point, the chunkTracker set `noMoreItems()`;).\n\nThe second execution skipped directly because `noMoreItems()`; had already been set.\n\nmaybe set it to true while step open in `ChunkOrientedStep` ?\n\n```java\n\t@Override\n\tprotected void open(ExecutionContext executionContext) throws Exception {\n\t\tthis.compositeItemStream.open(executionContext);\n\t\t// set to true on every step open\n\t\tthis.chunkTracker.get().moreItems = true;\n\t}\n\n```\n\n"
+      },
+      {
+        "author": "kzander91",
+        "created_at": "2025-12-03T13:22:24Z",
+        "body": "This bug is also the cause of #5126, and the fix committed here won't solve it, as explained by @abstiger.\nThere's another issue with the fix in that the `ThreadLocal` is never cleared again, so instead of flipping flags in `open()`, I would suggest to clear it in `close()`:\n```java\n\t@Override\n\tprotected void close(ExecutionContext executionContext) throws Exception {\n\t\tthis.chunkTracker.remove(); // ensure that the next invocation instantiates a new instance, and avoid leaks\n\t\tthis.compositeItemStream.close();\n\t}\n```"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-04T13:19:29Z",
+        "body": "Thank you all for the feedback! \n\n@abstiger \n\n> I don’t think switching to thread-local solves the problem. What if a job-step is executed twice in the same thread?\n \nIt does, it is just the lifecycle of the thread bound chunk tracker that was not correctly managed when I introduced it in a2d61f8ffa33da7680b9ca0d3f8b8195d90fab69. I have addressed that in 69665d83d8556d9c23a965ee553972a277221d83."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "a2d61f8ffa33da7680b9ca0d3f8b8195d90fab69"
+      ]
+    }
+  },
+  {
+    "number": 5104,
+    "title": "EmptyResultDataAccessException in JobRepository.findRunningJobExecutions for a completed job execution",
+    "state": "closed",
+    "created_at": "2025-11-24T15:31:41Z",
+    "updated_at": "2025-12-04T14:10:14Z",
+    "author": "A1exL",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5104",
+    "body": "**Bug description**\n`JobRepository.findRunningJobExecutions` throws an EmptyResultDataAccessException if there are no running job executions for a given job name and BATCH_JOB_EXECUTION table contains only COMPLETED or FAILED records (BATCH_JOB_EXECUTION.STATUS column value).\n\n**Environment**\n- Spring Boot 4.0.0\n- Spring Batch 6.0.0\n- Java 25\n- Embedded H2 database (reproduces on any database)\n\n**Steps to reproduce**\nPreconditions:\nJdbcJobExecutionDao is used. BATCH_JOB_EXECUTION and BATCH_JOB_INSTANCE tables are empty.\nHave Spring Batch Job with name \"SuccessfulJob\".\n\n1. Run this job, wait until it completes successfully.\nAfter execution one record in BATCH_JOB_INSTANCE table will be created.\nAlso one record with STATUS=COMPLETED will be created in BATCH_JOB_EXECUTION table.\n2. call `org.springframework.batch.core.repository.JobRepository.findRunningJobExecutions(\"SuccessfulJob\")`\n\n**Expected behavior**\nAn empty set is returned.\n\n**Actual behavior**\nAn EmptyResultDataAccessException is thrown.\n\n\n**Cause of the issue**\nRoot cause of the issue is the code in `JdbcJobExecutionDao.findRunningJobExecutions` method:\nThis code fragment\n`getJdbcTemplate().queryForObject(getQuery(GET_RUNNING_EXECUTION_FOR_INSTANCE), Long.class, jobInstanceId)`\nfails if there are **only** COMPLETED (or FAILED) records in BATCH_JOB_EXECUTION table for a given jobInstanceId\nCode in `org.springframework.batch.core.repository.dao.jdbc.JdbcJobExecutionDao`\n```\t\t\t\t\nprivate static final String GET_RUNNING_EXECUTION_FOR_INSTANCE = \"\"\"\n\t\tSELECT E.JOB_EXECUTION_ID\n\t\tFROM %PREFIX%JOB_EXECUTION E, %PREFIX%JOB_INSTANCE I\n\t\tWHERE E.JOB_INSTANCE_ID=I.JOB_INSTANCE_ID AND I.JOB_INSTANCE_ID=? AND E.STATUS IN ('STARTING', 'STARTED', 'STOPPING')\n\t\t\"\"\";\n\t\t\n\npublic Set<JobExecution> findRunningJobExecutions(String jobName) {\n\tfinal Set<JobExecution> result = new HashSet<>();\n\tList<Long> jobInstanceIds = this.jobInstanceDao.getJobInstanceIds(jobName);\n\tfor (long jobInstanceId : jobInstanceIds) {\n\n\t\t// throws EmptyResultDataAccessException if nothing is found\n\t\tlong runningJobExecutionId = getJdbcTemplate().queryForObject(getQuery(GET_RUNNING_EXECUTION_FOR_INSTANCE),\n\t\t\t\tLong.class, jobInstanceId);\n\n\t\tJobExecution runningJobExecution = getJobExecution(runningJobExecutionId);\n\t\tresult.add(runningJobExecution);\n\t}\n\treturn result;\n}\n```\n\n**Minimal Complete Reproducible example**\nhttps://github.com/A1exL/spring-batch6-bugs\nPlease launch `JobRepositoryTests` and see the results\n",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "has: minimal-example"
+    ],
+    "comments": [
+      {
+        "author": "darckyn",
+        "created_at": "2025-11-26T19:36:50Z",
+        "body": "Hi.\n\nSame error here!\nMy database has BATCH_JOB_EXECUTION.STATUS with only COMPLETE in all lines\n\nEnvironment\n\n- Spring Boot 4.0.0\n- Spring Batch 6.0.0\n- Java 21\n- SqlServer 2019\n\nIn my source code, I use `findRunningJobExecutions` inside a Scheduled:\n\n    @Scheduled(cron = CronConst.EVERY_FIVE_SECONDS, zone = SystemConst.ZONE_DEFAULT)\n    public void launchValidateGarantiaJob() throws JobExecutionAlreadyRunningException, JobInstanceAlreadyCompleteException,\n            InvalidJobParametersException, JobRestartException {\n        var runningJobs = jobRepository.findRunningJobExecutions(validateGarantiaJob.getName());\n        if (EmptyUtil.isEmpty(runningJobs)) {\n            jobOperator.start(validateGarantiaJob, JobUtil.createJobParameters());\n        } else {\n            throw new JobExecutionAlreadyRunningException(validateGarantiaJob.getName());\n        }\n    }"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-04T14:06:16Z",
+        "body": "Thank you for reporting this issue and for providing a sample! Indeed this is a bug. I will plan the fix for the upcoming patch release."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "57504927d912947ad1d15079b00d0969060db664"
+      ]
+    }
+  },
+  {
+    "number": 5105,
+    "title": "@EnableMongoJobRepository fails with Invalid transaction attribute token: [SERIALIZABLE]",
+    "state": "closed",
+    "created_at": "2025-11-24T23:35:23Z",
+    "updated_at": "2025-12-15T11:13:35Z",
+    "author": "br05s",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5105",
+    "body": "**Bug description**\nWhen using `@EnableMongoJobRepository` with `@EnableBatchProcessing`, you will receive an error saying `Invalid transaction attribute token: [SERIALIZABLE]`\n\n**Environment**\n- Spring Boot 4.0.0\n- Spring Batch 6.0.0\n- Java 25\n\n**Steps to reproduce**\n1. Create a new Spring Boot project through the Initializr with Spring Batch and Spring Data MongoDB selected.\n2. Create a configuration class and annotate it with `@EnableBatchProcessing` and `@EnableMongoJobRepository`\n3. Implement a simple job\n4. Add MongoDB properties to `application.yml`\n\n**Expected behavior**\nJob should run without issue\n\n**Minimal Complete Reproducible example**\n`SimpleJobConfig.java`\n```java\n@EnableBatchProcessing\n@EnableMongoJobRepository\n@Configuration\npublic class SimpleJobConfig {\n\n    @Bean\n    Job simpleJob(Step simpleStep, JobRepository jobRepository) {\n        return new JobBuilder(jobRepository)\n                .incrementer(new RunIdIncrementer())\n                .start(simpleStep)\n                .build();\n    }\n\n    @Bean\n    Step simpleStep(Tasklet simpleTasklet, PlatformTransactionManager transactionManager, JobRepository jobRepository) {\n        return new StepBuilder(\"simpleStep\", jobRepository)\n                .tasklet(simpleTasklet, transactionManager)\n                .build();\n    }\n\n    @Bean\n    Tasklet simpleTasklet() {\n        return (contribution, chunkContext) -> {\n            println(\"test\");\n            return RepeatStatus.FINISHED;\n        };\n    }\n\n    @Bean\n    MongoTransactionManager transactionManager(MongoDatabaseFactory mongoDatabaseFactory) {\n        return new MongoTransactionManager(mongoDatabaseFactory);\n    }\n\n}\n```\n\n`application.yml`\n```yaml\nspring:\n  application:\n    name: batch-mongo-demo\n  mongodb:\n    host: (removed)\n    port: 27017\n    database: batch\n```",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "br05s",
+        "created_at": "2025-11-24T23:39:42Z",
+        "body": "It looks like the problem is `BatchRegistrar` sets the property `isolationLevelForCreate` when configuring the Mongo job repository instead of `setIsolationLevelForCreateEnum` like the JDBC version does.\n\n```java\nIsolation isolationLevelForCreate = mongoJobRepositoryAnnotation.isolationLevelForCreate();\nif (isolationLevelForCreate != null) {\n    beanDefinitionBuilder.addPropertyValue(\"isolationLevelForCreate\", isolationLevelForCreate);\n}\n```"
+      },
+      {
+        "author": "banseok1216",
+        "created_at": "2025-12-07T09:53:20Z",
+        "body": "I’m seeing the same issue with `@EnableBatchProcessing` + `@EnableMongoJobRepository`.\n\nI can confirm that the root cause is the one you pointed out in `BatchRegistrar` (binding the `Isolation` enum to `isolationLevelForCreate` instead of the enum-based property), and there is some additional evidence from the Mongo default configuration.\n\n`MongoDefaultBatchConfiguration` configures the `MongoJobRepositoryFactoryBean` like this:\n\n```java\n@Bean\n@Override\npublic JobRepository jobRepository() throws BatchConfigurationException {\n    MongoJobRepositoryFactoryBean jobRepositoryFactoryBean = new MongoJobRepositoryFactoryBean();\n    try {\n        jobRepositoryFactoryBean.setMongoOperations(getMongoOperations());\n        jobRepositoryFactoryBean.setTransactionManager(getTransactionManager());\n        jobRepositoryFactoryBean.setIsolationLevelForCreateEnum(getIsolationLevelForCreate());\n        jobRepositoryFactoryBean.setValidateTransactionState(getValidateTransactionState());\n        jobRepositoryFactoryBean.setJobKeyGenerator(getJobKeyGenerator());\n        jobRepositoryFactoryBean.setJobInstanceIncrementer(getJobInstanceIncrementer());\n        jobRepositoryFactoryBean.setJobExecutionIncrementer(getJobExecutionIncrementer());\n        jobRepositoryFactoryBean.setStepExecutionIncrementer(getStepExecutionIncrementer());\n        jobRepositoryFactoryBean.afterPropertiesSet();\n        return jobRepositoryFactoryBean.getObject();\n    }\n    catch (Exception e) {\n        throw new BatchConfigurationException(\"Unable to configure the default job repository\", e);\n    }\n}\n```\n\nHere the isolation level is passed via the enum-based setter:\n\n```java\njobRepositoryFactoryBean.setIsolationLevelForCreateEnum(getIsolationLevelForCreate());\n```\n\nSo the `Isolation` value is clearly meant to go through `setIsolationLevelForCreateEnum`.\n\nOn the other hand, in `BatchRegistrar.registerMongoJobRepository`, the value from `@EnableMongoJobRepository#isolationLevelForCreate` (which is an `Isolation` enum) is currently bound to the **String** property `isolationLevelForCreate`:\n\n```java\nIsolation isolationLevelForCreate = mongoJobRepositoryAnnotation.isolationLevelForCreate();\nif (isolationLevelForCreate != null) {\n    beanDefinitionBuilder.addPropertyValue(\"isolationLevelForCreate\", isolationLevelForCreate);\n}\n```\n\nThis ends up invoking `setIsolationLevelForCreate(String)` internally and going through `TransactionAttributeEditor`, which expects tokens like `ISOLATION_SERIALIZABLE`. With the enum being converted to `\"SERIALIZABLE\"`, this leads to:\n\n> Invalid transaction attribute token: [SERIALIZABLE]\n\nFor JDBC, the registrar already uses the enum-based property:\n\n```java\nIsolation isolationLevelForCreate = jdbcJobRepositoryAnnotation.isolationLevelForCreate();\nif (isolationLevelForCreate != null) {\n    beanDefinitionBuilder.addPropertyValue(\"isolationLevelForCreateEnum\", isolationLevelForCreate);\n}\n```\n\nand the default Mongo configuration (`MongoDefaultBatchConfiguration`) also uses `setIsolationLevelForCreateEnum`.\n\nSo it looks like the Mongo registrar should be using the same enum-based property. Changing it to:\n\n```java\nIsolation isolationLevelForCreate = mongoJobRepositoryAnnotation.isolationLevelForCreate();\nif (isolationLevelForCreate != null) {\n    beanDefinitionBuilder.addPropertyValue(\"isolationLevelForCreateEnum\", isolationLevelForCreate);\n}\n```\n\nfixes the issue for me.\n\nTo guard against regressions, I also added a small test in `BatchRegistrarTests` that bootstraps a context with:\n\n```java\n@Configuration\n@EnableBatchProcessing\n@EnableMongoJobRepository\nstatic class MongoJobConfiguration {\n\n    @Bean\n    MongoOperations mongoTemplate() {\n        return Mockito.mock(MongoOperations.class);\n    }\n\n    @Bean\n    MongoTransactionManager transactionManager() {\n        return Mockito.mock(MongoTransactionManager.class);\n    }\n}\n```\n\nand simply asserts that a `JobRepository` is created:\n\n```java\n@Test\n@DisplayName(\"Mongo job repository should be configured successfully with @EnableMongoJobRepository\")\nvoid testMongoJobRepositoryConfiguredWithEnableMongoJobRepository() {\n    AnnotationConfigApplicationContext context =\n            new AnnotationConfigApplicationContext(MongoJobConfiguration.class);\n\n    JobRepository jobRepository = context.getBean(JobRepository.class);\n    Assertions.assertNotNull(jobRepository);\n}\n```\n\nWith the current code this test fails with `Invalid transaction attribute token: [SERIALIZABLE]`, and with the change to `isolationLevelForCreateEnum` it passes. I’ll open a PR with this change and the test.\n"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-15T11:13:34Z",
+        "body": "@br05s This is valid issue, thank you for reporting it.\n\nResolved in #5141 and will be shipped in the upcoming v6.0.1. Many thanks to @banseok1216 for the fix 🙏"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5114,
+    "title": "stop() does not prevent upcoming steps to be executed anymore",
+    "state": "closed",
+    "created_at": "2025-11-27T10:12:25Z",
+    "updated_at": "2025-12-16T00:00:04Z",
+    "author": "andre-bugay",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5114",
+    "body": "It seems like Spring Batch 6 cannot stop a Job anymore.\nAfter calling stop(), all steps are executed and later the job is marked as FAILED.\n\nIn Spring Batch 5 the flow was:\n`STARTED` -> `STOPPING` -> mark step executions as terminateOnly -> `STOPPED`\n\nIn Spring Batch 6 it is:\n`STARTED` -> `STOPPING` -> `STOPPED` -> `FAILED`\n\nIf I am right then the root cause of this change is the following new line in \n\n\nhttps://github.com/spring-projects/spring-batch/blob/c8a0528bf1ee3ff8015ae1ddaaef368355f32ed3/spring-batch-core/src/main/java/org/springframework/batch/core/launch/support/SimpleJobOperator.java#L348\n\nDirectly afterwards the \n`jobRepository.update(jobExecution);`\nchecks\nhttps://github.com/spring-projects/spring-batch/blob/c8a0528bf1ee3ff8015ae1ddaaef368355f32ed3/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/SimpleJobRepository.java#L139\n\nThis will always be false as the endTime was set just before.\nThe jobState will be set from `STOPPING` to `STOPPED` directly.\n\n**Consequence**\nInside `SimpleJobRepository#update(StepExecution)` -> `checkForInterruption(stepExecution)` the check in\nhttps://github.com/spring-projects/spring-batch/blob/c8a0528bf1ee3ff8015ae1ddaaef368355f32ed3/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/SimpleJobRepository.java#L186-L188\nwill never be true and the steps are not marked for terminateOnly.\n\nIs this intended and how can I prevent running the unstarted steps once the job is stopped?\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-12-05T10:33:03Z",
+        "body": "Hi, I also have reviewed the root cause of this issue. I'd like to share my findings for your reference.\n\nAs you pointed out, the commit e5fbc2a introduced:\n```java\njobExecution.setEndTime(LocalDateTime.now());\n```\n\nThis change causes the following logic within SimpleJobRepository to execute:\n```java\nif (jobExecution.getStatus() == BatchStatus.STOPPING && jobExecution.getEndTime() != null) {\n    if (logger.isInfoEnabled()) {\n       logger.info(\"Upgrading job execution status from STOPPING to STOPPED since it has already ended.\");\n    }\n    jobExecution.upgradeStatus(BatchStatus.STOPPED);\n}\n```\nLooking at the history, this seems to be an intentional change (though I am uncertain of the exact reasoning for setting the status to STOPPED at this specific point). The solution will depend on whether Spring Batch Team decide to retain or revert this code modification.\n\n## Scenario 1: Retaining jobExecution.setEndTime(LocalDateTime.now()) (Current Batch 6 Behavior)\nIf we must keep jobExecution.setEndTime(LocalDateTime.now()), then the following is the issue:\n\nUnless you are creating and using a custom Step implementation, and instead use the provided TaskletStep or the newly added ChunkOrientedStep (in Batch 6), the following logic in SimpleJobOperator at Line #374 is executed:\n```java\nstoppableStep.stop(stepExecution);\n// default void stop(StepExecution stepExecution) {\n//     stepExecution.setTerminateOnly();\n//     stepExecution.setStatus(BatchStatus.STOPPED);\n//     stepExecution.setExitStatus(ExitStatus.STOPPED);\n//     stepExecution.setEndTime(LocalDateTime.now());\n// }\n```\nThis sets the StepExecution to terminateOnly, and then at Line #375 of SimpleJobOperator, it is persisted to the database (metadata repository).\n\nThe core problem is that the StepExecution object being updated by the SimpleJobOperator.stop() call is not the same object instance currently being used by the actively executing Step thread. Therefore, to make interruption work, logic should be added to the executing Step (in both TaskletStep and ChunkOrientedStep) to fetch the latest status of the StepExecution from the metadata repository before every chunk transaction commit & after the ItemStream.update() call (or at a similar boundary, based on the historical TaskletStep logic).\n\n\n## Scenario 2: Reverting the Code Added in e5fbc2a (Returning to Legacy Behavior)\nIf Spring Batch Team choose to revert the code added in e5fbc2a, the logic you mentioned will appropriately interrupt the Step. However, only TaskletStep will be correctly interrupted.\n\nIf you look at `TaskletStep.doExecute()`, it calls `getJobRepository().update(stepExecution);` right before every transaction commit (after `Tasklet.execute()` completes - around line #464). This update triggers the logic you cited:\n```java\nprivate void checkForInterruption(StepExecution stepExecution) {\n    JobExecution jobExecution = stepExecution.getJobExecution();\n    jobExecutionDao.synchronizeStatus(jobExecution); // <--- Reads the updated JobExecution status from DB\n    if (jobExecution.isStopping()) {\n       logger.info(\"Parent JobExecution is stopped, so passing message on to StepExecution\");\n       stepExecution.setTerminateOnly(); // <--- Sets terminateOnly\n    }\n}\n```\nThis allows the running Step to read the latest JobExecution status modified by JobOperator and set terminateOnly.\n\nThe issue is that ChunkOrientedStep does not have this same logic. It only calls `JobRepository.updateExecutionContext()`.\n\nTherefore, if Spring Batch Team proceed with Scenario 2, a call to `getJobRepository().update(stepExecution);` must also be added to the ChunkOrientedStep implementation to ensure proper interruption.\n\nI hope this analysis is helpful for your ongoing work!"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-05T15:02:44Z",
+        "body": "@andre-bugay @KILL9-NO-MERCY Thank you for raising this issue and for taking the time to analyse the root cause! Indeed, stopping a job seems to be broken, even though the [graceful shutdown sample](https://github.com/spring-projects/spring-batch/tree/main/spring-batch-samples/src/main/java/org/springframework/batch/samples/shutdown) was working as expected when I introduced it in d4a7dfd25f2782fba7a1563ab62aa116b4f6d33f. There seems to be a commit after that that broke the stop feature.. What bothers me is that that sample involves a manual step (sending the interruption signal to the process) which makes it difficult to detect regressions automatically on CI.\n\nI will check that and plan the fix for the upcoming 6.0.1."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-12T12:32:22Z",
+        "body": "> The solution will depend on whether Spring Batch Team decide to retain or revert this code modification.\n\nI am not against reverting a change if it has introduced a regression. \n\n> As you pointed out, the commit [e5fbc2a](https://github.com/spring-projects/spring-batch/commit/e5fbc2a0387858f5f95009e3a032d2864398f9ac) introduced:\n\nReverting e5fbc2a0387858f5f95009e3a032d2864398f9ac does not seem to fix the issue, so probably scenario 1 is not the best option. I think this commit is the culprit: db6ef7b067e0daeee59c1baea03a0acfed4f5cfc, but I am still investigating.\n\n> Therefore, if Spring Batch Team proceed with Scenario 2, a call to getJobRepository().update(stepExecution); must also be added to the ChunkOrientedStep implementation to ensure proper interruption.\n\n@KILL9-NO-MERCY  Have you tried this patch? Because I also tried this and does not seem to help neither.\n\nI would appreciate a patch in a PR if someone managed to fix the issue already (and avoid duplicate efforts)."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-12T12:42:14Z",
+        "body": "Just to give a bit more context: the attempts I shared in my previous comment led to optimistic locking exceptions (I used [this example](https://github.com/spring-projects/spring-batch/tree/main/spring-batch-samples/src/main/java/org/springframework/batch/samples/shutdown) for tests), so I have a doubt something related to locking could be involved (I am thinking of #5020, but I am probably wrong). cc @quaff . Probably a database sync in missing here: https://github.com/spring-projects/spring-batch/blob/main/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java#L476.\n\nI will continue to investigate, but if someone managed to fix the issue already, then I would appreciate a patch in a PR to avoid duplicate efforts. Many thanks upfront 🙏"
+      },
+      {
+        "author": "quaff",
+        "created_at": "2025-12-15T03:12:50Z",
+        "body": "> so I have a doubt something related to locking could be involved (I am thinking of [#5020](https://github.com/spring-projects/spring-batch/issues/5020), but I am probably wrong).\n\n#5020 is related to multi-process which this issue doesn't mention."
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-12-15T14:02:55Z",
+        "body": "@andre-bugay @fmbenhassine \n\nI've submitted PR #5165 to address this issue.\n\nThe PR fixes the `terminateOnly` flag setting by:\n1. Detecting externally stopped StepExecution via `getStepExecution()` and checking `isStopped()` status\n2. Synchronizing version and setting `terminateOnly` in `JobRepository.update(StepExecution)`\n3. Adding `JobRepository.update(stepExecution)` call in ChunkOrientedStep to match TaskletStep behavior\n\nAs mentioned in #5120, my testing shows both #5120 (OptimisticLockingFailureException) and #5114 (terminateOnly not set) are resolved with these changes.\n\nHowever, I would appreciate it if you could cross-check for any potential side effects I may have overlooked. Thank you!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "e5fbc2a0387858f5f95009e3a032d2864398f9ac",
+        "29f5ecf567cc21b5ce3dd9a41283d227a85c3667",
+        "644d7e6997c4e29822be580dab8e6f65713e17be"
+      ]
+    }
+  },
+  {
+    "number": 5115,
+    "title": "MetaDataInstanceFactory.createStepExecution(JobParameters) does not propagate JobParameters to StepExecution",
+    "state": "closed",
+    "created_at": "2025-11-27T14:31:37Z",
+    "updated_at": "2025-12-15T13:30:17Z",
+    "author": "benelog",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5115",
+    "body": "## Bug description\n`StepExecution` instances created via `MetaDataInstanceFactory.createStepExecution(JobParameters)` do not reference the provided `JobParameters`.\n\nThis appears to be a side effect introduced by the following commit:\n\nhttps://github.com/spring-projects/spring-batch/commit/90d895955d951156849ba6fa018676273fdbe2c4\n\n## Environment\nSpring Batch  v6.0.0\n\n## Steps to reproduce\nThe following test case reproduces the bug:\n\n```java\n@Test\nvoid testCreateStepExecutionJobParameters() {\n    JobParameters parameters = new JobParametersBuilder()\n        .addString(\"foo\", \"bar\")\n        .toJobParameters();\n\n    StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(parameters);\n    String paramValue = stepExecution.getJobExecution().getJobParameters().getString(\"foo\");\n\n    assertEquals(\"bar\", paramValue);\n}\n```\n",
+    "labels": [
+      "in: test",
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "benelog",
+        "created_at": "2025-12-13T23:51:38Z",
+        "body": "@fmbenhassine\n\nThis issue did not occur in Spring Batch v5.2.x but newly appeared after upgrading to v6.0.0.\n\nI am currently resolving it with the following workaround:\n\n(When using Spring Batch v5.2.x)\n```java\nStepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);\n````\n\n\\-\\>\n\n(After upgrading to Spring Batch v6.0.0)\n\n```java\nJobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(\"testJob\", 0L, 0L, jobParameters);\nStepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobExecution, \"testStep\", 0L);\n```\n\nIf the following PR is included in Spring Batch v6.0.1, it would help reduce the trial and error experienced by users upgrading the version and contribute to users feeling that v6.0.x is stable.\n\nhttps://github.com/spring-projects/spring-batch/pull/5116\n"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "da16f6b92ecc1b4d5ed0acb947df1dad923e590a",
+        "1a5b8d0321fd6efd02c589b0711260f93fe9315f",
+        "8264ab11b9fa1905da648f454a050dd058b3fda0"
+      ]
+    }
+  },
+  {
+    "number": 5117,
+    "title": "ExecutionContext not loaded when step execution is queried from the job repository",
+    "state": "closed",
+    "created_at": "2025-11-27T15:17:07Z",
+    "updated_at": "2025-12-16T10:06:00Z",
+    "author": "ruudkenter",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5117",
+    "body": "In Spring Batch 5.2.x the StepExecution returned from the SimpleJobExplorer returned a fully populated StepExecution, including the ExecutionContext.\n \nSpring Batch 6.0.0,  is using a JobRepository for the same task [fetching the StepExecution](https://github.com/spring-projects/spring-batch/blob/c8a0528bf1ee3ff8015ae1ddaaef368355f32ed3/spring-batch-integration/src/main/java/org/springframework/batch/integration/partition/StepExecutionRequestHandler.java#L48), however, that doesn't seem to populate the ExecutionContext for the StepExecution. It ultimately delegates to: [JdbcStepExecutionDao](https://github.com/spring-projects/spring-batch/blob/c8a0528bf1ee3ff8015ae1ddaaef368355f32ed3/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/jdbc/JdbcStepExecutionDao.java#L299) without loading the ExecutionContext from the BATCH_STEP_EXECUTION_CONTEXT table. Failing my remote partitioned batch job.\n \nNot sure if this is intentional and I am missing out on something, but to me this seems to be an issue.\n\n[Demonstration of the issue](https://github.com/ruudkenter/spring-batch-6-demo). \n\nNOTE: It does work when you switch to using ResourcelessJobRepository.\n \nRegards\nRuud",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "ruudkenter",
+        "created_at": "2025-12-09T21:39:18Z",
+        "body": "Issue is resolved by (https://github.com/spring-projects/spring-batch/pull/5147)"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-10T16:50:47Z",
+        "body": "Thank you for reporting this issue, which is valid! And indeed, #5147 resolves it and was merged.\n\nThe fix will be part of the upcoming 6.0.1 planned for next week."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5120,
+    "title": "StepExecution Update in SimpleJobOperator.stop() Causes JobExecution.BatchStatus.UNKNOWN after graceful stop",
+    "state": "closed",
+    "created_at": "2025-12-01T11:33:13Z",
+    "updated_at": "2025-12-16T00:01:14Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5120",
+    "body": "Hello Spring Batch Team,\n\nI am reporting an issue where using JobOperator.stop() to gracefully stop a running ChunkOrientedStep results in an OptimisticLockingFailureException and setting UNKNOWN state\n\n## Bug description \nIn Spring Batch version 6.0.0, calling SimpleJobOperator.stop(jobExecution) on an executing ChunkOrientedStep causes an Optimistic Locking version conflict.\n\nThis happens because the SimpleJobOperator.stop() method, after calling stoppableStep.stop() at line #374 proceeds to explicitly call jobRepository.update(stepExecution). \n\nThis update prematurely increments the database version of the StepExecution. \n\nConsequently, the main batch execution thread, which holds an outdated version of the StepExecution in memory, fails with an OptimisticLockingFailureException during its final persistence call in AbstractStep.execute().\n\n## Environment\nSpring Batch Version: 6.0.0\nSpring Boot 4.0.0\n\n## Steps to reproduce\n1) Start a Spring Batch application with a long-running ChunkOrientedStep.\n2) While the step is actively processing a chunk (inside the chunk transaction), call JobOperator.stop(jobExecution) from a separate thread or API endpoint.\n3) The SimpleJobOperator.stop() call updates the DB, increasing the StepExecution version.(at line 375)\n~4) The batch execution thread(Chunk processing thread) detects the terminateOnly flag and attempts a graceful exit from the chunk processing loop. (at ChunkOrientedStep.doExecute() line 362)~ ChunkOrientedStep doExecute() completed(not stopped - this is related https://github.com/spring-projects/spring-batch/issues/5114) \n5) The AbstractStep.execute() method attempts to save the final status of the step.(at line 327)\n6) The job fails with an OptimisticLockingFailureException. and JobExecution.BatchStatus & ExitStatus set UNKNOWN \n7) so this JobExecution cannot restarted\n\n\n## Expected behavior \nWhen JobOperator.stop() is called, the job should safely stop and transition to the STOPPED status without causing an OptimisticLockingFailureException or setting UNKNOWN status for restartability\n\n\n## Actual Stack Trace\n```java\norg.springframework.dao.OptimisticLockingFailureException: Attempt to update step execution id=9 with wrong version (1), where current version is 2\n\tat org.springframework.batch.core.repository.dao.jdbc.JdbcStepExecutionDao.updateStepExecution(JdbcStepExecutionDao.java:254) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat org.springframework.batch.core.repository.support.SimpleJobRepository.update(SimpleJobRepository.java:154) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]\n\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359) ~[spring-aop-7.0.1.jar:7.0.1]\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190) ~[spring-aop-7.0.1.jar:spring-aop-7.0.1]\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158) ~[spring-aop-7.0.1.jar:spring-aop-7.0.1]\n\tat org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:370) ~[spring-tx-7.0.1.jar:spring-tx-7.0.1]\n\tat org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:118) ~[spring-tx-7.0.1.jar:spring-tx-7.0.1]\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179) ~[spring-aop-7.0.1.jar:spring-aop-7.0.1]\n\tat org.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:222) ~[spring-aop-7.0.1.jar:spring-aop-7.0.1]\n\tat jdk.proxy2/jdk.proxy2.$Proxy117.update(Unknown Source) ~[na:na]\n\tat org.springframework.batch.core.step.AbstractStep.execute(AbstractStep.java:327) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat org.springframework.batch.core.job.SimpleStepHandler.handleStep(SimpleStepHandler.java:131) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat org.springframework.batch.core.job.AbstractJob.handleStep(AbstractJob.java:397) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat org.springframework.batch.core.job.SimpleJob.doExecute(SimpleJob.java:129) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat org.springframework.batch.core.job.AbstractJob.execute(AbstractJob.java:293) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat org.springframework.batch.core.launch.support.TaskExecutorJobLauncher$1.run(TaskExecutorJobLauncher.java:220) ~[spring-batch-core-6.0.0.jar:6.0.0]\n\tat java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]\n```\n\nI believe this flow analysis and stack trace strongly indicate a bug introduced by the implementation of StoppableStep on AbstractStep in Spring Batch 6. We hope this report is helpful in identifying and resolving the issue in future releases.\n\nIf you require any further information, such as a Minimal Complete Reproducible Example (MCRE) code or assistance with testing, please do not hesitate to ask!\n\nThank you for your hard work and for maintaining such a valuable framework.\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-05T07:00:22Z",
+        "body": "Thank you for reporting this! \n\nIs this the same as (or similar to) #5114?"
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-12-05T08:46:39Z",
+        "body": "Thank you for the quick response!\n\nNo, my issue (#5120) is not the same as #5114\n\ni'm anayizing  #5114 and found additional issue\nI will leave a comment on https://github.com/spring-projects/spring-batch/issues/5114 \n\nPlease let me know if any additional information!"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-05T09:13:48Z",
+        "body": "OK thank you for your quick feedback!\n\nI will check both issues in details."
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-12-05T10:48:48Z",
+        "body": "Hi,\n\nI have been analyzing the details of this issue further, specifically concerning the behavior described in spring-projects/spring-batch/issues/5114, and I needed to make a small correction regarding the Step execution.\n\nI have updated step #4 in the \"Steps to reproduce\" section:\n**AS-IS**: The batch execution thread (Chunk processing thread) detects the terminateOnly flag and attempts a graceful exit from the chunk processing loop. (at ChunkOrientedStep.doExecute() line 362)\n\n**TO-BE**: ChunkOrientedStep.doExecute() completed (not stopped - this is related to stop() does not prevent upcoming steps to be executed anymore #5114)\n\nWhile this specific behavioral detail doesn't change the immediate bug related to the stop() logic we discussed, it is an important clarification on how the ChunkOrientedStep terminates.\n\nAlso, I previously mentioned that this issue was unrelated to #5114. After re-evaluating, I must correct that statement: The resolution of this issue is indeed closely tied to the direction chosen in the comments of #5114. The solution path for our current problem hinges directly on which of the two scenarios is adopted, which commented in Issue #5114. Therefore, it's not accurate to say they are entirely disconnected."
+      },
+      {
+        "author": "KILL9-NO-MERCY",
+        "created_at": "2025-12-15T14:00:24Z",
+        "body": "@fmbenhassine \nI've submitted PR #5165 to address this optimistic locking issue.\n\nThe changes synchronize the StepExecution version by fetching the latest state from the database before update, which prevents the version conflict between the stopping thread and the executing thread.\n\nIn my testing, the issue is resolved for both TaskletStep and ChunkOrientedStep during stop operations. However, I would appreciate it if you could cross-check for any potential side effects I might have missed.\n\nThank you!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "29f5ecf567cc21b5ce3dd9a41283d227a85c3667",
+        "f62da2bd6a7a9459d809e86065877ac440130b70",
+        "644d7e6997c4e29822be580dab8e6f65713e17be",
+        "09b07834ed86f4a11a51e118e665dc20156352c9",
+        "0feafa15a73c4be4f990b627c914bb918118e96e",
+        "78ba896caa7020f1f7f972ae7b3dd469699a4922",
+        "984a057f86c92b326782b964f949c0eb0eb805d4"
+      ]
+    }
+  },
+  {
+    "number": 5122,
+    "title": "`MapJobRegistry` registers discovered Jobs by their bean name instead of their job name",
+    "state": "closed",
+    "created_at": "2025-12-02T10:30:09Z",
+    "updated_at": "2025-12-05T05:51:21Z",
+    "author": "kzander91",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5122",
+    "body": "The changes made with #4855 ignore the _names_ of the discovered Jobs:\nhttps://github.com/spring-projects/spring-batch/blob/fa73e01f40d6cd7e8274b473a17e8c0c387fae84/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/support/MapJobRegistry.java#L63-L67\nWe see that the bean names are used instead of `Job#getName()`.\nThis should probably be changed to something like this:\n```java\n\t@Override\n\tpublic void afterSingletonsInstantiated() {\n\t\tthis.applicationContext.getBeansOfType(Job.class).values().forEach(this::register);\n\t}\n```\nSince `register()` throws a checked exception, the exact logic may need to be changed a bit.\n\n---\n\nMy workaround:\n```java\n@Bean\nMapJobRegistry jobRegistry(ObjectProvider<Job> jobs) {\n    return new MapJobRegistry() {\n\n        // Workaround for https://github.com/spring-projects/spring-batch/issues/5122\n        @Override\n        public void afterSingletonsInstantiated() {\n            for (Job job : jobs) {\n                try {\n                    register(job);\n                } catch (DuplicateJobException e) {\n                    throw new IllegalStateException(e);\n                }\n            }\n        }\n    };\n}\n```",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-05T05:25:51Z",
+        "body": "Thank you for reporting this issue. In fact, jobs should be registered by their name and not their bean name. This is an oversight from my side, I will fix that in 6.0.1."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "184ac31f704935c6d49865839713cd3126ce7cd3"
+      ]
+    }
+  },
+  {
+    "number": 5123,
+    "title": "Incorrect deprecation warning in `JobOperatorTestUtils.getJob()`",
+    "state": "closed",
+    "created_at": "2025-12-02T14:39:07Z",
+    "updated_at": "2025-12-05T05:21:07Z",
+    "author": "kzander91",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5123",
+    "body": "`JobOperatorTestUtils` does not override and \"un-deprecate\" `getJob()`.\nThis causes unnecessary deprecation warnings to be raised for clients.",
+    "labels": [
+      "in: test",
+      "type: bug"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "4216a0a5834d90f0063cfe6ec32bc45c1e9d260b"
+      ]
+    }
+  },
+  {
+    "number": 5126,
+    "title": "`ChunkOrientedStep.ChunkTracker` is not reset after step, allowing only a single execution of a particular step",
+    "state": "closed",
+    "created_at": "2025-12-03T10:14:26Z",
+    "updated_at": "2025-12-04T17:43:08Z",
+    "author": "kzander91",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5126",
+    "body": "**Bug description**\n`ChunkOrientedStep.doExecute()` loops until `chunkTracker.moreItems()` no longer returns `true`:\nhttps://github.com/spring-projects/spring-batch/blob/fa73e01f40d6cd7e8274b473a17e8c0c387fae84/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java#L359-L375\n\nAfter the reader is exhausted, the `chunkTracker` switches to `false`, but that flag is never reset back to `true`. The consequence is that starting with the second invocation of the step, it will exit immediately and never do anything because `chunkTracker.moreItems()` still returns `false`.\n\n**Environment**\nSpring Batch 6.0.0\n\n**Steps to reproduce**\n1. Configure a job with a chunk-oriented step.\n2. Run the job.\n3. Run the job again.\n\n**Expected behavior**\nThe step is executed both times.\n\n**Minimal Complete Reproducible example**\n[demo14.zip](https://github.com/user-attachments/files/23903365/demo14.zip)\nRun with `./mvnw test`\n\nThe reproducer has a test that invokes the job three times. The first invocation starts chunk processing, both subsequent invocations skip it. This is also shown in the logs, where the first execution prints logs like this:\n```\nJob: [SimpleJob: [name=job]] launched with the following parameters: [{JobParameter{name='batch.random', value=7960112850225085599, type=class java.lang.Long, identifying=true}}]\nExecuting step: [step]\nReader was called, returning item\nReader was called, returning null\nWriting chunk: [items=[item], skips=[]]\nStep: [step] executed in 5ms\nJob: [SimpleJob: [name=job]] completed with the following parameters: [{JobParameter{name='batch.random', value=7960112850225085599, type=class java.lang.Long, identifying=true}}] and the following status: [COMPLETED] in 22ms\n```\n\nWhile the subsequent invocations print logs like this:\n```\nJob: [SimpleJob: [name=job]] launched with the following parameters: [{JobParameter{name='batch.random', value=-1299334786035736075, type=class java.lang.Long, identifying=true}}]\nExecuting step: [step]\nStep: [step] executed in\nJob: [SimpleJob: [name=job]] completed with the following parameters: [{JobParameter{name='batch.random', value=-1299334786035736075, type=class java.lang.Long, identifying=true}}] and the following status: [COMPLETED] in 6ms\n```\n\n(Nitpick: When the step duration is zero, we get a message with a missing duration: `Step: [step] executed in`) -> #5037\n\n---\n\nMy current workaround is to declare all `Job` and `Step` beans with `@Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)`. I then implemented my own `JobRegistry` that retrieves each job on demand from the `BeanFactory` to ensure that fresh instances are used for each run.",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "has: minimal-example"
+    ],
+    "comments": [
+      {
+        "author": "abstiger",
+        "created_at": "2025-12-03T13:13:09Z",
+        "body": "https://github.com/spring-projects/spring-batch/issues/5099#issuecomment-3588361319"
+      },
+      {
+        "author": "Jaraxxuss",
+        "created_at": "2025-12-04T10:14:46Z",
+        "body": "facing same issue when launching same job multiple times in test method"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-04T10:17:32Z",
+        "body": "Thank you for reporting this issue and for providing a minimal example. Indeed, the lifecycle of the thread bound chunk tracker is incorrect when I introduced it in #5099. I will fix that in the upcoming patch release.\n\nJust a side note: you have reported a couple issues and shared feedback on v6 and I appreciate that🙏 I was expecting some bumps and edge cases in 6.0.0 (as with every overhaul), but I am priortizing to stabilise things in 6.0.1. I will also come back to you asap to help on your [modularisation request](https://github.com/spring-projects/spring-batch/issues/5072#issuecomment-3575523924) . Thank you for your comprehension."
+      },
+      {
+        "author": "kzander91",
+        "created_at": "2025-12-04T11:43:31Z",
+        "body": "@fmbenhassine sure thing! Usually I'm trying to give feedback earlier during the milestone phases, but this time it wasn't feasible for me due to the modularisation, where I was basically stuck.\nI personally have already migrated to using a single context (but other's may still need guidance of course), which is why I have been able to test the v6 more thoroughly now."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-04T13:23:17Z",
+        "body": "@kzander91 The reproducer you provided inspired me to create this: b58c8429bcad782702fd4f1015b9dcc984b3de2b. Thank you for the inspiration 😉"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "69665d83d8556d9c23a965ee553972a277221d83"
+      ]
+    }
+  },
+  {
+    "number": 5127,
+    "title": "Fault-tolerant step: `retry(Class)` traverses exception causes, `skip(Class)` does not",
+    "state": "closed",
+    "created_at": "2025-12-03T14:03:54Z",
+    "updated_at": "2025-12-16T20:26:24Z",
+    "author": "kzander91",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5127",
+    "body": "**Bug description**\n`skip(Class)` and `retry(Class)` behave inconsistently in that `skip(SkippableException.class)` does _not_ cause `throw new RuntimeException(new SkippableException())` to be skipped, but `retry(SkippableException.class)` _does_ inspect the cause and causes the same expression to be retried.\n\nThe expectation would be that exception matching in both `RetryPolicy` and `SkipPolicy` behave consistently (ideally aligned with `RetryPolicy`, in that causes are traversed).\n\nThe underlying reason for that is the switch to the new retry support from Framework, which always traverses causes (as it happens, a feature that I have requested myself 🙃): spring-projects/spring-framework#35583\n\n**Environment**\nSpring Batch 6.0.0\n\n**Steps to reproduce**\n1. Configure fault-tolerant step that skips and retries the same exception type.\n2. Throw another exception with a skippable exception as the cause.\n\n**Expected behavior**\nThe exception is both retried and then skipped (after retry exhaustion).\n\n**Minimal Complete Reproducible example**\nReproducer: [demo14.zip](https://github.com/user-attachments/files/23907601/demo14.zip)\nRun with `./mvnw test`\n\nThe project has a step like this:\n```java\n@Bean\nStep step() {\n    return new StepBuilder(\"step\", jobRepository)\n            .chunk(5)\n            .transactionManager(transactionManager)\n            .faultTolerant()\n            .retry(SkippableException.class)\n            .retryLimit(1)\n            .skip(SkippableException.class)\n            .skipLimit(1)\n            .reader(new ListItemReader<>(List.of(\"item\")))\n            .writer(_ -> {\n                throw new RuntimeException(new SkippableException());\n            })\n            .build();\n}\n\nstatic class SkippableException extends RuntimeException {\n\n}\n```\n\nA test then launches and expects successful completion and a skip count of 1.\n\n---\nWith Spring Batch 5, I was using a `LimitCheckingItemSkipPolicy` with a `BinaryExceptionClassifier` (from spring-retry) that was configured to traverse causes. However this is now deprecated and no equivalent replacement exists (apart from fully reimplementing my own `SkipPolicy`.\n\n---\n\nWhile debugging this, I found another, likely related issue:\nhttps://github.com/spring-projects/spring-batch/blob/fa73e01f40d6cd7e8274b473a17e8c0c387fae84/spring-batch-core/src/main/java/org/springframework/batch/core/step/skip/LimitCheckingExceptionHierarchySkipPolicy.java#L50-L54\nNote how the logic is inverted in the case of `skipCount < 0` (which is the case when the `SkipPolicy` is queried directly after a retryable exception happend). In that case, non-skippable exceptions are classified as skippable, due to `!isSkippable(t)`.",
+    "labels": [
+      "type: bug",
+      "in: core",
+      "has: minimal-example",
+      "related-to: fault-tolerance"
+    ],
+    "comments": [
+      {
+        "author": "kzander91",
+        "created_at": "2025-12-03T15:36:31Z",
+        "body": "After more debugging, I'm getting more confused, perhaps the logic here is inverted as well?\nhttps://github.com/spring-projects/spring-batch/blob/fa73e01f40d6cd7e8274b473a17e8c0c387fae84/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java#L688-L702\nWhy is `this.skipPolicy.shouldSkip()` negated? This error, which is logged when the `SkipPolicy` _does_ indicate a skip, also indicates that the inverse was intended:\nhttps://github.com/spring-projects/spring-batch/blob/fa73e01f40d6cd7e8274b473a17e8c0c387fae84/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java#L700\n"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-16T10:41:15Z",
+        "body": "Thank you for reporting this issue and for providing an example! Indeed, that negation in `LimitCheckingExceptionHierarchySkipPolicy` and its inversion in `ChunkOrientedStep` are confusing and should be fixed.\n\nI will try to fix that for tomorrow's planned 6.0.1 release (which is unlikely given how busy my day is today), otherwise I will plan it for 6.0.2, unless someone manages to contribute a fix in a timely manner. Here is a failing test with the latest main to add in `ChunkOrientedStepTests`:\n\n\n```java\n@Test\nvoid testSkippableExceptionsTraversal() throws Exception {\n\t// given\n\tclass SkippableException extends RuntimeException {\n\n\t}\n\tItemReader<String> reader = new ListItemReader<>(List.of(\"item1\"));\n\tItemWriter<String> writer = chunk -> {\n\t\tthrow new RuntimeException(new SkippableException());\n\t};\n\n\tJobRepository jobRepository = new ResourcelessJobRepository();\n\tChunkOrientedStep<String, String> step = new StepBuilder(\"step\", jobRepository).<String, String>chunk(1)\n\t\t.reader(reader)\n\t\t.writer(writer)\n\t\t.faultTolerant()\n\t\t.retry(SkippableException.class)\n\t\t.retryLimit(1)\n\t\t.skip(SkippableException.class)\n\t\t.skipLimit(1)\n\t\t.build();\n\n\tJobInstance jobInstance = new JobInstance(1L, \"job\");\n\tJobExecution jobExecution = new JobExecution(1L, jobInstance, new JobParameters());\n\tStepExecution stepExecution = new StepExecution(1L, \"step\", jobExecution);\n\n\t// when - execute step\n\tstep.execute(stepExecution);\n\n\t// then - should skip the exception thrown by the writer\n\tExitStatus stepExecutionExitStatus = stepExecution.getExitStatus();\n\tassertEquals(ExitStatus.COMPLETED.getExitCode(), stepExecutionExitStatus.getExitCode());\n\tassertEquals(1, stepExecution.getSkipCount());\n}\n```\n\n---\n\n> The underlying reason for that is the switch to the new retry support from Framework, which always traverses causes (as it happens, a feature that I have requested myself 🙃) : https://github.com/spring-projects/spring-framework/issues/35583\n\nYes I saw that congrats ! You are doing an amazing job with all your contributions across the portfolio, really appreciated 🙏\n\n> The underlying reason for that is the switch to the new retry support from Framework\n\nas it happens, a feature that I have contributed myself 🙃: https://github.com/spring-projects/spring-framework/pull/34716"
+      },
+      {
+        "author": "therepanic",
+        "created_at": "2025-12-16T15:45:35Z",
+        "body": "Hi, @fmbenhassine! Thank you for all your work on this project!\n\nYou wrote that you probably won't have time to work on this, so I decided to do PR today. Maybe you'll be able to review it and, if necessary, polish it up and release it directly in the new 6.0.1 release. In any case, I think it needs to be fixed in 6.0.2. I also left a couple of comments. PTAL https://github.com/spring-projects/spring-batch/pull/5171.\n"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-16T20:22:48Z",
+        "body": "> You wrote that you probably won't have time to work on this, so I decided to do PR today.\n\nThis is so kind! Thank you very much for your help 🙏\n\nI will take a loop at your PR."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "8cade4d656f79646ed99ba68cd6e8b77ee0fe862",
+        "2c57f8d13e6f8fda7b89cfaa9b9668209bc6ee54",
+        "5edb62f0c818f4505804b46b45f5843556e6e826"
+      ]
+    }
+  },
+  {
+    "number": 5138,
+    "title": "Step execution no longer persisted after partitioner creates the context",
+    "state": "closed",
+    "created_at": "2025-12-05T22:02:43Z",
+    "updated_at": "2025-12-10T17:32:01Z",
+    "author": "brian-mcnamara",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5138",
+    "body": "**Bug description**\nWith [this change](https://github.com/spring-projects/spring-batch/commit/90d895955d951156849ba6fa018676273fdbe2c4#diff-1ccc98868257080253b51baded74a755478f3f85f754e0dc8ef05144ecd7dc02), a steps context is no longer persisted inside SimpleStepExecutionSplitter.java, causing the execution context created by a partitioner to be lost, preventing a remote worker from loading the created context. Specifically the call to jobRepository.addAll prior to batch 6 ensured the context was persisted\n\nSpecifically, after the contexts are created, MessageChannelPartitionHandler.doHandle is responsible to create and send the message, when the remote worker receives the message, it loads the steps through the job repository.\n\n**Environment**\nSpring boot 4.0.0, batch 6.0.0, batch-integration 6.0.0, JDK21\n\n**Steps to reproduce**\n\nSee https://github.com/brian-mcnamara/SpringBatch6/blob/main/src/main/java/com/example/batchpartitionbug/BatchPartitionBugApplication.java\n\n(can be run with `./gradlew run`) Specifically note line 91 which should get the context from the partitioner on line 197\n\nThis bug is seen with a partitioned step using message channels for delivery and a persistence layer for the jobRepository. \n\n\n**Expected behavior**\n\nThe partitioner should initialize the step contexts on the controller and update the step in the repository. This enabling the worker to load the step from the repository and use the context created earlier\n",
+    "labels": [
+      "type: bug",
+      "in: core"
+    ],
+    "comments": [
+      {
+        "author": "quaff",
+        "created_at": "2025-12-08T08:02:45Z",
+        "body": "My application failed to start due to `@Value(\"#{stepExecutionContext['xxx']}\")` is null after upgrade to Spring Boot 4.0."
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-10T16:43:12Z",
+        "body": "Thank you for reporting this issue and for providing an example! This is a valid issue. It seems like we have a gap in our remote partitioning [tests](https://github.com/spring-projects/spring-batch/tree/main/spring-batch-samples/src/test/java/org/springframework/batch/samples/partition/remote).. I will check that. I planned the fix for the upcoming 6.0.1 release."
+      },
+      {
+        "author": "brian-mcnamara",
+        "created_at": "2025-12-10T17:32:00Z",
+        "body": "Thank you both for the quick turn around, and all your work!"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "d983f71da9cf8fa014d5cb2657174a84e966c17c",
+        "1da2f28b4c1a855feed5f10ad70b708ead061305",
+        "412158afd9f8576b323d445212ed9e8f76c4bd84",
+        "60bf5b42bb6bee89a180ad321397c09b1c3999dc",
+        "cc2d57fde1cc603fc6d18defcc3eee1807e2adcd",
+        "a8961a6770a78cf94eee2f5d270f280751d2092d",
+        "e64383d8eeab77a5894657cfa2b343bffca54979"
+      ]
+    }
+  },
+  {
+    "number": 5139,
+    "title": "Enhance `ResourcelessJobRepository` implementation for testing",
+    "state": "closed",
+    "created_at": "2025-12-07T06:59:50Z",
+    "updated_at": "2025-12-16T09:34:03Z",
+    "author": "benelog",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5139",
+    "body": "## Background\n\nI understand the design intent behind `ResourcelessJobRepository`, based on the following issue:\n\n* [https://github.com/spring-projects/spring-batch/issues/4679](https://github.com/spring-projects/spring-batch/issues/4679)\n\n However, I believe there are a few targeted enhancements that would make this class much more useful in tests, without violating the original design goals.\n\nIn a single application context, `ResourcelessJobRepository` cannot run the same job multiple times. This limitation is acceptable as long as users understand it, but in tests it can become a constraint.\n\nFor example, the following test runs the same job with different `JobParameters` using `JobOperatorTestUtils`, but cannot rely on `ResourcelessJobRepository`:\n\n```java\n@SpringBootTest(\"spring.batch.job.enabled=false\")\n@SpringBatchTest\nclass HelloParamJobTest {\n\n  @Autowired\n  JobOperatorTestUtils testUtils;\n\n  @BeforeEach\n  void prepareTestUtils(@Autowired @Qualifier(\"helloParamJob\") Job helloParamJob) {\n    testUtils.setJob(helloParamJob);\n  }\n\n  @Test\n  void startJob() throws Exception {\n    JobParameters params = testUtils.getUniqueJobParametersBuilder()\n        .addLocalDate(\"helloDate\", LocalDate.of(2025, 7, 28))\n        .toJobParameters();\n    JobExecution execution = testUtils.startJob(params);\n    assertThat(execution.getExitStatus()).isEqualTo(ExitStatus.COMPLETED);\n  }\n\n  @Test\n  void startJobWithInvalidJobParameters() {\n    JobParameters params = testUtils.getUniqueJobParametersBuilder()\n        .addLocalDate(\"goodDate\", LocalDate.of(2025, 7, 28))\n        .toJobParameters();\n    assertThatExceptionOfType(InvalidJobParametersException.class)\n        .isThrownBy(() -> testUtils.startJob(params))\n        .withMessageContaining(\"do not contain required keys: [helloDate]\");\n  }\n}\n```\n\n## Known solutions\n\nI am aware of several existing workarounds for this limitation:\n\n* Register `ResourcelessJobRepository` as a prototype-scoped bean.\n* Use an in-memory database together with a JDBC-based `JobRepository`.\n* Use `@DirtiesContext` (or similar) to refresh the `ApplicationContext` before each test.\n\nHowever, all of these come with trade-offs, such as:\n\n* Additional complexity in object wiring and dependencies.\n* Extra configuration overhead.\n* Slower test execution due to frequent context refreshes.\n\nIn particular, as mentioned in this comment:\n\n* [https://github.com/spring-projects/spring-batch/issues/5118#issuecomment-3604092261](https://github.com/spring-projects/spring-batch/issues/5118#issuecomment-3604092261)\n\ncalls to `ResourcelessJobRepository#getJobInstance(String, JobParameters)` have caused test scenarios that worked well with  Spring Batch v5.2 to become impossible when upgrading to v6.0.\n\nIn such cases, users may see an error like:\n\n```text\nMessage: A job instance already exists and is complete for identifying parameters={JobParameter{name='batch.random', value=4546055881725385948}\n```\n\nThis can be confusing because the job name and/or `JobParameters` are actually different, yet the repository still resolves them to the same `JobInstance`. This also feels misaligned with Spring Batch's conceptual model, where a `JobInstance` is uniquely identified by a job name and its `JobParameters`.\n\n## Proposed enhancements\n\nTo address these issues while preserving the original design, I would like to propose the following enhancements to `ResourcelessJobRepository`:\n\n### 1. Filter return values based on job name, IDs, and parameters\n\nFor the methods below, compare the incoming arguments (`jobName`, `instanceId`, `executionId`, `JobParameters`, etc.) with the values held in the internal `JobInstance` and `JobExecution` fields, and filter return values accordingly:\n\n* `getJobInstances(String jobName, int start, int count)`\n* `findJobInstances(String jobName)`\n* `getJobInstance(long instanceId)`\n* `getLastJobInstance(String jobName)`\n* `getJobInstance(String jobName, JobParameters jobParameters)`\n* `getJobInstanceCount(String jobName)`\n* `getJobExecution(long executionId)`\n* `getLastJobExecution(String jobName, JobParameters jobParameters)`\n* `getLastJobExecution(JobInstance jobInstance)`\n* `getJobExecutions(JobInstance jobInstance)`\n\nSome methods already have comments like `// FIXME should return null if the id is not matching`, which suggest that this kind of filtering was already considered. Even if only a subset of these methods were updated, the observable behavior might be acceptable in practice. However, for conceptual consistency and to future-proof the implementation, I believe it would be better to have a systematic comparison of `jobName`, `jobInstanceId`, etc., across the class.\n\n### 2. Add methods to delete the current JobInstance and JobExecution\n\nAdd the ability to drop the currently held `JobInstance` and `JobExecution` from `ResourcelessJobRepository`:\n\n* `deleteJobInstance(JobInstance jobInstance)`\n* `deleteJobExecution(JobExecution jobExecution)`\n\nIf these methods are introduced, tests could intentionally delete the just-run `JobInstance` or `JobExecution` to reuse the same `ResourcelessJobRepository` instance in a more flexible way. For example:\n\n```java\n@Autowired\nJobOperatorTestUtils testUtils;\n\n@Autowired\nJobRepository repository;\n\n@BeforeEach\nvoid prepareTestUtils(@Autowired @Qualifier(\"helloParamJob\") Job helloParamJob) {\n  testUtils.setJob(helloParamJob);\n}\n\n@Test\nvoid startJob() throws Exception {\n  JobParameters params = testUtils.getUniqueJobParametersBuilder()\n      .addLocalDate(\"helloDate\", LocalDate.of(2025, 7, 28))\n      .toJobParameters();\n  JobExecution execution = testUtils.startJob(params);\n  assertThat(execution.getExitStatus()).isEqualTo(ExitStatus.COMPLETED);\n\n  // Explicitly clear the current JobInstance for the next test\n  repository.deleteJobInstance(execution.getJobInstance());\n}\n```\n\nThese two enhancements together would:\n\n* Make the implementation more faithful to the JobRepository interface contract.\n  * Reduce surprising behavior where different jobs/parameters map to the same `JobInstance`.\n* Make `ResourcelessJobRepository` more useful in test scenarios, especially when upgrading from Spring Batch 5.x to 6.x.\n* Maintain the original in-memory, single-instance nature of `ResourcelessJobRepository`.\n\nI would be happy to open a PR or further refine this proposal based on feedback from the maintainers.\n",
+    "labels": [
+      "in: core",
+      "type: enhancement"
+    ],
+    "comments": [
+      {
+        "author": "arey",
+        "created_at": "2025-12-09T15:44:54Z",
+        "body": "When I migrated from Spring Batch 5.x to 6.0.0, I encountered the same issue as @benelog :\n\n> Message: A job instance already exists and is complete for identifying parameters={JobParameter{name='batch.random', value=4546055881725385948}\n\nMy unit tests using `SpringBatchTest` failed when I tried to execute more than one job.\n\nTo avoid the context becoming dirty between the two test methods, I used some tricks to bypass the limitation of the `ResourcelessJobRepository` and override the `deleteJobExecution` method. \n\nI hope we could improve the `ResourcelessJobRepository` implementation and remove by removing the `FIXME` and implementing `UnsupportedOperationException` of the `JobRepository` interface.\n\n```java\n    @BeforeEach\n     void setUp() throws IOException {\n      var currentJobExecution =jobRepository.getJobExecution(1L);  // arbitrary ID\n        if (currentJobExecution != null) {\n            jobRepository.deleteJobExecution(currentJobExecution);\n        }\n    }\n\n  @Configuration\n    static class ProgrammaticTestConfiguration extends DefaultBatchConfiguration {\n\n        @Override\n        @Bean\n        public @NonNull JobRepository jobRepository() {\n            return new MyResourcelessJobRepository();\n        }\n\n    }\n\n    static class MyResourcelessJobRepository extends ResourcelessJobRepository {\n\n        @Override\n        public void deleteJobExecution(@org.jspecify.annotations.Nullable JobExecution jobExecution) {\n            try {\n                var jobExecutionField = ResourcelessJobRepository.class.getDeclaredField(\"jobExecution\");\n                jobExecutionField.setAccessible(true);\n                jobExecutionField.set(this, null);\n\n                var jobInstanceField = ResourcelessJobRepository.class.getDeclaredField(\"jobInstance\");\n                jobInstanceField.setAccessible(true);\n                jobInstanceField.set(this, null);\n            } catch (NoSuchFieldException | IllegalAccessException e) {\n                throw new RuntimeException(e);\n            }\n        }\n    }\n```"
+      },
+      {
+        "author": "benelog",
+        "created_at": "2025-12-10T07:02:53Z",
+        "body": "@arey\nI had the same thought and have incorporated it into the following pull request:\nhttps://github.com/spring-projects/spring-batch/pull/5140"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-10T20:52:48Z",
+        "body": "Thank you for reporting this issue! There is no doubt, `ResourcelessJobRepository` should be updated to fix the FIXMEs (😅) and implement default methods from the `JobRepository` interface (including meta-data deletion methods). I will merge #5140  which LGTM 👍 \n\nOnce that in place, and since you are using test utilities provided by Spring Batch, you should use the `JobRepositoryTestUtils` instead of the `JobRepository` directly (similar to using `JobOperatorTestUtils` instead of `JobOperator`):\n\n```diff\n@Autowired\nJobOperatorTestUtils testUtils;\n\n@Autowired\n--JobRepository repository;\n++JobRepositoryTestUtils repositoryUtils;\n\n@BeforeEach\nvoid prepareTestUtils(@Autowired @Qualifier(\"helloParamJob\") Job helloParamJob) {\n  testUtils.setJob(helloParamJob);\n++  repositoryUtils.removeJobExecutions();\n}\n\n@Test\nvoid startJob() throws Exception {\n  JobParameters params = testUtils.getUniqueJobParametersBuilder()\n      .addLocalDate(\"helloDate\", LocalDate.of(2025, 7, 28))\n      .toJobParameters();\n  JobExecution execution = testUtils.startJob(params);\n  assertThat(execution.getExitStatus()).isEqualTo(ExitStatus.COMPLETED);\n\n--  // Explicitly clear the current JobInstance for the next test\n-- repository.deleteJobInstance(execution.getJobInstance());\n}\n```\n\nThat said, the `ResourcelessJobRepository` is designed for a very specific use case: a single execution of a Spring Batch job. It does exactly that (and I believe it does it very well as it performs two orders of magnitude better than any other repository implementation). This is mentioned in its Javadoc as well as the [reference docs](https://docs.spring.io/spring-batch/reference/job/configuring-repository.html#_configuring_a_resourceless_jobrepository). So using it for anything else than what it was designed for is incorrect, including using it in tests without proper lifecycle management. In fact, the `ResourcelessJobRepository` is very lightweight and can be defined as a prototype bean in your test context. Every job can use a different instance of it and this is completely fine. I think of it like a virtual thread but for jobs: you can have as many disposable resourcessless job repositories as needed, no need to reuse them or pool them, etc. They will be GCed anyway. "
+      },
+      {
+        "author": "benelog",
+        "created_at": "2025-12-10T21:50:34Z",
+        "body": "@fmbenhassine\nThank you for your feedback and for considering my PR favorably.\n\nFirst of all, this is quite straightforward, but I wanted to leave a note here for people who might refer to this issue when using `JobRepositoryTestUtils.removeJobExecutions()` with Spring Batch 6.0.0.\n\n[`JobRepositoryTestUtils.removeJobExecutions()`](https://github.com/spring-projects/spring-batch/blob/main/spring-batch-test/src/main/java/org/springframework/batch/test/JobRepositoryTestUtils.java#L154) eventually calls [`JobRepository.removeJobExecution(JobExecution)`](https://github.com/spring-projects/spring-batch/blob/main/spring-batch-core/src/main/java/org/springframework/batch/core/repository/JobRepository.java#L326). \nIn v6.0.0, `ResourcelessJobRepository` does not implement `removeJobExecution(JobExecution)`, so the default method implementation in `JobRepository` is invoked and an `UnsupportedOperationException` is thrown. \n\nTherefore, unless `removeJobExecution(JobExecution)` is implemented as in [https://github.com/spring-projects/spring-batch/pull/5140](https://github.com/spring-projects/spring-batch/pull/5140), calling `JobRepositoryTestUtils.removeJobExecutions()` will result in an `UnsupportedOperationException`. \nI initially tried that approach as well, and it failed for this reason. In the example code in the description, I chose not to use `JobRepositoryTestUtils` so that the call chain would be expressed more directly.\n\nAlso, if we think ahead to a future where the `JobRepository` used in tests might be switched from `ResourcelessJobRepository` to another implementation,  I believe there are cases where it is beneficial to delete only the single `JobExecution` created by the current test instead of clearing all executions.\nIn an environment where the database used for tests is shared across multiple developers, wiping all `JobExecution` records could lead to unintended side effects.\n\nAdding an implementation of methods such as `ResourcelessJobRepository.removeJobExecution(JobExecution)` would, as described above, improve the usability of `JobRepositoryTestUtils` and at the same time make the `JobRepository` contract more fully implemented.\n\nThank you as well for reiterating the design intent that `ResourcelessJobRepository` can be registered as a prototype bean for testing.\nIt is certainly possible to define a separate `ApplicationContext` for tests where the same job needs to be executed repeatedly, but I feel there are trade-offs in terms of convenience. \nIf the implementation of `ResourcelessJobRepository.removeJobExecution(JobExecution)` proposed in this PR is adopted, I expect it will help address these concerns.\n"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-11T04:55:30Z",
+        "body": "Resolved with #5140. Thank you for raising the issue and contributing a PR 🙏"
+      },
+      {
+        "author": "phactum-mnestler",
+        "created_at": "2025-12-15T15:28:24Z",
+        "body": "For anyone finding this issue the same way as me:\nWe're using the Spring Boot auto configuration, and after the upgrade to Spring Boot 4 we suddenly had both this issue and #5108, as the framework suddenly provided `ResourcelessJobRepository` instead of `SimpleJobRepository`. Adding an additional dependency for `spring-boot-starter-batch-jdbc` fixed the issue for us."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5150,
+    "title": "`RemotePartitioningWorkerStepBuilder` doesn't override all configuration methods from `StepBuilder`",
+    "state": "closed",
+    "created_at": "2025-12-09T03:10:28Z",
+    "updated_at": "2025-12-10T16:58:47Z",
+    "author": "quaff",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5150",
+    "body": "**Bug description**\n\n`MessageDispatchingException` raised after migration:\n\n```\n2025-12-09T11:03:05.207+08:00 ERROR 26960 --- [        task-12] o.s.integration.handler.LoggingHandler   : org.springframework.integration.MessageDispatchingException: Dispatcher has no subscribers, failedMessage=GenericMessage [payload=StepExecutionRequest: [stepExecutionId=14, stepName=importCustomerWorkerStep], headers={sequenceNumber=9, kafka_offset=3, sequenceSize=10, kafka_consumer=org.springframework.kafka.core.DefaultKafkaConsumerFactory$ExtendedKafkaConsumer@b5009fc, kafka_timestampType=CREATE_TIME, correlationId=1:importCustomerWorkerStep, id=ff913842-1559-3203-f6ad-d1af28690380, kafka_receivedPartitionId=2, kafka_receivedTopic=worker, kafka_receivedTimestamp=1765249385033, kafka_groupId=spring-batch-remote-partitioning-kafka, timestamp=1765249385206}]\n\tat org.springframework.integration.dispatcher.UnicastingDispatcher.doDispatch(UnicastingDispatcher.java:156)\n\tat org.springframework.integration.dispatcher.UnicastingDispatcher$1.run(UnicastingDispatcher.java:131)\n\tat org.springframework.integration.util.ErrorHandlingTaskExecutor.lambda$execute$0(ErrorHandlingTaskExecutor.java:64)\n```\n\n**Steps to reproduce**\n\nUpgrade from deprecated\n\n```java\nstepBuilderFactory.get(stepName).inputChannel(inputChannel).chunk(CHUNK_SIZE, transactionManager)\n```\nto\n\n```java\nstepBuilderFactory.get(stepName).inputChannel(inputChannel).chunk(CHUNK_SIZE).transactionManager(transactionManager)\n```\n",
+    "labels": [
+      "type: bug",
+      "in: integration"
+    ],
+    "comments": [],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "5e3df332ab1831ac90d4e8234b52d3ce05601244",
+        "f04f6636362fad92c0a741b0785af699535a5d99",
+        "37a39e2d5d02f02ee4e73400a4ff5a9cf6f850be"
+      ]
+    }
+  },
+  {
+    "number": 5152,
+    "title": "Class JobParametersInvalidException mentioned in \"Spring Batch 6.0 Migration Guide\" but is not available in 6.0.0",
+    "state": "closed",
+    "created_at": "2025-12-09T10:24:16Z",
+    "updated_at": "2025-12-10T16:56:22Z",
+    "author": "sebeichholz",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5152",
+    "body": "The [Spring Batch 6.0 Migration Guide](https://github.com/spring-projects/spring-batch/wiki/Spring-Batch-6.0-Migration-Guide) says that the class **JobParametersInvalidException** was moved to a new package.\n\nThe class was in 6.0.0-M3 , but in 6.0.0 the class appears to have been renamed to \"InvalidJobParametersException\".\n\nSo perhaps the Migration Guide should be updated. Thanks!",
+    "labels": [
+      "in: documentation",
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-10T16:56:13Z",
+        "body": "Thank you for reporting this issue! Indeed, that class was renamed as part of #5013.\n\nI fixed the migration guide accordingly."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
+  },
+  {
+    "number": 5172,
+    "title": "Local Chunking: BatchStatus remains COMPLETED when worker thread write fails",
+    "state": "closed",
+    "created_at": "2025-12-17T04:58:24Z",
+    "updated_at": "2025-12-17T08:42:28Z",
+    "author": "KILL9-NO-MERCY",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5172",
+    "body": "Hi Spring Batch team,\n\nThank you for your great work on Spring Batch 6.0 and the new local chunking feature! While testing `ChunkTaskExecutorItemWriter`, I noticed a potential issue with status management when worker threads fail during write operations.\n\n**Bug description**\nWhen using `ChunkTaskExecutorItemWriter` for local chunking, if a worker thread fails during the write operation, the step's `BatchStatus` incorrectly remains `COMPLETED` while the `ExitStatus` is correctly set to `FAILED`. This creates an inconsistency in the step execution metadata.\n\n\n**Root Cause**\nIn `AbstractStep.execute()` (around line 322), after calling `afterStep()`, only the `ExitStatus` is explicitly set:\n```java\nexitStatus = exitStatus.and(getCompositeListener().afterStep(stepExecution));\nstepExecution.setExitStatus(exitStatus);  // Only ExitStatus is updated\n```\n\nThe `BatchStatus` is not updated based on the `afterStep()` result. It remains as `COMPLETED` (set earlier in the try block) even when `afterStep()` returns `FAILED`.\n\n**Current Implementation (ChunkTaskExecutorItemWriter.java)**\n```java\n@Override\npublic ExitStatus afterStep(StepExecution stepExecution) {\n    try {\n        for (StepContribution contribution : getStepContributions()) {\n            stepExecution.apply(contribution);\n        }\n    }\n    catch (ExecutionException | InterruptedException e) {\n        // Missing: stepExecution.setStatus(BatchStatus.FAILED);\n        return ExitStatus.FAILED.addExitDescription(e);\n    }\n    return ExitStatus.COMPLETED.addExitDescription(\"Waited for \" + this.responses.size() + \" results.\");\n}\n```\n\n**Expected behavior**\n\nWhen `afterStep()` returns `ExitStatus.FAILED`, the `BatchStatus` should also be set to `FAILED` to maintain consistency between `ExitStatus` and `BatchStatus`.\n\n**Proposed Fix**\n```java\n@Override\npublic ExitStatus afterStep(StepExecution stepExecution) {\n    try {\n        for (StepContribution contribution : getStepContributions()) {\n            stepExecution.apply(contribution);\n        }\n    }\n    catch (ExecutionException | InterruptedException e) {\n        stepExecution.setStatus(BatchStatus.FAILED);  // Add this line\n        return ExitStatus.FAILED.addExitDescription(e);\n    }\n    return ExitStatus.COMPLETED.addExitDescription(\"Waited for \" + this.responses.size() + \" results.\");\n}\n```\n\n**Steps to reproduce**\n1. Configure a step using `ChunkTaskExecutorItemWriter`\n2. Create a `ChunkProcessor` that throws an exception during write operation\n3. Execute the job\n4. Check the `BATCH_STEP_EXECUTION` table in the database\n\n\n**Observed Result:**\n- `EXIT_CODE`: FAILED ✓\n- `STATUS`: COMPLETED ✗ (Expected: FAILED)\n\n\n**Minimal Complete Reproducible example**\n```java\npackage com.example.batch;\n\nimport lombok.AllArgsConstructor;\nimport lombok.Data;\nimport lombok.NoArgsConstructor;\nimport lombok.extern.slf4j.Slf4j;\nimport org.springframework.batch.core.ExitStatus;\nimport org.springframework.batch.core.job.Job;\nimport org.springframework.batch.core.job.builder.JobBuilder;\nimport org.springframework.batch.core.job.parameters.RunIdIncrementer;\nimport org.springframework.batch.core.repository.JobRepository;\nimport org.springframework.batch.core.step.Step;\nimport org.springframework.batch.core.step.builder.StepBuilder;\nimport org.springframework.batch.core.step.item.ChunkProcessor;\nimport org.springframework.batch.infrastructure.item.ItemReader;\nimport org.springframework.batch.infrastructure.item.ItemWriter;\nimport org.springframework.batch.infrastructure.item.support.ListItemReader;\nimport org.springframework.batch.integration.chunk.ChunkTaskExecutorItemWriter;\nimport org.springframework.context.annotation.Bean;\nimport org.springframework.context.annotation.Configuration;\nimport org.springframework.core.task.SimpleAsyncTaskExecutor;\nimport org.springframework.transaction.PlatformTransactionManager;\nimport org.springframework.transaction.support.TransactionTemplate;\n\nimport java.util.List;\n\n@Slf4j\n@Configuration\npublic class IssueReproductionJobConfiguration {\n    \n    @Bean\n    public Job issueReproductionJob(JobRepository jobRepository, Step issueReproductionStep) {\n        return new JobBuilder(jobRepository)\n                .incrementer(new RunIdIncrementer())\n                .start(issueReproductionStep)\n                .build();\n    }\n\n    @Bean\n    public Step issueReproductionStep(\n            JobRepository jobRepository,\n            PlatformTransactionManager transactionManager,\n            ChunkTaskExecutorItemWriter issueReproductionWriter\n    ) {\n        return new StepBuilder(jobRepository)\n                .chunk(3)\n                .transactionManager(transactionManager)\n                .reader(issueReproductionReader())\n                .writer(issueReproductionWriter)\n                .build();\n    }\n\n    @Bean\n    public ItemReader issueReproductionReader() {\n        return new ListItemReader<>(List.of(\n                new TestItem(1L, \"Item-1\", \"First item\"),\n                new TestItem(2L, \"Item-2\", \"Second item - will throw exception\"),\n                new TestItem(3L, \"Item-3\", \"Third item\")\n        ));\n    }\n\n    @Bean\n    public ChunkTaskExecutorItemWriter issueReproductionWriter(\n            ChunkProcessor chunkProcessor\n    ) {\n        return new ChunkTaskExecutorItemWriter<>(chunkProcessor, new SimpleAsyncTaskExecutor());\n    }\n\n    @Bean\n    public ChunkProcessor chunkProcessor(PlatformTransactionManager transactionManager) {\n        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);\n        ItemWriter writer = chunk -> {\n            for (TestItem testItem : chunk.getItems()) {\n                log.info(\"Writing: {}\", testItem);\n\n                if (\"Item-2\".equals(testItem.getName())) {\n                    throw new RuntimeException(\"Simulated write failure\");\n                }\n            }\n        };\n\n        return (chunk, contribution) -> txTemplate.executeWithoutResult(status -> {\n            try {\n                writer.write(chunk);\n                contribution.setExitStatus(ExitStatus.COMPLETED);\n            } catch (Exception e) {\n                status.setRollbackOnly();\n                contribution.setExitStatus(ExitStatus.FAILED.addExitDescription(e));\n                throw e;\n            }\n        });\n    }\n\n    @Data\n    @NoArgsConstructor\n    @AllArgsConstructor\n    public static class TestItem {\n        private Long id;\n        private String name;\n        private String description;\n    }\n}\n```\n\n\nAfter execution, query the metadata:\n```sql\nSELECT STEP_NAME, STATUS, EXIT_CODE, EXIT_MESSAGE\nFROM BATCH_STEP_EXECUTION;\n\n-- Result: \n-- STEP_NAME            | STATUS    | EXIT_CODE | EXIT_MESSAGE\n-- issueReproductionStep| COMPLETED | FAILED    | java.lang.RuntimeException: Simulated write failure ...\n--                        ^^^^^^^^^   ^^^^^^\n--                        Inconsistent!\n```\n\n\n**Proposed Solution**\n\nUpdate `ChunkTaskExecutorItemWriter.afterStep()` to explicitly set `BatchStatus.FAILED` when worker threads fail:\n```java\n@Override\npublic ExitStatus afterStep(StepExecution stepExecution) {\n    try {\n        for (StepContribution contribution : getStepContributions()) {\n            stepExecution.apply(contribution);\n        }\n    }\n    catch (ExecutionException | InterruptedException e) {\n        stepExecution.setStatus(BatchStatus.FAILED);  // Set BatchStatus to maintain consistency\n        return ExitStatus.FAILED.addExitDescription(e);\n    }\n    return ExitStatus.COMPLETED.addExitDescription(\"Waited for \" + this.responses.size() + \" results.\");\n}\n```\n\nThis ensures that both `BatchStatus` and `ExitStatus` are consistently set to `FAILED` when worker thread execution fails, preventing metadata inconsistencies that can affect job restart logic and monitoring systems.",
+    "labels": [
+      "type: bug",
+      "in: integration"
+    ],
+    "comments": [
+      {
+        "author": "fmbenhassine",
+        "created_at": "2025-12-17T08:41:58Z",
+        "body": "Thank you for raising this issue and for providing an example! Really top notch bug reporting here 👌\n\nThis is indeed a valid issue. In addition to marking the step execution as failed in the catch block as suggested , we also need to check if one of the workers has failed (as failed contributions could be applied before successful ones and therefore the step will be marked as completed even if one of the workers has failed)."
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": [
+        "82121a59872e018b1c98cbe68345fde716cd2e60"
+      ]
+    }
+  }
+]
