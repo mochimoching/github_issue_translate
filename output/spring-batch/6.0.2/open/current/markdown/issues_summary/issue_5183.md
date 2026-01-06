@@ -1,40 +1,92 @@
-*このドキュメントは生成AI(Claude Sonnet 4.5)によって2026年1月6日に生成されました。*
+*（このドキュメントは生成AI(Claude Sonnet 4.5)によって2026年1月6日に生成されました）*
 
 ## 課題概要
 
-Spring Batch 6.0の新しい`ChunkOrientedStep`において、マルチスレッド処理と`@StepScope`の`ItemProcessor`を組み合わせると、`ScopeNotActiveException`が発生する問題です。
+Spring Batch 6.0で導入された`ChunkOrientedStep`において、マルチスレッド（`TaskExecutor`）設定を使用する際、`@StepScope`で定義された`ItemProcessor`がワーカースレッド内で正しく解決されず、`ScopeNotActiveException`が発生する問題です。
 
-**`@StepScope`とは**: Spring BatchにおけるSpringのスコープの一つで、ステップ実行中のみ有効なBeanを定義します。`JobParameters`や`StepExecution`などのステップ実行時の情報にアクセスできます。
+**@StepScopeとは**: Spring Batchが提供するカスタムスコープで、ステップ実行ごとにBeanのインスタンスを作成します。`JobParameters`や`ExecutionContext`の値を遅延評価で注入できるため、動的な設定が可能になります。
 
-**マルチスレッド処理とは**: Spring Batchでチャンク処理を並列化する機能です。`TaskExecutor`を設定することで、複数のスレッドで同時にアイテムを処理できます。
+**TaskExecutorとは**: Spring Frameworkが提供する非同期タスク実行の抽象化インターフェースです。マルチスレッド処理を実現するために使用され、Spring Batchではチャンク処理の並列化に利用されます。
 
-**ItemProcessorとは**: 読み取ったデータ（item）を加工・変換するコンポーネントです。ビジネスロジックの実行、データの検証・変換などを行います。
+### 問題の発生状況
 
-**問題の状況**:
-- ステップに`TaskExecutor`（例：`SimpleAsyncTaskExecutor`）を設定してマルチスレッド処理を有効化
-- `ItemProcessor`を`@StepScope`で定義
-- 処理実行時にワーカースレッドで`ScopeNotActiveException`が発生
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+skinparam minClassWidth 150
 
-**具体的な事象**:
-```bash
-Caused by: org.springframework.beans.factory.support.ScopeNotActiveException: 
-Error creating bean with name 'scopedTarget.issueReproductionProcessor': 
-Scope 'step' is not active for the current thread
+participant "メインスレッド" as Main
+participant "TaskExecutor" as Executor
+participant "ワーカースレッド" as Worker
+participant "StepSynchronizationManager" as Manager
+participant "@StepScope Processor" as Processor
+
+Main -> Manager: StepContextを登録
+activate Main
+note right: メインスレッドのThreadLocalに保存
+
+Main -> Executor: submit(処理タスク)
+activate Executor
+
+Executor -> Worker: 新しいスレッドで実行
+activate Worker
+
+Worker -> Processor: process(item) 呼び出し
+activate Processor
+note right: @StepScopeプロキシ
+
+Processor -> Manager: StepContextを取得
+note right: ワーカースレッドのThreadLocalから検索
+
+Manager --> Processor: ❌コンテキスト未登録
+note right: ThreadLocalは\nスレッドごとに独立
+
+Processor --> Worker: ❌ScopeNotActiveException
+deactivate Processor
+note right
+  Error: Scope 'step' is not active
+  for the current thread
+end note
+
+Worker --> Executor: 例外返却
+deactivate Worker
+
+Executor --> Main: 処理失敗
+deactivate Executor
+deactivate Main
+
+@enduml
 ```
 
-**再現環境**:
+### エラーの詳細
+
+```
+Caused by: org.springframework.beans.factory.support.ScopeNotActiveException: 
+  Error creating bean with name 'scopedTarget.issueReproductionProcessor': 
+  Scope 'step' is not active for the current thread
+  at AbstractBeanFactory.doGetBean()
+  at $Proxy134.process()
+  at ChunkOrientedStep.doProcess()
+
+Caused by: java.lang.IllegalStateException: 
+  No context holder available for step scope
+  at StepScope.getContext()
+```
+
+### マルチスレッド設定の例
+
 ```java
 @Bean
 public Step issueReproductionStep(
         JobRepository jobRepository,
         ItemReader<TestItem> reader,
-        ItemProcessor<TestItem, TestItem> processor, // @StepScope Bean
+        ItemProcessor<TestItem, TestItem> itemProcessor, // @StepScope
         ItemWriter<TestItem> writer
 ) {
     return new StepBuilder(jobRepository)
             .<TestItem, TestItem>chunk(1)
             .reader(reader)
-            .processor(processor)
+            .processor(itemProcessor)
             .writer(writer)
             .taskExecutor(new SimpleAsyncTaskExecutor()) // マルチスレッド有効
             .build();
@@ -44,7 +96,8 @@ public Step issueReproductionStep(
 @StepScope
 public ItemProcessor<TestItem, TestItem> issueReproductionProcessor() {
     return item -> {
-        log.info("Processing item: {}", item.getName());
+        log.info("[Thread: {}] Processing item: {}", 
+                 Thread.currentThread().getName(), item.getName());
         return item;
     };
 }
@@ -52,205 +105,421 @@ public ItemProcessor<TestItem, TestItem> issueReproductionProcessor() {
 
 ## 原因
 
-`ChunkOrientedStep`のマルチスレッド処理実装（`processChunkConcurrently`メソッド）において、`TaskExecutor`によって管理されるワーカースレッドに`StepContext`が伝播されていないことが原因です。
+### ThreadLocalの仕組み
 
-**詳細な原因分析**:
-
-1. **StepScopeの仕組み**:
-```java
-// StepScopeでBeanを取得する際の流れ
-1. Spring: @StepScope Beanのプロキシを生成
-2. プロキシ: 実際のBeanを取得するため、StepScope.getContext()を呼び出す
-3. StepScope: StepSynchronizationManager.getContext()でコンテキストを取得
-4. StepSynchronizationManager: 現在のスレッドのThreadLocalからコンテキストを取得
-```
-
-2. **問題の発生メカニズム**:
+`StepSynchronizationManager`は、`StepContext`を`ThreadLocal`変数に保存します。`ThreadLocal`は各スレッドごとに独立した値を保持するため、別スレッドからはアクセスできません。
 
 ```plantuml
 @startuml
-participant "Main Thread" as Main
-participant "StepSynchronizationManager" as Manager
-participant "TaskExecutor" as Executor
-participant "Worker Thread" as Worker
-participant "ItemProcessor (Proxy)" as Processor
+skinparam backgroundColor transparent
 
-Main -> Manager: register(stepExecution)
-note right: メインスレッドにStepContext登録
+package "メインスレッド (Thread-1)" {
+  component "ThreadLocal<StepContext>" as TL1
+  component "StepContext" as SC1
+  TL1 --> SC1: 保持
+}
 
-Main -> Executor: submit(() -> process(item))
-note right: ワーカースレッドにタスク送信
+package "ワーカースレッド (Thread-2)" {
+  component "ThreadLocal<StepContext>" as TL2
+  component "null" as SC2
+  TL2 --> SC2: 未初期化
+}
 
-Executor -> Worker: タスク実行開始
-Worker -> Processor: process(item)
-note right: @StepScope プロキシを呼び出し
-
-Processor -> Manager: getContext()
-note right: 現在のスレッド（Worker）のコンテキストを取得
-
-Manager -> Manager: ThreadLocal.get()
-note right: このスレッドには未登録！
-
-Manager -> Processor: null を返す
-Processor -> Worker: **ScopeNotActiveException**
-note right: "Scope 'step' is not active"
+note right of SC2
+  ワーカースレッドでは
+  StepContextが登録されていない
+  →ScopeNotActiveException
+end note
 
 @enduml
 ```
 
-3. **なぜワーカースレッドにコンテキストがないのか**:
+### ChunkOrientedStep.processChunkConcurrentlyの実装
 
-| スレッド | StepContext登録 | 説明 |
-|----------|----------------|------|
-| メインスレッド | ✅ 登録済み | `ChunkOrientedStep`の起動時に`StepSynchronizationManager.register()`を呼び出し |
-| ワーカースレッド | ❌ 未登録 | `TaskExecutor.submit()`で新しいスレッドが作成されるが、コンテキストの伝播処理がない |
-
-**ThreadLocalの特性**: `StepSynchronizationManager`は`ThreadLocal`を使用してコンテキストを管理します。`ThreadLocal`は各スレッド固有のデータを保持するため、**親スレッドの値は子スレッドに自動的には伝播されません**。
-
-4. **ChunkOrientedStep.processChunkConcurrentlyの問題箇所**:
 ```java
-// ChunkOrientedStep.java
-private void processChunkConcurrently(...) {
-    while (...) {
-        I item = chunkProvider.provide(contribution);
-        
-        // 問題: StepContextの登録なしにワーカースレッドでタスク実行
-        Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
-            // このスレッドにはStepContextが登録されていない！
+private void processChunkConcurrently(Chunk<I> chunk, 
+                                     StepContribution contribution) throws Exception {
+    List<Future<O>> futures = new ArrayList<>();
+    
+    for (I item : chunk.getItems()) {
+        // ❌問題: StepContextを伝播せずにタスクを投入
+        Future<O> future = this.taskExecutor.submit(() -> {
             return processItem(item, contribution);
-            // ↑ @StepScopeのItemProcessorを呼び出すと例外発生
+            // ↑ここで@StepScope Beanにアクセス
+            // →StepSynchronizationManager.getContext()が呼ばれる
+            // →ワーカースレッドにはコンテキストが無い
+            // →ScopeNotActiveException
         });
-        
+        futures.add(future);
+    }
+    
+    // 結果を収集
+    for (Future<O> future : futures) {
+        O processedItem = future.get(); // 例外が伝播される
         // ...
     }
 }
 ```
 
-**Spring Batch 5.xとの比較**:
-Spring Batch 5.xの`TaskletStep`では、マルチスレッドチャンク処理において`StepContext`の伝播が適切に実装されていた可能性があります（具体的な実装の比較は報告書に記載されていませんが、この問題が6.xで新たに発生していることから推測されます）。
-
-## 対応方針
-
-報告者が提案する修正内容は、`processChunkConcurrently`メソッドにおいて、ワーカースレッドの開始時に`StepContext`を登録し、終了時にクリーンアップすることです。
-
-**提案される修正** (KILL9-NO-MERCY氏):
-
-```java
-// ChunkOrientedStep.processChunkConcurrently メソッド内
-private void processChunkConcurrently(...) {
-    while (...) {
-        I item = chunkProvider.provide(contribution);
-        
-        Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
-            try {
-                // 修正: 現在のワーカースレッドのStepSynchronizationManagerに
-                //       ステップ実行を登録
-                StepSynchronizationManager.register(stepExecution);
-                
-                // アイテムを処理（@StepScope Beanにアクセス可能）
-                return processItem(item, contribution);
-                
-            } finally {
-                // 修正: メモリリークを防ぐため、処理後にコンテキストをクリア
-                StepSynchronizationManager.close();
-            }
-        });
-        
-        // 残りのロジック...
-    }
-}
-```
-
-**修正のポイント**:
-
-1. **ワーカースレッドでのStepContext登録**:
-```java
-StepSynchronizationManager.register(stepExecution);
-```
-   - ワーカースレッドの`ThreadLocal`に`StepContext`を登録
-   - `@StepScope` Beanが現在の`StepExecution`情報にアクセス可能になる
-
-2. **処理後のクリーンアップ**:
-```java
-finally {
-    StepSynchronizationManager.close();
-}
-```
-   - `ThreadLocal`から`StepContext`を削除
-   - メモリリークを防止（特にスレッドプールを使用する場合、スレッドが再利用されるため重要）
-
-**修正後の動作**:
+### コンテキスト伝播の不足
 
 ```plantuml
 @startuml
-participant "Main Thread" as Main
-participant "StepSynchronizationManager" as Manager
-participant "TaskExecutor" as Executor
-participant "Worker Thread" as Worker
-participant "ItemProcessor (Proxy)" as Processor
+skinparam backgroundColor transparent
+skinparam state {
+  MinimumWidth 200
+}
+:メインスレッド開始;
 
-Main -> Manager: register(stepExecution)
-note right: メインスレッドにStepContext登録
+:StepSynchronizationManager.register();
+note right
+  StepContext登録
+  （メインスレッドのThreadLocal）
+end note
 
-Main -> Executor: submit(() -> process(item))
+partition "TaskExecutor.submit()" {
+  fork
+    :ワーカースレッド1起動;
+    :❌StepContext未登録;
+    :@StepScope Bean取得試行;
+    :❌ScopeNotActiveException;
+  fork again
+    :ワーカースレッド2起動;
+    :❌StepContext未登録;
+    :@StepScope Bean取得試行
+    :❌ScopeNotActiveException;
+  end fork
+}
 
-Executor -> Worker: タスク実行開始
-Worker -> Manager: **register(stepExecution)**
-note right: ワーカースレッドにStepContext登録
+:処理失敗;
 
-Worker -> Processor: process(item)
-Processor -> Manager: getContext()
-Manager -> Manager: ThreadLocal.get()
-Manager -> Processor: **StepContext を返す**
-note right: コンテキストが存在！
-
-Processor -> Processor: 処理実行
-note right: @Value("#{jobParameters['...']}")が正常に解決
-
-Processor -> Worker: 処理結果を返す
-Worker -> Manager: **close()**
-note right: ワーカースレッドのコンテキストをクリア
-
-Worker -> Main: Future完了
 @enduml
 ```
 
-**考慮事項**:
+### Spring Batch 5.xとの違い
 
-1. **スレッドセーフティ**: 
-   - 各ワーカースレッドが独自の`StepExecution`参照を持つため、スレッド間の競合はありません
-   - `ThreadLocal`を使用しているため、スレッドセーフです
+Spring Batch 5.xでは`TaskletStep`が使用されており、マルチスレッド処理時のスコープ伝播が考慮されていました。Spring Batch 6.0で導入された`ChunkOrientedStep`では、この伝播メカニズムが実装されていません。
 
-2. **メモリリーク防止**:
-   - `finally`節で`StepSynchronizationManager.close()`を呼び出すことで、スレッドプール内のスレッドが再利用される際に古いコンテキストが残らないようにします
+```plantuml
+@startuml
+skinparam backgroundColor transparent
 
-3. **既存のコードへの影響**:
-   - シングルスレッド処理（`processChunkSequentially`）には影響なし
-   - マルチスレッド処理のみに修正を適用
+state "Spring Batch 5.x\n(TaskletStep)" as V5 {
+  [*] -> StepContext登録
+  StepContext登録 -> マルチスレッド処理
+  マルチスレッド処理: ✓コンテキスト伝播機能あり
+  マルチスレッド処理 -> 正常動作
+}
 
-**代替案**:
+state "Spring Batch 6.0\n(ChunkOrientedStep)" as V6 {
+  [*] -> StepContext登録
+  StepContext登録 -> マルチスレッド処理
+  マルチスレッド処理: ❌コンテキスト伝播機能なし
+  マルチスレッド処理 -> ScopeNotActiveException
+}
 
-もし`StepExecution`のクローンが必要な場合（並行アクセスによる状態変更を避けるため）、以下のような実装も考えられます：
+@enduml
+```
+
+## 対応方針
+
+### 提案される修正案
+
+`ChunkOrientedStep.processChunkConcurrently()`メソッドで、ワーカースレッドに`StepContext`を伝播させるよう修正します。
+
+#### 修正前のコード
+
+```java
+Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
+    return processItem(item, contribution);
+    // ❌StepContextが無い
+});
+```
+
+#### 修正後のコード（提案）
 
 ```java
 Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
     try {
-        // StepExecutionのコピーを作成して登録
-        StepExecution workerStepExecution = new StepExecution(
-            stepExecution.getStepName(),
-            stepExecution.getJobExecution()
-        );
-        workerStepExecution.setExecutionContext(stepExecution.getExecutionContext());
-        
-        StepSynchronizationManager.register(workerStepExecution);
+        // ✅現在のワーカースレッドのStepSynchronizationManagerにステップ実行を登録
+        StepSynchronizationManager.register(stepExecution);
         return processItem(item, contribution);
     } finally {
+        // ✅メモリリークを防ぐため、処理後にコンテキストをクリア
         StepSynchronizationManager.close();
     }
 });
 ```
 
-ただし、この場合は`ExecutionContext`の並行アクセスに注意が必要です。
+### 修正後の動作フロー
 
-**まとめ**:
-この問題は、Spring Batch 6.xの`ChunkOrientedStep`における新しいマルチスレッド実装において、`StepContext`の伝播が欠落していることが原因です。提案された修正により、`@StepScope` Beanがマルチスレッド環境でも正常に動作するようになります。
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+skinparam minClassWidth 150
+
+participant "メインスレッド" as Main
+participant "TaskExecutor" as Executor
+participant "ワーカースレッド" as Worker
+participant "StepSynchronizationManager" as Manager
+participant "@StepScope Processor" as Processor
+
+Main -> Manager: StepContextを登録\n(メインスレッド用)
+activate Main
+
+Main -> Executor: submit(処理タスク)
+activate Executor
+
+Executor -> Worker: 新しいスレッドで実行
+activate Worker
+
+Worker -> Manager: ✅StepContextを登録\n(ワーカースレッド用)
+activate Manager
+note right: stepExecutionを伝播
+
+Worker -> Processor: process(item) 呼び出し
+activate Processor
+
+Processor -> Manager: StepContextを取得
+Manager --> Processor: ✅コンテキスト返却
+note right: ワーカースレッドの\nThreadLocalから取得成功
+
+Processor -> Processor: 処理実行
+Processor --> Worker: ✅処理結果返却
+deactivate Processor
+
+Worker -> Manager: ✅close()\nコンテキストクリア
+deactivate Manager
+note right: メモリリーク防止
+
+Worker --> Executor: ✅成功
+deactivate Worker
+
+Executor --> Main: ✅完了
+deactivate Executor
+deactivate Main
+
+@enduml
+```
+
+### コンテキスト伝播のライフサイクル
+
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+
+:メインスレッド\nStepContext登録<#LightBlue>;
+
+fork
+  :ワーカースレッド1<#LightGreen>;
+  :✅StepContext登録;
+  :@StepScope Bean利用可能;
+  :処理実行;
+  :✅StepContext解放;
+fork again
+  :ワーカースレッド2<#LightGreen>;
+  :✅StepContext登録;
+  :@StepScope Bean利用可能;
+  :処理実行;
+  :✅StepContext解放;
+fork again
+  :ワーカースレッド3<#LightGreen>;
+  :✅StepContext登録;
+  :@StepScope Bean利用可能;
+  :処理実行;
+  :✅StepContext解放;
+end fork
+
+:すべてのワーカー完了;
+
+:メインスレッド継続<#LightBlue>;
+
+@enduml
+```
+
+### 修正の影響範囲
+
+```plantuml
+@startuml
+skinparam componentStyle rectangle
+skinparam backgroundColor transparent
+
+component "ChunkOrientedStep" as Step {
+  component "processChunkConcurrently()" as Concurrent
+}
+
+component "TaskExecutor" as Executor
+component "StepSynchronizationManager" as Manager
+component "@StepScope Beans" as Beans
+
+Step --> Executor: submit()
+note on link
+  ✅修正箇所:
+  タスク実行前に
+  StepContext登録
+end note
+
+Executor --> Manager: register(stepExecution)
+Manager --> Executor: コンテキスト有効化
+
+Executor --> Beans: アクセス可能
+note on link
+  ✅@StepScope Bean
+  正常に解決
+end note
+
+Executor --> Manager: close()
+note on link
+  finally節で
+  必ずクリア
+end note
+
+@enduml
+```
+
+### 注意点とベストプラクティス
+
+#### 1. メモリリークの防止
+
+```java
+Future<O> future = this.taskExecutor.submit(() -> {
+    try {
+        StepSynchronizationManager.register(stepExecution);
+        return processItem(item, contribution);
+    } finally {
+        // ✅重要: 必ずclose()を呼ぶ
+        // ThreadLocalに残ったStepContextを解放しないと
+        // スレッドプールのスレッドが再利用される際に
+        // 古いコンテキストが残り続ける
+        StepSynchronizationManager.close();
+    }
+});
+```
+
+#### 2. StepExecutionの伝播
+
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+
+package "processChunkConcurrently()メソッド" {
+  component "stepExecution\n(メソッドパラメータ)" as SE
+  component "ワーカータスク" as Task
+  
+  SE --> Task: キャプチャして渡す
+  note on link
+    ラムダ式で
+    stepExecutionを参照
+  end note
+}
+
+package "ワーカースレッド" {
+  component "StepSynchronizationManager" as Manager
+  component "@StepScope Bean" as Bean
+  
+  Manager --> Bean: コンテキスト提供
+}
+
+Task --> Manager: register(stepExecution)
+note on link
+  メインスレッドから
+  受け取った値を使用
+end note
+
+@enduml
+```
+
+#### 3. 例外処理
+
+```java
+Future<O> future = this.taskExecutor.submit(() -> {
+    try {
+        StepSynchronizationManager.register(stepExecution);
+        return processItem(item, contribution);
+    } catch (Exception e) {
+        // 例外が発生してもfinallyでcloseされる
+        throw e;
+    } finally {
+        StepSynchronizationManager.close();
+    }
+});
+
+try {
+    O result = future.get(); // 例外は再スローされる
+    // ...
+} catch (ExecutionException e) {
+    // ワーカースレッドでの例外を処理
+    throw (Exception) e.getCause();
+}
+```
+
+### 代替アプローチ: TaskDecorator使用
+
+より汎用的な解決策として、`TaskDecorator`を使用してコンテキスト伝播を自動化する方法もあります：
+
+```java
+public class StepContextTaskDecorator implements TaskDecorator {
+    private final StepExecution stepExecution;
+    
+    public StepContextTaskDecorator(StepExecution stepExecution) {
+        this.stepExecution = stepExecution;
+    }
+    
+    @Override
+    public Runnable decorate(Runnable runnable) {
+        return () -> {
+            try {
+                StepSynchronizationManager.register(stepExecution);
+                runnable.run();
+            } finally {
+                StepSynchronizationManager.close();
+            }
+        };
+    }
+}
+
+// TaskExecutor設定
+ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+executor.setTaskDecorator(new StepContextTaskDecorator(stepExecution));
+```
+
+**メリット**: 各タスクで個別にregister/closeを呼ぶ必要がない
+**デメリット**: `ChunkOrientedStep`の内部実装に依存
+
+### 期待される最終的な動作
+
+| 項目 | 修正前 | 修正後 |
+|-----|-------|-------|
+| シングルスレッド | ✓ 動作 | ✓ 動作 |
+| マルチスレッド | ❌ ScopeNotActiveException | ✓ 動作 |
+| @StepScope Bean | ❌ 解決失敗 | ✓ 正常に解決 |
+| JobParameters注入 | ❌ 失敗 | ✓ 成功 |
+| メモリリーク | - | ✓ 防止 |
+
+### 関連機能への影響
+
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+
+component "修正後の恩恵を受ける機能" as Benefits {
+  [ItemProcessor (@StepScope)]
+  [ItemReader (@StepScope)]
+  [ItemWriter (@StepScope)]
+  [@Value (jobParameters) 注入]
+  [@Value (stepExecutionContext) 注入]
+}
+
+component "ChunkOrientedStep\n(マルチスレッド)" as Step
+
+Step --> Benefits: すべて正常動作
+
+note right of Benefits
+  ワーカースレッドでも
+  StepScopeが機能
+end note
+
+@enduml
+```
+
+**現在のステータス**: 開発チームへの問題報告済み。具体的な修正案が提示されており、実装待ちの状態です。コミュニティから動作する再現リポジトリの提供も可能との申し出があります。

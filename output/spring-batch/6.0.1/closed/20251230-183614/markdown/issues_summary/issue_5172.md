@@ -83,7 +83,9 @@ participant "StepExecution" as SE
 participant "ChunkOrientedTasklet" as COT
 participant "ChunkTaskExecutorItemWriter" as CTEIW
 participant "Worker Thread" as WT
-
+skinparam state {
+  MinimumWidth 180
+}
 SE -> COT: execute()
 activate COT
 

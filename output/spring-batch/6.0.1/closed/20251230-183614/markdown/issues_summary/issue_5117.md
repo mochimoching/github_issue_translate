@@ -160,6 +160,9 @@ participant "JobRepository" as repo
 participant "JdbcStepExecutionDao" as dao
 database "BATCH_STEP_EXECUTION" as db1
 database "BATCH_STEP_\nEXECUTION_CONTEXT" as db2
+skinparam state {
+  MinimumWidth 190
+}
 
 handler -> repo: getStepExecution(stepExecutionId)
 repo -> dao: getStepExecution(jobExec, stepExecutionId)

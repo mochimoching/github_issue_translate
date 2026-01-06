@@ -72,6 +72,7 @@ public static String formatDuration(Duration duration) {
 
 ```plantuml
 @startuml
+
 start
 :ジョブ開始;
 :startDate = LocalDateTime.now();

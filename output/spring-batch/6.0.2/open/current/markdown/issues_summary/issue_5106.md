@@ -1,95 +1,153 @@
-*このドキュメントは生成AI(Claude Sonnet 4.5)によって2026年1月6日に生成されました。*
+*（このドキュメントは生成AI(Claude Sonnet 4.5)によって2026年1月6日に生成されました）*
 
 ## 課題概要
 
-Spring Batch 6.0において、`JobOperator.start()`と非同期タスクエグゼキューターを組み合わせてジョブを起動する際、間欠的に`OptimisticLockingFailureException`が発生する問題です。
+`JobOperator.start()`と非同期タスクエグゼキューターを併用してジョブを起動する際、`OptimisticLockingFailureException`が断続的に発生する問題です。
 
-**OptimisticLockingFailureExceptionとは**: データベースの楽観的ロック機能を使用する際、既存レコードを更新しようとした時点で、そのレコードのバージョン番号が想定と異なる（他の処理によって既に更新された）場合にスローされる例外です。
+**OptimisticLockingFailureExceptionとは**: Spring Frameworkのデータアクセス層で使用される楽観的ロック機能において、レコードのバージョンが期待値と異なる場合にスローされる例外です。通常、複数のトランザクションが同じレコードを同時に更新しようとした際に発生します。
 
-**問題の状況**:
-- `jobOperator.start()`を使用してジョブを起動
-- 非同期タスクエグゼキューター（`ThreadPoolTaskExecutor`など）を使用
-- ジョブ起動時に`OptimisticLockingFailureException`が間欠的に発生
+### 問題の状況
 
-**具体的な事象**:
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+skinparam minClassWidth 150
+
+participant "アプリケーション" as App
+participant "JobOperator" as JO
+participant "TaskExecutorJobLauncher" as Launcher
+participant "非同期スレッド" as Async
+database "BATCH_JOB_EXECUTION" as DB
+
+App -> JO: start()
+JO -> Launcher: launchJobExecution()
+Launcher -> DB: ジョブインスタンス作成開始
+
+note over Launcher, Async: 競合状態発生
+
+Launcher -> Async: 非同期タスク起動
+Async -> DB: updateJobExecution() 呼び出し
+note right of Async: レコードが未登録なので\nOptimisticLockingFailureException発生
+
+Launcher -> DB: ジョブインスタンス登録完了
+note over Launcher: タイミングにより成功/失敗が決まる
+@enduml
 ```
-OptimisticLockingFailureException: Attempt to update job execution id=1 
-with wrong version (0), where current version is 1
-```
 
-**再現環境**:
-- Spring Boot 4.0.0
-- Spring Batch 6.0.0/6.0.1
-- Java 21
-- 複数のユーザーが同じ問題を再現環境を作成して確認
-  - JDBC環境: https://github.com/phactum-mnestler/spring-batch-reproducer
-  - MongoDB環境: https://github.com/kizombaDev/spring-batch-async-bug-reproducer
+### 発生パターン
+
+| 状況 | レコード登録 | 非同期スレッド起動 | 結果 |
+|------|------------|-----------------|------|
+| 正常ケース | 先に完了 | 後に実行 | ✓ 成功 |
+| 異常ケース | 実行中 | 先に実行 | ✗ OptimisticLockingFailureException |
+
+**影響範囲**:
+- Spring Batch 6.0.0以降
+- Spring Boot 4.0.0以降
+- 非同期タスクエグゼキューター使用時
 
 ## 原因
 
-`TaskExecutorJobLauncher`クラスの実装において、非同期タスクエグゼキューターへのジョブ実行タスクの送信と、その後の処理に競合状態（race condition）が存在することが原因です。
+`TaskExecutorJobLauncher.launchJobExecution()`メソッド内での競合状態が根本原因です。
 
-**詳細な原因分析**:
+### コード構造の問題点
 
-1. **Spring Batch 6.xでの変更**: `TaskExecutorJobLauncher.launchJobExecution()`メソッドにおいて、finally節が新たに追加されました（5.xには存在しない）
-
-2. **競合状態の発生箇所**:
-```java
-// TaskExecutorJobLauncher.java
-try {
-    taskExecutor.execute(() -> {
-        // ジョブ実行（非同期で別スレッドで実行）
-        job.execute(jobExecution);
-        // ジョブスレッドでJobExecutionを更新（version 0 → 1）
-    });
-} finally {
-    // ランチャースレッドでJobExecutionを更新しようとする
-    // しかし、ジョブスレッドが既に更新している可能性がある
-    this.jobRepository.update(jobExecution); // ← 競合発生！
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+skinparam state {
+  MinimumWidth 250
 }
+
+state "TaskExecutorJobLauncher.launchJobExecution()" as Main {
+  state "try節" as Try {
+    [*] -> ジョブ実行準備
+    ジョブ実行準備 -> 非同期タスク起動: taskExecutor.execute()
+  }
+  
+  state "finally節" as Finally {
+    [*] -> updateJobExecution: 必ず実行される
+    updateJobExecution: jobRepository.update(jobExecution)
+  }
+  
+  Try --> Finally: 例外発生有無に関わらず
+}
+
+state "非同期スレッド" as Async {
+  [*] -> ジョブ実行
+  ジョブ実行 -> DB更新: updateJobExecution()
+  DB更新 : version=0 → version=1
+}
+
+note left of Async
+  finally節より先に
+  DB更新を試みる可能性
+end note
+
+note right of Finally
+  version=0を期待して更新
+  実際はversion=1（既に更新済み）
+  → OptimisticLockingFailureException
+end note
+@enduml
 ```
 
-3. **問題の流れ**:
-   - ランチャースレッド: `BATCH_JOB_EXECUTION`テーブルに初期レコード（version=0）を登録
-   - ランチャースレッド: タスクエグゼキューターにジョブ実行を送信（非同期）
-   - **ジョブスレッド**: すぐに実行開始し、`JobExecution`を更新（version 0→1）
-   - **ランチャースレッド**: finally節で`JobExecution`を更新しようとする
-   - この時点で、ランチャースレッドが持つ`JobExecution`オブジェクトのversionは0だが、データベース上はversionが1になっている
-   - 結果: `OptimisticLockingFailureException`が発生
+### Spring Batch 5.xとの違い
 
-**Spring Batch 5.xとの違い**:
-- 5.xでは、`taskExecutor.execute()`の送信が失敗した場合（`TaskRejectedException`）のみ`jobRepository.update()`を呼び出していた
-- 6.xでは、finally節により成功時も無条件に`jobRepository.update()`を呼び出すため、競合が発生
+**Spring Batch 5.x**:
+- 非同期タスクのスケジュール設定が失敗した場合のみジョブ実行を更新
+- `finally`節でのDB更新処理なし
+
+**Spring Batch 6.x**:
+- `finally`節で必ずジョブ実行を更新
+- 非同期タスク内での更新と競合する可能性
+
+具体的なスタックトレース:
+```
+org.springframework.dao.OptimisticLockingFailureException: 
+  Attempt to update job execution id=1 with wrong version (0), 
+  where current version is 1
+  at JdbcJobExecutionDao.updateJobExecution()
+  at SimpleJobRepository.update()
+  at AbstractJob.updateStatus()
+  at AbstractJob.execute()
+  at TaskExecutorJobLauncher$1.run()
+```
+
+### 問題の本質
+
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+
+:jobOperator.start() 呼び出し;
+
+fork
+  :メインスレッド;
+  :JobRepository.update()\nversion=0;
+fork again
+  :非同期ワーカースレッド;
+  :JobRepository.update()\nversion=0;
+end fork
+
+:楽観的ロック競合;
+note right
+  両方のスレッドが
+  version=0を期待
+  →OptimisticLockingFailureException
+end note
+
+@enduml
+```
 
 ## 対応方針
 
-Spring Batchメンテナーが確認し、バージョン6.0.2で修正予定です（コメント6、fmbenhassine氏）。
+現時点では開発チームからの公式な修正はリリースされていませんが、コミュニティから以下の回避策が提案されています。
 
-[#3637](https://github.com/spring-projects/spring-batch/issues/3637)のリグレッション（退行バグ）として認識されています。
+### 回避策1: シングルスレッドエグゼキューター使用
 
-**推奨される修正内容** (コメント5、banseok1216氏の提案):
-```java
-// TaskExecutorJobLauncher.launchJobExecution(..)メソッド
-try {
-    taskExecutor.execute(() -> {
-        job.execute(jobExecution);
-    });
-} catch (TaskRejectedException e) {
-    // タスク送信が拒否された場合のみJobExecutionを更新
-    jobExecution.upgradeStatus(BatchStatus.FAILED);
-    if (ExitStatus.UNKNOWN.equals(jobExecution.getExitStatus())) {
-        jobExecution.setExitStatus(ExitStatus.FAILED.addExitDescription(e));
-    }
-    this.jobRepository.update(jobExecution);
-}
-// finally節での無条件更新を削除
-// → 受け入れられたタスクの場合、ジョブスレッドがJobExecutionを更新するため、
-//    ランチャースレッドからの追加更新は不要
-```
+`ThreadPoolTaskExecutor`のスレッド数を1に制限することで、競合状態を回避します。
 
-**コミュニティ提案の回避策**:
-
-1. **シングルスレッドエグゼキューター使用** (licenziato氏の回避策):
 ```java
 @Bean
 public JobOperatorFactoryBean jobOperator(JobRepository jobRepository) {
@@ -97,27 +155,65 @@ public JobOperatorFactoryBean jobOperator(JobRepository jobRepository) {
     taskExecutor.setCorePoolSize(1);
     taskExecutor.setMaxPoolSize(1);
     taskExecutor.afterPropertiesSet();
-    
+
     JobOperatorFactoryBean jobOperatorFactoryBean = new JobOperatorFactoryBean();
     jobOperatorFactoryBean.setJobRepository(jobRepository);
     jobOperatorFactoryBean.setTaskExecutor(taskExecutor);
     return jobOperatorFactoryBean;
 }
 ```
-ただし、この方法は環境によっては効果がないことが報告されています。
 
-2. **SyncTaskExecutor使用** (StefanMuellerCH氏の回避策):
-```java
-@Bean
-public JobOperatorFactoryBean jobOperator(JobRepository jobRepository) {
-    var taskExecutor = new SyncTaskExecutor();
-    var jobOperatorFactoryBean = new JobOperatorFactoryBean();
-    jobOperatorFactoryBean.setJobRepository(jobRepository);
-    jobOperatorFactoryBean.setTaskExecutor(taskExecutor);
-    return jobOperatorFactoryBean;
-}
+**メリット**: 簡単に実装可能
+**デメリット**: 並行実行の利点が失われる
+
+### 想定される根本修正アプローチ
+
+```plantuml
+@startuml
+skinparam backgroundColor transparent
+
+:ジョブ起動要求;
+
+:BATCH_JOB_EXECUTION\nレコード登録完了まで待機;
+note right
+  確実にレコードが
+  作成されてから次へ
+end note
+
+:非同期タスク起動 ;
+
+:ジョブ実行;
+
+:DB更新\n（レコード確実に存在）;
+
+:完了;
+@enduml
 ```
-**注意**: `SyncTaskExecutor`は同期実行となるため、パフォーマンスへの影響が大きく、本番環境での使用は推奨されません。
 
-**まとめ**: 
-正式な修正がリリースされるまで、一時的な回避策として`SyncTaskExecutor`を使用することは可能ですが、本番環境では6.0.2のリリースを待つことが推奨されます。
+### 期待される修正内容
+
+1. **`TaskExecutorJobLauncher`の修正**:
+   - `finally`節での無条件更新ロジックを見直し
+   - 非同期タスク起動前にジョブ実行レコードの登録を完了
+   - Spring Batch 5.xの動作（スケジュール失敗時のみ更新）に戻す
+
+2. **同期ポイントの追加**:
+   - ジョブ実行レコードの登録完了を確認してから非同期タスクを起動
+   - カウントダウンラッチなどの同期機構の導入
+
+### 影響するコンポーネント
+
+| コンポーネント | 影響内容 |
+|--------------|---------|
+| `TaskExecutorJobLauncher` | finally節のDB更新ロジック |
+| `JobOperator` | 非同期タスクエグゼキューター設定 |
+| JDBCベースのJobRepository | 楽観的ロック機構 |
+| MongoDBベースのJobRepository | データ整合性制約 |
+
+### 関連する課題とディスカッション
+
+- [Discussion #5121](https://github.com/spring-projects/spring-batch/discussions/5121) - 関連する問題の議論
+- 最小再現環境: https://github.com/phactum-mnestler/spring-batch-reproducer
+- MongoDB環境での再現: https://github.com/kizombaDev/spring-batch-async-bug-reproducer
+
+**現在のステータス**: Spring Batch 6.0.1でも未解決。開発チームの修正待ちの状態です。

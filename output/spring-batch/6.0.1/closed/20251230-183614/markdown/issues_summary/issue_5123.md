@@ -102,8 +102,11 @@ Warning:(15, 30) 'getJob(java.lang.String)' is deprecated
 
 ```plantuml
 @startuml
+skinparam state {
+  MinimumWidth 180
+}
 rectangle "テストコード" {
-  rectangle "jobOperator.getJob(\"myJob\")" #yellow {
+  rectangle "jobOperator.getJob('myJob')" #yellow {
     note right
       ⚠️ Deprecated warning
       'getJob(String)' is deprecated
@@ -131,7 +134,7 @@ SimpleJobOperator <|-- JobOperatorTestUtils
 
 note right of JobOperatorTestUtils::getJob
   オーバーライドしているが
-  @Deprecatedを付けていない
+@Deprecatedを付けていない
   
   → 親クラスのDeprecatedが
      継承される

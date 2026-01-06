@@ -98,6 +98,9 @@ public class ResourcelessJobRepository implements JobRepository {
 participant "Test1" as test1
 participant "Test2" as test2
 participant "ResourcelessJobRepository" as repo
+skinparam state {
+  MinimumWidth 210
+}
 
 == Test1実行 ==
 test1 -> repo: getJobInstance("myJob", params1)
@@ -210,6 +213,9 @@ public void deleteJobExecution(JobExecution jobExecution) {
 participant "Test1" as test1
 participant "Test2" as test2
 participant "ResourcelessJobRepository" as repo
+skinparam state {
+  MinimumWidth 180
+}
 
 == Test1実行 ==
 test1 -> repo: getJobInstance("myJob", params1)

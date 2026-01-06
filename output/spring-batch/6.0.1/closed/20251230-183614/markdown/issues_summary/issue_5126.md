@@ -108,7 +108,9 @@ participant "ChunkOrientedStep" as step
 participant "ThreadLocal" as tl
 participant "ChunkTracker" as tracker
 participant "ItemReader" as reader
-
+skinparam state {
+  MinimumWidth 180
+}
 launcher -> step: execute(stepExecution #1)
 
 step -> tl: get()

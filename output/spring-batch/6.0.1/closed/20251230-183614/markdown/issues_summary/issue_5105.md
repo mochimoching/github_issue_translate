@@ -209,7 +209,9 @@ if (isolationLevelForCreate != null) {
 participant "BatchRegistrar" as reg
 participant "BeanDefinitionBuilder" as bdb
 participant "MongoJobRepositoryFactoryBean" as factory
-
+skinparam state {
+  MinimumWidth 180
+}
 reg -> bdb: addPropertyValue(\n"isolationLevelForCreateEnum",\nIsolation.SERIALIZABLE)
 
 bdb -> factory: setIsolationLevelForCreateEnum(\nIsolation.SERIALIZABLE)

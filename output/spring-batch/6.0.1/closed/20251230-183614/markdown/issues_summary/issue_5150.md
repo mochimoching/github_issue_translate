@@ -93,6 +93,9 @@ public class StepBuilder {
 
 ```plantuml
 @startuml
+skinparam state {
+  MinimumWidth 180
+}
 class StepBuilderFactory {
   + get(name): RemotePartitioningWorkerStepBuilder
 }

@@ -166,6 +166,9 @@ void testCreateStepExecutionJobParameters() {
 
 ```plantuml
 @startuml
+skinparam state {
+  MinimumWidth 150
+}
 object "StepExecution" as step {
   stepName = "step"
 }

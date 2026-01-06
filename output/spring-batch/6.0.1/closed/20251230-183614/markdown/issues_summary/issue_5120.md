@@ -58,6 +58,9 @@ WHERE
 
 ```plantuml
 @startuml
+skinparam state {
+  MinimumWidth 200
+}
 participant "停止スレッド" as stop
 participant "実行スレッド" as exec
 database "DB" as db
