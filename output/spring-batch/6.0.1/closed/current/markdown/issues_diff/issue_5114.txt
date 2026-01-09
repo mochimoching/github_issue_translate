@@ -1,0 +1,111 @@
+Issue #5114: stop() does not prevent upcoming steps to be executed anymore
+Reference: PR #5165 (2025-12-15T13:33:13Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5165
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/job/JobExecution.java b/spring-batch-core/src/main/java/org/springframework/batch/core/job/JobExecution.java
+index a500d91dd2..f11403ee45 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/job/JobExecution.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/job/JobExecution.java
+@@ -213,6 +213,14 @@ public boolean isStopping() {
+ 		return status == BatchStatus.STOPPING;
+ 	}
+ 
++	/**
++	 * Test if this {@link StepExecution} indicates that it has been stopped.
++	 * @return {@code true} if the status is {@link BatchStatus#STOPPED}.
++	 */
++	public boolean isStopped() {
++		return status == BatchStatus.STOPPED;
++	}
++
+ 	/**
+ 	 * Sets the {@link ExecutionContext} for this execution.
+ 	 * @param executionContext The context.
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java
+index 183ff946c5..ff79ff1474 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java
+@@ -328,7 +328,7 @@ public long getStepExecutionCount(JobInstance jobInstance, String stepName) {
+ 	@Override
+ 	public void update(StepExecution stepExecution) {
+ 		stepExecution.setLastUpdated(LocalDateTime.now());
+-		if (this.jobExecution != null && this.jobExecution.isStopping()) {
++		if (this.jobExecution != null && this.jobExecution.isStopped()) {
+ 			stepExecution.setTerminateOnly();
+ 		}
+ 	}
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/SimpleJobRepository.java b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/SimpleJobRepository.java
+index 1c043e79f5..d74608057a 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/SimpleJobRepository.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/SimpleJobRepository.java
+@@ -158,8 +158,20 @@ public void update(StepExecution stepExecution) {
+ 		Assert.notNull(stepExecution.getId(), "StepExecution must already be saved (have an id assigned)");
+ 
+ 		stepExecution.setLastUpdated(LocalDateTime.now());
++
++		StepExecution latestStepExecution = getStepExecution(stepExecution.getId());
++		Assert.state(latestStepExecution != null,
++				"StepExecution with id " + stepExecution.getId() + "not found. Batch metadata state may be corrupted.");
++
++		if (latestStepExecution.getJobExecution().isStopped()) {
++			Integer version = latestStepExecution.getVersion();
++			if (version != null) {
++				stepExecution.setVersion(version);
++			}
++			stepExecution.setTerminateOnly();
++		}
++
+ 		stepExecutionDao.updateStepExecution(stepExecution);
+-		checkForInterruption(stepExecution);
+ 	}
+ 
+ 	private void validateStepExecution(StepExecution stepExecution) {
+@@ -180,22 +192,6 @@ public void updateExecutionContext(JobExecution jobExecution) {
+ 		ecDao.updateExecutionContext(jobExecution);
+ 	}
+ 
+-	/**
+-	 * Check to determine whether or not the JobExecution that is the parent of the
+-	 * provided StepExecution has been interrupted. If, after synchronizing the status
+-	 * with the database, the status has been updated to STOPPING, then the job has been
+-	 * interrupted.
+-	 * @param stepExecution the step execution
+-	 */
+-	private void checkForInterruption(StepExecution stepExecution) {
+-		JobExecution jobExecution = stepExecution.getJobExecution();
+-		jobExecutionDao.synchronizeStatus(jobExecution);
+-		if (jobExecution.isStopping()) {
+-			logger.info("Parent JobExecution is stopped, so passing message on to StepExecution");
+-			stepExecution.setTerminateOnly();
+-		}
+-	}
+-
+ 	@Override
+ 	public void deleteStepExecution(StepExecution stepExecution) {
+ 		this.ecDao.deleteExecutionContext(stepExecution);
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/step/StoppableStep.java b/spring-batch-core/src/main/java/org/springframework/batch/core/step/StoppableStep.java
+index eae4b62b7d..5032e11c6b 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/step/StoppableStep.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/step/StoppableStep.java
+@@ -37,7 +37,6 @@ public interface StoppableStep extends Step {
+ 	 * @param stepExecution the current step execution
+ 	 */
+ 	default void stop(StepExecution stepExecution) {
+-		stepExecution.setTerminateOnly();
+ 		stepExecution.setStatus(BatchStatus.STOPPED);
+ 		stepExecution.setExitStatus(ExitStatus.STOPPED);
+ 		stepExecution.setEndTime(LocalDateTime.now());
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+index 976add5b61..325aeb300f 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+@@ -373,6 +373,8 @@ protected void doExecute(StepExecution stepExecution) throws Exception {
+ 						? BatchMetrics.STATUS_ROLLED_BACK : BatchMetrics.STATUS_COMMITTED;
+ 				chunkTransactionEvent.commit();
+ 			});
++
++			getJobRepository().update(stepExecution);
+ 		}
+ 	}
+ 

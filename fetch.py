@@ -134,6 +134,65 @@ def save_issues_markdown_separate(issues: List[Dict], base_dir: str) -> None:
     print(f"✅ Markdown個別ファイル保存完了: {issues_dir}/ ({len(issues)}個のファイル)")
 
 
+def save_issues_diff(issues: List[Dict], base_dir: str, github: GitHubClient, max_size: int = 50000) -> None:
+    """IssueをクローズしたPR/Commitのdiffを個別ファイルとして保存
+    
+    Args:
+        issues: issue情報のリスト
+        base_dir: Markdownの基底ディレクトリ（issues_diffはこの下に作成）
+        github: GitHubClientインスタンス
+        max_size: diffの最大サイズ（文字数）
+    """
+    # issues_diffディレクトリを作成
+    diff_dir = os.path.join(base_dir, "issues_diff")
+    os.makedirs(diff_dir, exist_ok=True)
+    
+    saved_count = 0
+    skipped_count = 0
+    
+    for issue in issues:
+        issue_number = issue['number']
+        issue_title = issue['title']
+        
+        print(f"  Issue #{issue_number} のdiffを取得中...")
+        
+        # 最新のクローズ参照のdiffを取得
+        diff_info = github.get_latest_closing_diff(issue_number, max_size)
+        
+        if diff_info is None:
+            print(f"    ⚠️ Issue #{issue_number}: 関連するPR/Commitが見つかりませんでした")
+            skipped_count += 1
+            continue
+        
+        # diff出力ファイル
+        diff_filename = f"issue_{issue_number}.txt"
+        diff_filepath = os.path.join(diff_dir, diff_filename)
+        
+        with open(diff_filepath, 'w', encoding='utf-8') as f:
+            # ヘッダー情報
+            f.write(f"Issue #{issue_number}: {issue_title}\n")
+            
+            if diff_info['type'] == 'pr':
+                f.write(f"Reference: PR #{diff_info['number']} ({diff_info['created_at']})\n")
+            else:
+                f.write(f"Reference: Commit {diff_info['sha'][:7]} ({diff_info['created_at']})\n")
+            
+            f.write(f"URL: {diff_info['url']}\n")
+            f.write("\n--- Diff ---\n")
+            f.write(diff_info['diff'])
+            
+            # 切り詰め警告
+            if diff_info['truncated']:
+                f.write(f"\n\n[Warning: Diff truncated at {max_size} characters]")
+        
+        ref_desc = f"PR #{diff_info['number']}" if diff_info['type'] == 'pr' else f"Commit {diff_info['sha'][:7]}"
+        truncated_msg = " (truncated)" if diff_info['truncated'] else ""
+        print(f"    ✅ {ref_desc}{truncated_msg}")
+        saved_count += 1
+    
+    print(f"✅ Diff保存完了: {diff_dir}/ ({saved_count}個のファイル, {skipped_count}個スキップ)")
+
+
 def main():
     """メイン処理"""
     parser = argparse.ArgumentParser(
@@ -178,6 +237,18 @@ def main():
         '--output',
         type=str,
         help='出力ファイルパス（指定しない場合は自動生成）'
+    )
+    parser.add_argument(
+        '--no-diff',
+        action='store_true',
+        default=False,
+        help='PR/Commitのdiff取得を無効化（デフォルト: diff取得する）'
+    )
+    parser.add_argument(
+        '--max-diff-size',
+        type=int,
+        default=50000,
+        help='diffの最大サイズ（文字数）超過分は切り詰め (デフォルト: 50000)'
     )
     
     args = parser.parse_args()
@@ -282,11 +353,18 @@ def main():
         # Markdown個別ファイルとして保存
         save_issues_markdown_separate(formatted_issues, md_output_dir)
         
+        # Diff取得（--no-diffが指定されていない場合）
+        if not args.no_diff:
+            print("\nPR/Commitのdiffを取得中...")
+            save_issues_diff(formatted_issues, md_output_dir, github, args.max_diff_size)
+        
         print("\n✅ 処理が完了しました！")
         print(f"取得件数: {len(formatted_issues)}件")
         print(f"JSON出力先: {output_json_filepath}")
         print(f"Markdown出力先: {output_md_filepath}")
         print(f"Markdown個別ファイル: {os.path.join(md_output_dir, 'issues')}/")
+        if not args.no_diff:
+            print(f"Diff出力先: {os.path.join(md_output_dir, 'issues_diff')}/")
         
     except KeyboardInterrupt:
         print("\n\n処理を中断しました。")

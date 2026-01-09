@@ -1,0 +1,142 @@
+Issue #5127: Fault-tolerant step: `retry(Class)` traverses exception causes, `skip(Class)` does not
+Reference: PR #5171 (2025-12-16T15:39:00Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5171
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+index 325aeb300f..87db64826a 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+@@ -24,6 +24,7 @@
+ import org.apache.commons.logging.LogFactory;
+ import org.jspecify.annotations.Nullable;
+ 
++import org.springframework.batch.core.ExitStatus;
+ import org.springframework.batch.core.job.JobInterruptedException;
+ import org.springframework.batch.core.listener.ChunkListener;
+ import org.springframework.batch.core.listener.CompositeChunkListener;
+@@ -87,6 +88,7 @@
+  * @param <I> type of input items
+  * @param <O> type of output items
+  * @author Mahmoud Ben Hassine
++ * @author Andrey Litvitski
+  * @since 6.0
+  */
+ public class ChunkOrientedStep<I, O> extends AbstractStep {
+@@ -690,7 +692,7 @@ private void writeChunk(Chunk<O> chunk, StepContribution contribution) throws Ex
+ 			observation.lowCardinalityKeyValue(fullyQualifiedMetricName + ".status", BatchMetrics.STATUS_FAILURE);
+ 			observation.error(exception);
+ 			if (this.faultTolerant && exception instanceof RetryException retryException
+-					&& !this.skipPolicy.shouldSkip(retryException.getCause(), -1)) {
++					&& this.skipPolicy.shouldSkip(retryException.getCause(), -1)) {
+ 				logger.info("Retry exhausted while attempting to write items, scanning the chunk", retryException);
+ 				ChunkScanEvent chunkScanEvent = new ChunkScanEvent(contribution.getStepExecution().getStepName(),
+ 						contribution.getStepExecution().getId());
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/step/skip/LimitCheckingExceptionHierarchySkipPolicy.java b/spring-batch-core/src/main/java/org/springframework/batch/core/step/skip/LimitCheckingExceptionHierarchySkipPolicy.java
+index b091d28061..ac25724330 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/step/skip/LimitCheckingExceptionHierarchySkipPolicy.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/step/skip/LimitCheckingExceptionHierarchySkipPolicy.java
+@@ -26,6 +26,7 @@
+  * limit.
+  *
+  * @author Mahmoud Ben Hassine
++ * @author Andrey Litvitski
+  * @since 6.0
+  */
+ public class LimitCheckingExceptionHierarchySkipPolicy implements SkipPolicy {
+@@ -49,29 +50,30 @@ public LimitCheckingExceptionHierarchySkipPolicy(Set<Class<? extends Throwable>>
+ 
+ 	@Override
+ 	public boolean shouldSkip(Throwable t, long skipCount) throws SkipLimitExceededException {
++		boolean skippable = isSkippable(t);
+ 		if (skipCount < 0) {
+-			return !isSkippable(t);
++			return skippable;
+ 		}
+-		if (!isSkippable(t)) {
++		if (!skippable) {
+ 			return false;
+ 		}
+-		if (skipCount < this.skipLimit) {
+-			return true;
+-		}
+-		else {
++		if (skipCount >= this.skipLimit) {
+ 			throw new SkipLimitExceededException(this.skipLimit, t);
+ 		}
++		return true;
+ 	}
+ 
+ 	private boolean isSkippable(Throwable t) {
+-		boolean isSkippable = false;
+-		for (Class<? extends Throwable> skippableException : this.skippableExceptions) {
+-			if (skippableException.isAssignableFrom(t.getClass())) {
+-				isSkippable = true;
+-				break;
++		Throwable current = t;
++		while (current != null) {
++			for (Class<? extends Throwable> skippableException : this.skippableExceptions) {
++				if (skippableException.isInstance(current)) {
++					return true;
++				}
+ 			}
++			current = current.getCause();
+ 		}
+-		return isSkippable;
++		return false;
+ 	}
+ 
+ }
+\ No newline at end of file
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java
+index da2c5fc959..a4005a5685 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java
+@@ -51,6 +51,7 @@
+ 
+ /**
+  * @author Mahmoud Ben Hassine
++ * @author Andrey Litvitski
+  */
+ public class ChunkOrientedStepTests {
+ 
+@@ -283,4 +284,39 @@ void testDoSkipInProcessShouldThrowNonSkippableProcessExceptionWhenSkipPolicyRet
+ 		assertEquals(0, stepExecution.getProcessSkipCount(), "Process skip count should be 0");
+ 	}
+ 
++	@Test
++	void testSkippableExceptionsTraversal() throws Exception {
++		// given
++		class SkippableException extends RuntimeException {
++
++		}
++		ItemReader<String> reader = new ListItemReader<>(List.of("item1"));
++		ItemWriter<String> writer = chunk -> {
++			throw new RuntimeException(new SkippableException());
++		};
++
++		JobRepository jobRepository = new ResourcelessJobRepository();
++		ChunkOrientedStep<String, String> step = new StepBuilder("step", jobRepository).<String, String>chunk(1)
++			.reader(reader)
++			.writer(writer)
++			.faultTolerant()
++			.retry(SkippableException.class)
++			.retryLimit(1)
++			.skip(SkippableException.class)
++			.skipLimit(1)
++			.build();
++
++		JobInstance jobInstance = new JobInstance(1L, "job");
++		JobExecution jobExecution = new JobExecution(1L, jobInstance, new JobParameters());
++		StepExecution stepExecution = new StepExecution(1L, "step", jobExecution);
++
++		// when - execute step
++		step.execute(stepExecution);
++
++		// then - should skip the exception thrown by the writer
++		ExitStatus stepExecutionExitStatus = stepExecution.getExitStatus();
++		assertEquals(ExitStatus.COMPLETED.getExitCode(), stepExecutionExitStatus.getExitCode());
++		assertEquals(1, stepExecution.getSkipCount());
++	}
++
+ }

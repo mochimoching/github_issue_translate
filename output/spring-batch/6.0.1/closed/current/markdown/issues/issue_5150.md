@@ -11,8 +11,8 @@
 **関連リンク**:
 - Commits:
   - [5e3df33](https://github.com/spring-projects/spring-batch/commit/5e3df332ab1831ac90d4e8234b52d3ce05601244)
-  - [f04f663](https://github.com/spring-projects/spring-batch/commit/f04f6636362fad92c0a741b0785af699535a5d99)
   - [37a39e2](https://github.com/spring-projects/spring-batch/commit/37a39e2d5d02f02ee4e73400a4ff5a9cf6f850be)
+  - [f04f663](https://github.com/spring-projects/spring-batch/commit/f04f6636362fad92c0a741b0785af699535a5d99)
 
 ## 内容
 

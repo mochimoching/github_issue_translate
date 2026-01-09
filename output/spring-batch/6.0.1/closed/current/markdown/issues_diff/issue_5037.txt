@@ -1,0 +1,36 @@
+Issue #5037: Minor logging issue when a step or job completes instantly
+Reference: PR #5100 (2025-11-21T21:06:24Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5100
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/observability/BatchMetrics.java b/spring-batch-core/src/main/java/org/springframework/batch/core/observability/BatchMetrics.java
+index 422ed0ff61..23d510c1e0 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/observability/BatchMetrics.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/observability/BatchMetrics.java
+@@ -66,9 +66,12 @@ private BatchMetrics() {
+ 	 * @return A human readable duration
+ 	 */
+ 	public static String formatDuration(@Nullable Duration duration) {
+-		if (duration == null || duration.isZero() || duration.isNegative()) {
++		if (duration == null || duration.isNegative()) {
+ 			return "";
+ 		}
++		if (duration.isZero()) {
++			return "0ms";
++		}
+ 		StringBuilder formattedDuration = new StringBuilder();
+ 		long hours = duration.toHours();
+ 		long minutes = duration.toMinutes();
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/observability/BatchMetricsTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/observability/BatchMetricsTests.java
+index 3ff6e0f2dc..a0912b7e7f 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/observability/BatchMetricsTests.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/observability/BatchMetricsTests.java
+@@ -93,7 +93,7 @@ void testFormatNegativeDuration() {
+ 	@Test
+ 	void testFormatZeroDuration() {
+ 		String formattedDuration = BatchMetrics.formatDuration(Duration.ZERO);
+-		assertTrue(formattedDuration.isEmpty());
++		assertEquals("0ms", formattedDuration);
+ 	}
+ 
+ 	@Test

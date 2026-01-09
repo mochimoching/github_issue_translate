@@ -4,9 +4,15 @@
 
 GitHub issueを自動的に取得し、AI APIを使用して日本語に翻訳するPythonアプリケーション。
 
-**バージョン**: 2.1  
+**バージョン**: 2.2  
 **作成日**: 2025年12月26日  
-**最終更新**: 2026年1月6日
+**最終更新**: 2026年1月9日
+
+### 主要な変更点（v2.2）
+
+- **Diff取得機能**: IssueをクローズしたPR/Commitのdiffを自動取得
+- **Timeline API対応**: PR/Commitの時系列情報を取得し最新を特定
+- **新オプション追加**: `--no-diff`, `--max-diff-size`
 
 ### 主要な変更点（v2.0）
 
@@ -63,8 +69,11 @@ github_issue_translate/
     │               │   └── issues.json
     │               └── markdown/
     │                   ├── issues.md
-    │                   └── issues/
-    │                       ├── issue_XXXX.md
+    │                   ├── issues/
+    │                   │   ├── issue_XXXX.md
+    │                   │   └── ...
+    │                   └── issues_diff/   # PR/Commitのdiff
+    │                       ├── issue_XXXX.txt
     │                       └── ...
     └── {milestone}/               # 翻訳結果（リポジトリ名なし）
         └── {state}/
@@ -105,6 +114,7 @@ github_issue_translate/
 | `body` | 本文 | 文字列 |
 | `milestone` | マイルストーン | 文字列 or null |
 | `comments` | コメント一覧 | オブジェクト配列 |
+| `closing_references` | IssueをクローズしたPR/Commit | オブジェクト |
 
 #### 2.1.3 フィルタリングオプション
 
@@ -120,6 +130,49 @@ github_issue_translate/
 - **認証なし**: 60リクエスト/時
 - **認証あり**: 5,000リクエスト/時
 - GitHub Personal Access Token使用を推奨
+
+#### 2.1.5 Diff取得機能
+
+IssueをクローズしたPR（Pull Request）またはCommitのdiffを自動取得する機能。
+
+**使用API**:
+- Timeline API: `GET /repos/{owner}/{repo}/issues/{issue_number}/timeline`
+- Commits API: `GET /repos/{owner}/{repo}/commits/{sha}` (Accept: application/vnd.github.v3.diff)
+- Pulls API: `GET /repos/{owner}/{repo}/pulls/{pull_number}` (Accept: application/vnd.github.v3.diff)
+
+**処理フロー**:
+```
+1. Timeline APIでIssueに関連するイベントを取得
+   ↓
+2. cross-referenced, closed, referencedイベントからPR/Commitを抽出
+   ↓
+3. created_atタイムスタンプで最新の参照を特定
+   ↓
+4. PRがある場合はPRを優先（マージコミットとの重複回避）
+   ↓
+5. Diff APIでdiffテキストを取得
+   ↓
+6. issues_diff/ディレクトリに保存
+```
+
+**オプション**:
+| オプション | デフォルト | 説明 |
+|-----------|-----------|------|
+| `--no-diff` | false | diff取得を無効化 |
+| `--max-diff-size` | 50000 | diffの最大文字数（超過分は切り詰め） |
+
+**出力ファイル形式** (`issues_diff/issue_{number}.txt`):
+```
+Issue #5037: [タイトル]
+Reference: PR #4567 (2025-12-15T10:30:00Z)
+URL: https://github.com/spring-projects/spring-batch/pull/4567
+
+--- Diff ---
+diff --git a/src/main/java/...
+...
+
+[Warning: Diff truncated at 50000 characters]  ← 切り詰め時のみ
+```
 
 ### 2.2 翻訳機能
 
@@ -326,6 +379,8 @@ python fetch.py [OPTIONS]
 | `--labels` | リスト | - | ❌ | ラベルで絞り込み（複数可） |
 | `--max-comments` | 整数 | 20 | ❌ | 取得する最大コメント数（コメントは常に取得） |
 | `--output` | 文字列 | 自動生成 | ❌ | 出力ファイルパス |
+| `--no-diff` | フラグ | `false` | ❌ | PR/Commitのdiff取得を無効化 |
+| `--max-diff-size` | 整数 | 50000 | ❌ | diffの最大サイズ（文字数） |
 
 #### 3.2.3 使用例
 
@@ -333,10 +388,12 @@ python fetch.py [OPTIONS]
 # 基本実行（最新100件のopenなIssue）
 python fetch.py
 # 出力: output/spring-batch/all/open/current/json/issues.json
+#       output/spring-batch/all/open/current/markdown/issues_diff/ (diffファイル)
 
 # マイルストーン6.0.0のclosedなIssueを100件取得
 python fetch.py --milestone "6.0.0" --state closed --max-issues 100
 # 出力: output/spring-batch/6.0.0/closed/current/json/issues.json
+#       output/spring-batch/6.0.0/closed/current/markdown/issues_diff/ (diffファイル)
 
 # 特定のIssue番号を指定
 python fetch.py --issue-number 5183
@@ -350,6 +407,12 @@ python fetch.py --labels enhancement bug --max-issues 20
 python fetch.py --milestone "6.0.0" --state closed --output "my_issues.json"
 # JSON: my_issues.json
 # Markdown: output/spring-batch/6.0.0/closed/current/markdown/
+
+# diff取得を無効化（高速化したい場合）
+python fetch.py --milestone "6.0.0" --state closed --no-diff
+
+# diffの最大サイズを変更（大きなdiffも取得したい場合）
+python fetch.py --milestone "6.0.0" --state closed --max-diff-size 100000
 ```
 
 ### 3.3 translate.py (Issue翻訳)

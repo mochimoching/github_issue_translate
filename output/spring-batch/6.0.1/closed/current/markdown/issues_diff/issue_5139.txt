@@ -1,0 +1,568 @@
+Issue #5139: Enhance `ResourcelessJobRepository` implementation for testing
+Reference: PR #5140 (2025-12-07T07:17:52Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5140
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java
+index 579f0397eb..ee1a8f5523 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/ResourcelessJobRepository.java
+@@ -22,8 +22,10 @@
+ import org.jspecify.annotations.Nullable;
+ 
+ import org.springframework.batch.core.BatchStatus;
++import org.springframework.batch.core.job.DefaultJobKeyGenerator;
+ import org.springframework.batch.core.job.JobExecution;
+ import org.springframework.batch.core.job.JobInstance;
++import org.springframework.batch.core.job.JobKeyGenerator;
+ import org.springframework.batch.core.job.parameters.JobParameters;
+ import org.springframework.batch.infrastructure.item.ExecutionContext;
+ import org.springframework.batch.core.step.StepExecution;
+@@ -45,6 +47,7 @@
+  *
+  * @since 5.2.0
+  * @author Mahmoud Ben Hassine
++ * @author Sanghyuk Jung
+  */
+ public class ResourcelessJobRepository implements JobRepository {
+ 
+@@ -54,6 +57,8 @@ public class ResourcelessJobRepository implements JobRepository {
+ 
+ 	private long stepExecutionIdIncrementer = 0L;
+ 
++	private JobKeyGenerator jobKeyGenerator = new DefaultJobKeyGenerator();
++
+ 	/*
+ 	 * ===================================================================================
+ 	 * Job operations
+@@ -76,7 +81,7 @@ public List<String> getJobNames() {
+ 
+ 	@Override
+ 	public List<JobInstance> getJobInstances(String jobName, int start, int count) {
+-		if (this.jobInstance == null) {
++		if (this.jobInstance == null || !this.jobInstance.getJobName().equals(jobName)) {
+ 			return Collections.emptyList();
+ 		}
+ 		return Collections.singletonList(this.jobInstance);
+@@ -91,7 +96,7 @@ public List<JobInstance> getJobInstances(String jobName, int start, int count) {
+ 	 */
+ 	@Override
+ 	public List<JobInstance> findJobInstances(String jobName) {
+-		if (this.jobInstance == null) {
++		if (this.jobInstance == null || !this.jobInstance.getJobName().equals(jobName)) {
+ 			return Collections.emptyList();
+ 		}
+ 		return Collections.singletonList(this.jobInstance);
+@@ -99,16 +104,28 @@ public List<JobInstance> findJobInstances(String jobName) {
+ 
+ 	@Override
+ 	@Nullable public JobInstance getJobInstance(long instanceId) {
++		if (this.jobInstance == null || !(this.jobInstance.getId() == instanceId)) {
++			return null;
++		}
+ 		return this.jobInstance;
+ 	}
+ 
+ 	@Override
+ 	@Nullable public JobInstance getLastJobInstance(String jobName) {
++		if (this.jobInstance == null || !this.jobInstance.getJobName().equals(jobName)) {
++			return null;
++		}
+ 		return this.jobInstance;
+ 	}
+ 
+ 	@Override
+ 	@Nullable public JobInstance getJobInstance(String jobName, JobParameters jobParameters) {
++		if (this.jobInstance == null || !this.jobInstance.getJobName().equals(jobName)) {
++			return null;
++		}
++		if (!isJobKeyEquals(jobParameters)) {
++			return null;
++		}
+ 		return this.jobInstance;
+ 	}
+ 
+@@ -121,7 +138,9 @@ public boolean isJobInstanceExists(String jobName, JobParameters jobParameters)
+ 
+ 	@Override
+ 	public long getJobInstanceCount(String jobName) {
+-		// FIXME should return 0 if jobInstance is null or the name is not matching
++		if (this.jobInstance == null || !this.jobInstance.getJobName().equals(jobName)) {
++			return 0;
++		}
+ 		return 1;
+ 	}
+ 
+@@ -131,6 +150,14 @@ public JobInstance createJobInstance(String jobName, JobParameters jobParameters
+ 		return this.jobInstance;
+ 	}
+ 
++	@Override
++	public void deleteJobInstance(JobInstance jobInstance) {
++		if (this.jobInstance != null && this.jobInstance.getId() == jobInstance.getId()) {
++			this.jobInstance = null;
++			this.jobExecution = null;
++		}
++	}
++
+ 	/*
+ 	 * ===================================================================================
+ 	 * Job execution operations
+@@ -139,24 +166,36 @@ public JobInstance createJobInstance(String jobName, JobParameters jobParameters
+ 
+ 	@Override
+ 	@Nullable public JobExecution getJobExecution(long executionId) {
+-		// FIXME should return null if the id is not matching
++		if (this.jobExecution == null || !(this.jobExecution.getId() == executionId)) {
++			return null;
++		}
+ 		return this.jobExecution;
+ 	}
+ 
+ 	@Override
+ 	@Nullable public JobExecution getLastJobExecution(String jobName, JobParameters jobParameters) {
+-		// FIXME should return null if the job name is not matching
++		if (this.jobInstance == null || !this.jobInstance.getJobName().equals(jobName)) {
++			return null;
++		}
++		if (!isJobKeyEquals(jobParameters)) {
++			return null;
++		}
+ 		return this.jobExecution;
+ 	}
+ 
+ 	@Override
+ 	@Nullable public JobExecution getLastJobExecution(JobInstance jobInstance) {
+-		// FIXME should return null if the job instance is not matching
++		if (this.jobInstance == null || !(this.jobInstance.getId() == jobInstance.getId())) {
++			return null;
++		}
+ 		return this.jobExecution;
+ 	}
+ 
+ 	@Override
+ 	public List<JobExecution> getJobExecutions(JobInstance jobInstance) {
++		if (this.jobInstance == null || !(this.jobInstance.getId() == jobInstance.getId())) {
++			return Collections.emptyList();
++		}
+ 		if (this.jobExecution == null) {
+ 			return Collections.emptyList();
+ 		}
+@@ -187,6 +226,13 @@ public void updateExecutionContext(JobExecution jobExecution) {
+ 		jobExecution.setLastUpdated(LocalDateTime.now());
+ 	}
+ 
++	@Override
++	public void deleteJobExecution(JobExecution jobExecution) {
++		if (this.jobExecution != null && this.jobExecution.getId() == jobExecution.getId()) {
++			this.jobExecution = null;
++		}
++	}
++
+ 	/*
+ 	 * ===================================================================================
+ 	 * Step execution operations
+@@ -272,4 +318,13 @@ public void updateExecutionContext(StepExecution stepExecution) {
+ 		stepExecution.setLastUpdated(LocalDateTime.now());
+ 	}
+ 
+-}
+\ No newline at end of file
++	private boolean isJobKeyEquals(JobParameters params) {
++		if (this.jobExecution == null) {
++			return false;
++		}
++		String jobKey1 = this.jobKeyGenerator.generateKey(this.jobExecution.getJobParameters());
++		String jobKey2 = this.jobKeyGenerator.generateKey(params);
++		return jobKey1.equals(jobKey2);
++	}
++
++}
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/ResourcelessJobRepositoryTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/ResourcelessJobRepositoryTests.java
+index 3a2893466c..30e36daacc 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/ResourcelessJobRepositoryTests.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/ResourcelessJobRepositoryTests.java
+@@ -20,16 +20,16 @@
+ import org.springframework.batch.core.job.JobExecution;
+ import org.springframework.batch.core.job.JobInstance;
+ import org.springframework.batch.core.job.parameters.JobParameters;
++import org.springframework.batch.core.job.parameters.JobParametersBuilder;
+ import org.springframework.batch.infrastructure.item.ExecutionContext;
+ 
+-import static org.junit.jupiter.api.Assertions.assertEquals;
+-import static org.junit.jupiter.api.Assertions.assertFalse;
+-import static org.junit.jupiter.api.Assertions.assertNotNull;
++import static org.junit.jupiter.api.Assertions.*;
+ 
+ /**
+  * Test class for {@link ResourcelessJobRepository}.
+  *
+  * @author Mahmoud Ben Hassine
++ * @author Sanghyuk Jung
+  */
+ class ResourcelessJobRepositoryTests {
+ 
+@@ -91,4 +91,361 @@ void getLastJobExecution() {
+ 		assertEquals(1L, jobExecution.getJobInstance().getInstanceId());
+ 	}
+ 
+-}
+\ No newline at end of file
++	@Test
++	void getJobInstancesWithDiffrentJobParameters() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParametersBuilder().addLong("param", 1L).toJobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		JobParameters differentParameters = new JobParametersBuilder().addLong("param", 2L).toJobParameters();
++		var jobInstance = jobRepository.getJobInstance(jobName, differentParameters);
++
++		// then
++		assertNull(jobInstance);
++	}
++
++	@Test
++	void getJobInstancesWithDifferentJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		var jobInstances = jobRepository.getJobInstances("differentJob", 0, 10);
++
++		// then
++		assertTrue(jobInstances.isEmpty());
++	}
++
++	@Test
++	void getJobInstancesWithCorrectJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		var jobInstances = jobRepository.getJobInstances(jobName, 0, 10);
++
++		// then
++		assertEquals(1, jobInstances.size());
++		assertEquals(jobName, jobInstances.get(0).getJobName());
++	}
++
++	@Test
++	void findJobInstancesWithDifferentJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		var jobInstances = jobRepository.findJobInstances("differentJob");
++
++		// then
++		assertTrue(jobInstances.isEmpty());
++	}
++
++	@Test
++	void findJobInstancesWithCorrectJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		var jobInstances = jobRepository.findJobInstances(jobName);
++
++		// then
++		assertEquals(1, jobInstances.size());
++		assertEquals(jobName, jobInstances.get(0).getJobName());
++	}
++
++	@Test
++	void getJobInstanceWithDifferentId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		JobInstance jobInstance = jobRepository.getJobInstance(999L);
++
++		// then
++		assertNull(jobInstance);
++	}
++
++	@Test
++	void getJobInstanceWithCorrectId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		JobInstance jobInstance = jobRepository.getJobInstance(1L);
++
++		// then
++		assertNotNull(jobInstance);
++		assertEquals(jobName, jobInstance.getJobName());
++		assertEquals(1L, jobInstance.getInstanceId());
++	}
++
++	@Test
++	void getLastJobInstanceWithDifferentJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		JobInstance jobInstance = jobRepository.getLastJobInstance("differentJob");
++
++		// then
++		assertNull(jobInstance);
++	}
++
++	@Test
++	void getLastJobInstanceWithCorrectJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		JobInstance jobInstance = jobRepository.getLastJobInstance(jobName);
++
++		// then
++		assertNotNull(jobInstance);
++		assertEquals(jobName, jobInstance.getJobName());
++	}
++
++	@Test
++	void getJobInstanceCountWithDifferentJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		long count = jobRepository.getJobInstanceCount("differentJob");
++
++		// then
++		assertEquals(0L, count);
++	}
++
++	@Test
++	void getJobInstanceCountWithCorrectJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		jobRepository.createJobInstance(jobName, jobParameters);
++
++		// when
++		long count = jobRepository.getJobInstanceCount(jobName);
++
++		// then
++		assertEquals(1L, count);
++	}
++
++	@Test
++	void getJobExecutionWithDifferentId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobExecution jobExecution = jobRepository.getJobExecution(999L);
++
++		// then
++		assertNull(jobExecution);
++	}
++
++	@Test
++	void getJobExecutionWithCorrectId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobExecution jobExecution = jobRepository.getJobExecution(1L);
++
++		// then
++		assertNotNull(jobExecution);
++		assertEquals(1L, jobExecution.getId());
++	}
++
++	@Test
++	void getLastJobExecutionWithDifferentJobName() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobExecution jobExecution = jobRepository.getLastJobExecution("differentJob", jobParameters);
++
++		// then
++		assertNull(jobExecution);
++	}
++
++	@Test
++	void getLastJobExecutionWithDifferentJobParameters() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParametersBuilder().addLong("param", 1L).toJobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobParameters differentParameters = new JobParametersBuilder().addLong("param", 2L).toJobParameters();
++		JobExecution jobExecution = jobRepository.getLastJobExecution(jobName, differentParameters);
++
++		// then
++		assertNull(jobExecution);
++	}
++
++	@Test
++	void getLastJobExecutionByJobInstanceWithDifferentId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobInstance differentJobInstance = new JobInstance(999L, jobName);
++		JobExecution jobExecution = jobRepository.getLastJobExecution(differentJobInstance);
++
++		// then
++		assertNull(jobExecution);
++	}
++
++	@Test
++	void getLastJobExecutionByJobInstanceWithCorrectId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobExecution jobExecution = jobRepository.getLastJobExecution(jobInstance);
++
++		// then
++		assertNotNull(jobExecution);
++		assertEquals(1L, jobExecution.getId());
++	}
++
++	@Test
++	void getJobExecutionsWithDifferentJobInstance() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobInstance differentJobInstance = new JobInstance(999L, jobName);
++		var jobExecutions = jobRepository.getJobExecutions(differentJobInstance);
++
++		// then
++		assertTrue(jobExecutions.isEmpty());
++	}
++
++	@Test
++	void getJobExecutionsWithCorrectJobInstance() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		var jobExecutions = jobRepository.getJobExecutions(jobInstance);
++
++		// then
++		assertEquals(1, jobExecutions.size());
++		assertEquals(1L, jobExecutions.get(0).getId());
++	}
++
++	/* Tests for delete operations */
++
++	@Test
++	void deleteJobInstanceWithCorrectId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		JobExecution jobExecution = jobRepository.createJobExecution(jobInstance, jobParameters,
++				new ExecutionContext());
++
++		// when
++		jobRepository.deleteJobInstance(jobInstance);
++
++		// then
++		assertTrue(jobRepository.findJobInstances(jobName).isEmpty());
++		assertTrue(jobRepository.getJobInstances(jobName, 0, 10).isEmpty());
++		assertNull(jobRepository.getJobInstance(1L));
++		assertNull(jobRepository.getJobExecution(jobExecution.getId()));
++	}
++
++	@Test
++	void deleteJobInstanceWithDifferentId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		jobRepository.createJobExecution(jobInstance, jobParameters, new ExecutionContext());
++
++		// when
++		JobInstance differentJobInstance = new JobInstance(999L, jobName);
++		jobRepository.deleteJobInstance(differentJobInstance);
++
++		// then
++		assertEquals(jobInstance, jobRepository.getJobInstance(1L));
++		assertNotNull(jobRepository.getJobExecution(1L));
++	}
++
++	@Test
++	void deleteJobExecutionWithCorrectId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		JobExecution jobExecution = jobRepository.createJobExecution(jobInstance, jobParameters,
++				new ExecutionContext());
++
++		// when
++		jobRepository.deleteJobExecution(jobExecution);
++
++		// then
++		assertNull(jobRepository.getJobExecution(jobExecution.getId()));
++	}
++
++	@Test
++	void deleteJobExecutionWithDifferentId() {
++		// given
++		String jobName = "job";
++		JobParameters jobParameters = new JobParameters();
++		JobInstance jobInstance = jobRepository.createJobInstance(jobName, jobParameters);
++		JobExecution jobExecution = jobRepository.createJobExecution(jobInstance, jobParameters,
++				new ExecutionContext());
++
++		// when
++		JobExecution differentJobExecution = new JobExecution(999L, jobInstance, jobParameters);
++		jobRepository.deleteJobExecution(differentJobExecution);
++
++		// then
++		assertEquals(jobExecution, jobRepository.getJobExecution(jobExecution.getId()));
++	}
++
++}

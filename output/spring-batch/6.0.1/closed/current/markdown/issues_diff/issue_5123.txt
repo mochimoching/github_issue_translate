@@ -1,0 +1,63 @@
+Issue #5123: Incorrect deprecation warning in `JobOperatorTestUtils.getJob()`
+Reference: Commit 4216a0a (2025-12-05T05:21:07Z)
+URL: https://github.com/spring-projects/spring-batch/commit/4216a0a5834d90f0063cfe6ec32bc45c1e9d260b
+
+--- Diff ---
+diff --git a/spring-batch-test/src/main/java/org/springframework/batch/test/JobOperatorTestUtils.java b/spring-batch-test/src/main/java/org/springframework/batch/test/JobOperatorTestUtils.java
+index 578dc3e156..f757d9af79 100644
+--- a/spring-batch-test/src/main/java/org/springframework/batch/test/JobOperatorTestUtils.java
++++ b/spring-batch-test/src/main/java/org/springframework/batch/test/JobOperatorTestUtils.java
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright 2025 the original author or authors.
++ * Copyright 2025-present the original author or authors.
+  *
+  * Licensed under the Apache License, Version 2.0 (the "License");
+  * you may not use this file except in compliance with the License.
+@@ -100,6 +100,15 @@ public void setJob(Job job) {
+ 		this.job = job;
+ 	}
+ 
++	/**
++	 * Get the job that can be operated by this utility.
++	 * @return the job under test
++	 */
++	@Override
++	public Job getJob() {
++		return super.getJob();
++	}
++
+ 	/**
+ 	 * Set the job operator to be used by this utility.
+ 	 * @param jobOperator the job operator to use to start jobs and steps
+@@ -108,6 +117,14 @@ public void setJobOperator(JobOperator jobOperator) {
+ 		this.jobOperator = jobOperator;
+ 	}
+ 
++	/**
++	 * Get the job operator used by this utility.
++	 * @return the job operator
++	 */
++	public JobOperator getJobOperator() {
++		return this.jobOperator;
++	}
++
+ 	/**
+ 	 * Set the job repository to be used by this utility.
+ 	 * @param jobRepository the job repository to use to access job metadata
+@@ -116,6 +133,15 @@ public void setJobRepository(JobRepository jobRepository) {
+ 		this.jobRepository = jobRepository;
+ 	}
+ 
++	/**
++	 * Get the job repository used by this utility.
++	 * @return the job repository
++	 */
++	@Override
++	public JobRepository getJobRepository() {
++		return super.getJobRepository();
++	}
++
+ 	/**
+ 	 * Start the entire job, including all steps, with a set of unique random job
+ 	 * parameters.

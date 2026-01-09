@@ -86,6 +86,8 @@ python translate.py output/spring-batch/6.0.0/closed/current/json/issues.json --
 | `--labels` | リスト | なし | ラベルで絞り込み（複数指定可能）<br>例: `enhancement`, `bug` |
 | `--max-comments` | 整数 | 20 | 取得する最大コメント数（コメントは常に取得されます。デフォルト: 20） |
 | `--output` | 文字列 | 自動生成 | 出力ファイルパス（JSONファイル） |
+| `--no-diff` | フラグ | false | PR/Commitのdiff取得を無効化（デフォルト: diff取得する） |
+| `--max-diff-size` | 整数 | 50000 | diffの最大サイズ（文字数）。超過分は切り詰められる |
 
 ### translate.py（Issue翻訳）のオプション
 
@@ -139,6 +141,12 @@ python fetch.py --labels enhancement bug --state open --max-issues 20
 # 出力先を指定（カスタムJSONパスのみ）
 # 注：Markdown出力先は自動的にcurrent/markdownディレクトリに配置されます
 python fetch.py --milestone "6.0.0" --state closed --output "my_issues.json"
+
+# diff取得を無効化（高速化したい場合）
+python fetch.py --milestone "6.0.0" --state closed --no-diff
+
+# diffの最大サイズを変更（大きなdiffも取得したい場合）
+python fetch.py --milestone "6.0.0" --state closed --max-diff-size 100000
 ```
 
 ### Issue翻訳の例
@@ -252,9 +260,12 @@ output/
                 │   └── issues.json       # JSON形式
                 └── markdown/
                     ├── issues.md         # 統合Markdown
-                    └── issues/           # 個別Markdownファイル
-                        ├── issue_5106.md
-                        └── issue_5181.md
+                    ├── issues/           # 個別Markdownファイル
+                    │   ├── issue_5106.md
+                    │   └── issue_5181.md
+                    └── issues_diff/      # PR/Commitのdiff（デフォルトで取得）
+                        ├── issue_5106.txt
+                        └── issue_5181.txt
 ```
 
 ### 翻訳結果（translate.py）

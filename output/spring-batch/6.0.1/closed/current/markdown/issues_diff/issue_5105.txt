@@ -1,0 +1,73 @@
+Issue #5105: @EnableMongoJobRepository fails with Invalid transaction attribute token: [SERIALIZABLE]
+Reference: PR #5141 (2025-12-07T09:57:52Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5141
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/annotation/BatchRegistrar.java b/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/annotation/BatchRegistrar.java
+index 81451e134f..c244586940 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/annotation/BatchRegistrar.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/annotation/BatchRegistrar.java
+@@ -182,7 +182,7 @@ private void registerMongoJobRepository(BeanDefinitionRegistry registry,
+ 		}
+ 		Isolation isolationLevelForCreate = mongoJobRepositoryAnnotation.isolationLevelForCreate();
+ 		if (isolationLevelForCreate != null) {
+-			beanDefinitionBuilder.addPropertyValue("isolationLevelForCreate", isolationLevelForCreate);
++			beanDefinitionBuilder.addPropertyValue("isolationLevelForCreateEnum", isolationLevelForCreate);
+ 		}
+ 
+ 		String jobKeyGeneratorRef = mongoJobRepositoryAnnotation.jobKeyGeneratorRef();
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/configuration/annotation/BatchRegistrarTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/configuration/annotation/BatchRegistrarTests.java
+index 39b848ef10..9c277a3846 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/configuration/annotation/BatchRegistrarTests.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/configuration/annotation/BatchRegistrarTests.java
+@@ -40,6 +40,8 @@
+ import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
++import org.springframework.data.mongodb.MongoTransactionManager;
++import org.springframework.data.mongodb.core.MongoOperations;
+ import org.springframework.jdbc.core.JdbcTemplate;
+ import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
+ import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
+@@ -202,6 +204,17 @@ public void testCustomJobParametersConverterConfiguration() {
+ 		Assertions.assertEquals(JsonJobParametersConverter.class, jobParametersConverter.getClass());
+ 	}
+ 
++	@Test
++	@DisplayName("Mongo job repository should be configured successfully with @EnableMongoJobRepository")
++	void testMongoJobRepositoryConfiguredWithEnableMongoJobRepository() {
++		AnnotationConfigApplicationContext context =
++				new AnnotationConfigApplicationContext(MongoJobConfiguration.class);
++
++		JobRepository jobRepository = context.getBean(JobRepository.class);
++
++		Assertions.assertNotNull(jobRepository);
++	}
++
+ 	@Configuration
+ 	@EnableBatchProcessing
+ 	public static class JobConfigurationWithUserDefinedInfrastructureBeans {
+@@ -322,6 +335,23 @@ public JobParametersConverter jobParametersConverter() {
+ 
+ 	}
+ 
++	@Configuration
++	@EnableBatchProcessing
++	@EnableMongoJobRepository
++	public static class MongoJobConfiguration {
++
++		@Bean
++		public MongoOperations mongoTemplate() {
++			return Mockito.mock(MongoOperations.class);
++		}
++
++		@Bean
++		public MongoTransactionManager transactionManager() {
++			return Mockito.mock(MongoTransactionManager.class);
++		}
++
++	}
++
+ 	private PlatformTransactionManager getTransactionManagerSetOnJobRepository(JobRepository jobRepository) {
+ 		Advised target = (Advised) jobRepository; // proxy created by
+ 													// AbstractJobRepositoryFactoryBean

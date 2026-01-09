@@ -1,0 +1,91 @@
+Issue #5172: Local Chunking: BatchStatus remains COMPLETED when worker thread write fails
+Reference: Commit 82121a5 (2025-12-17T08:42:28Z)
+URL: https://github.com/spring-projects/spring-batch/commit/82121a59872e018b1c98cbe68345fde716cd2e60
+
+--- Diff ---
+diff --git a/spring-batch-integration/src/main/java/org/springframework/batch/integration/chunk/ChunkTaskExecutorItemWriter.java b/spring-batch-integration/src/main/java/org/springframework/batch/integration/chunk/ChunkTaskExecutorItemWriter.java
+index 51e3955f9e..dfaecd3f37 100644
+--- a/spring-batch-integration/src/main/java/org/springframework/batch/integration/chunk/ChunkTaskExecutorItemWriter.java
++++ b/spring-batch-integration/src/main/java/org/springframework/batch/integration/chunk/ChunkTaskExecutorItemWriter.java
+@@ -15,6 +15,7 @@
+  */
+ package org.springframework.batch.integration.chunk;
+ 
++import org.springframework.batch.core.BatchStatus;
+ import org.springframework.batch.core.ExitStatus;
+ import org.springframework.batch.core.step.StepContribution;
+ import org.springframework.batch.core.step.StepExecution;
+@@ -84,14 +85,21 @@ public void beforeStep(StepExecution stepExecution) {
+ 	@Override
+ 	public ExitStatus afterStep(StepExecution stepExecution) {
+ 		try {
++			ExitStatus exitStatus = ExitStatus.COMPLETED
++				.addExitDescription("Waited for " + this.responses.size() + " results.");
+ 			for (StepContribution contribution : getStepContributions()) {
+ 				stepExecution.apply(contribution);
++				if (ExitStatus.FAILED.getExitCode().equals(contribution.getExitStatus().getExitCode())) {
++					exitStatus = contribution.getExitStatus();
++					stepExecution.setStatus(BatchStatus.FAILED);
++				}
+ 			}
++			return exitStatus;
+ 		}
+ 		catch (ExecutionException | InterruptedException e) {
++			stepExecution.setStatus(BatchStatus.FAILED);
+ 			return ExitStatus.FAILED.addExitDescription(e);
+ 		}
+-		return ExitStatus.COMPLETED.addExitDescription("Waited for " + this.responses.size() + " results.");
+ 	}
+ 
+ 	private Collection<StepContribution> getStepContributions() throws ExecutionException, InterruptedException {
+diff --git a/spring-batch-samples/src/main/resources/org/springframework/batch/samples/chunking/local/data/vets-bad-data.csv b/spring-batch-samples/src/main/resources/org/springframework/batch/samples/chunking/local/data/vets-bad-data.csv
+new file mode 100644
+index 0000000000..1a8e526dcc
+--- /dev/null
++++ b/spring-batch-samples/src/main/resources/org/springframework/batch/samples/chunking/local/data/vets-bad-data.csv
+@@ -0,0 +1,6 @@
++foo1,bar1
++foo2,bar2
++fooooooooooooooooooooooooooooo3,baaaaaaaaaaaaaaaaaaaaaaaaaaaar3
++foo4,bar4
++foo5,bar5
++foo6,bar6
+\ No newline at end of file
+diff --git a/spring-batch-samples/src/test/java/org/springframework/batch/samples/chunking/local/LocalChunkingJobFunctionalTests.java b/spring-batch-samples/src/test/java/org/springframework/batch/samples/chunking/local/LocalChunkingJobFunctionalTests.java
+index c10649c5b0..e4118b53d2 100644
+--- a/spring-batch-samples/src/test/java/org/springframework/batch/samples/chunking/local/LocalChunkingJobFunctionalTests.java
++++ b/spring-batch-samples/src/test/java/org/springframework/batch/samples/chunking/local/LocalChunkingJobFunctionalTests.java
+@@ -29,6 +29,7 @@
+ import org.springframework.test.jdbc.JdbcTestUtils;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
+ public class LocalChunkingJobFunctionalTests {
+ 
+@@ -52,4 +53,25 @@ public void testLaunchJobWithJavaConfig() throws Exception {
+ 		assertEquals(6, vetsCount);
+ 	}
+ 
++	@Test
++	public void testLaunchJobWithJavaConfigFailure() throws Exception {
++		// given
++		ApplicationContext context = new AnnotationConfigApplicationContext(LocalChunkingJobConfiguration.class);
++		JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
++		JobOperator jobOperator = context.getBean(JobOperator.class);
++		Job job = context.getBean(Job.class);
++		JobParameters jobParameters = new JobParametersBuilder()
++			.addString("inputFile", "org/springframework/batch/samples/chunking/local/data/vets-bad-data.csv")
++			.toJobParameters();
++
++		// when
++		JobExecution jobExecution = jobOperator.start(job, jobParameters);
++
++		// then
++		assertEquals(BatchStatus.FAILED, jobExecution.getStatus());
++		assertTrue(jobExecution.getExitStatus().getExitDescription().contains("size limit: 30"));
++		int vetsCount = JdbcTestUtils.countRowsInTable(jdbcTemplate, "vets");
++		assertEquals(4, vetsCount);
++	}
++
+ }

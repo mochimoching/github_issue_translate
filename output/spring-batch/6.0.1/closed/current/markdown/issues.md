@@ -1,6 +1,6 @@
 # Spring Batch GitHub Issues
 
-取得日時: 2026年01月06日 17:04:49
+取得日時: 2026年01月09日 15:02:26
 
 取得件数: 17件
 
@@ -17,8 +17,8 @@
 **関連リンク**:
 - Commits:
   - [249330b](https://github.com/spring-projects/spring-batch/commit/249330b2718492424c2df9b452279c9601c2802e)
-  - [f3ccc74](https://github.com/spring-projects/spring-batch/commit/f3ccc7405c9d8f1c1f8a33fdfbbcbe143799e8f7)
   - [1d50d82](https://github.com/spring-projects/spring-batch/commit/1d50d829907a580fe3aea5b6a17859a418e478b9)
+  - [f3ccc74](https://github.com/spring-projects/spring-batch/commit/f3ccc7405c9d8f1c1f8a33fdfbbcbe143799e8f7)
 
 ### 内容
 
@@ -525,8 +525,8 @@ Resolved in #5141 and will be shipped in the upcoming v6.0.1. Many thanks to @ba
 
 **関連リンク**:
 - Commits:
-  - [e5fbc2a](https://github.com/spring-projects/spring-batch/commit/e5fbc2a0387858f5f95009e3a032d2864398f9ac)
   - [29f5ecf](https://github.com/spring-projects/spring-batch/commit/29f5ecf567cc21b5ce3dd9a41283d227a85c3667)
+  - [e5fbc2a](https://github.com/spring-projects/spring-batch/commit/e5fbc2a0387858f5f95009e3a032d2864398f9ac)
   - [644d7e6](https://github.com/spring-projects/spring-batch/commit/644d7e6997c4e29822be580dab8e6f65713e17be)
 
 ### 内容
@@ -696,8 +696,8 @@ However, I would appreciate it if you could cross-check for any potential side e
 
 **関連リンク**:
 - Commits:
-  - [da16f6b](https://github.com/spring-projects/spring-batch/commit/da16f6b92ecc1b4d5ed0acb947df1dad923e590a)
   - [1a5b8d0](https://github.com/spring-projects/spring-batch/commit/1a5b8d0321fd6efd02c589b0711260f93fe9315f)
+  - [da16f6b](https://github.com/spring-projects/spring-batch/commit/da16f6b92ecc1b4d5ed0acb947df1dad923e590a)
   - [8264ab1](https://github.com/spring-projects/spring-batch/commit/8264ab11b9fa1905da648f454a050dd058b3fda0)
 
 ### 内容
@@ -814,13 +814,13 @@ The fix will be part of the upcoming 6.0.1 planned for next week.
 
 **関連リンク**:
 - Commits:
-  - [29f5ecf](https://github.com/spring-projects/spring-batch/commit/29f5ecf567cc21b5ce3dd9a41283d227a85c3667)
-  - [f62da2b](https://github.com/spring-projects/spring-batch/commit/f62da2bd6a7a9459d809e86065877ac440130b70)
+  - [78ba896](https://github.com/spring-projects/spring-batch/commit/78ba896caa7020f1f7f972ae7b3dd469699a4922)
   - [644d7e6](https://github.com/spring-projects/spring-batch/commit/644d7e6997c4e29822be580dab8e6f65713e17be)
   - [09b0783](https://github.com/spring-projects/spring-batch/commit/09b07834ed86f4a11a51e118e665dc20156352c9)
-  - [0feafa1](https://github.com/spring-projects/spring-batch/commit/0feafa15a73c4be4f990b627c914bb918118e96e)
-  - [78ba896](https://github.com/spring-projects/spring-batch/commit/78ba896caa7020f1f7f972ae7b3dd469699a4922)
   - [984a057](https://github.com/spring-projects/spring-batch/commit/984a057f86c92b326782b964f949c0eb0eb805d4)
+  - [29f5ecf](https://github.com/spring-projects/spring-batch/commit/29f5ecf567cc21b5ce3dd9a41283d227a85c3667)
+  - [f62da2b](https://github.com/spring-projects/spring-batch/commit/f62da2bd6a7a9459d809e86065877ac440130b70)
+  - [0feafa1](https://github.com/spring-projects/spring-batch/commit/0feafa15a73c4be4f990b627c914bb918118e96e)
 
 ### 内容
 
@@ -1134,9 +1134,9 @@ I personally have already migrated to using a single context (but other's may st
 
 **関連リンク**:
 - Commits:
-  - [8cade4d](https://github.com/spring-projects/spring-batch/commit/8cade4d656f79646ed99ba68cd6e8b77ee0fe862)
-  - [2c57f8d](https://github.com/spring-projects/spring-batch/commit/2c57f8d13e6f8fda7b89cfaa9b9668209bc6ee54)
   - [5edb62f](https://github.com/spring-projects/spring-batch/commit/5edb62f0c818f4505804b46b45f5843556e6e826)
+  - [2c57f8d](https://github.com/spring-projects/spring-batch/commit/2c57f8d13e6f8fda7b89cfaa9b9668209bc6ee54)
+  - [8cade4d](https://github.com/spring-projects/spring-batch/commit/8cade4d656f79646ed99ba68cd6e8b77ee0fe862)
 
 ### 内容
 
@@ -1295,13 +1295,13 @@ I will take a loop at your PR.
 
 **関連リンク**:
 - Commits:
-  - [d983f71](https://github.com/spring-projects/spring-batch/commit/d983f71da9cf8fa014d5cb2657174a84e966c17c)
+  - [60bf5b4](https://github.com/spring-projects/spring-batch/commit/60bf5b42bb6bee89a180ad321397c09b1c3999dc)
   - [1da2f28](https://github.com/spring-projects/spring-batch/commit/1da2f28b4c1a855feed5f10ad70b708ead061305)
   - [412158a](https://github.com/spring-projects/spring-batch/commit/412158afd9f8576b323d445212ed9e8f76c4bd84)
-  - [60bf5b4](https://github.com/spring-projects/spring-batch/commit/60bf5b42bb6bee89a180ad321397c09b1c3999dc)
+  - [e64383d](https://github.com/spring-projects/spring-batch/commit/e64383d8eeab77a5894657cfa2b343bffca54979)
   - [cc2d57f](https://github.com/spring-projects/spring-batch/commit/cc2d57fde1cc603fc6d18defcc3eee1807e2adcd)
   - [a8961a6](https://github.com/spring-projects/spring-batch/commit/a8961a6770a78cf94eee2f5d270f280751d2092d)
-  - [e64383d](https://github.com/spring-projects/spring-batch/commit/e64383d8eeab77a5894657cfa2b343bffca54979)
+  - [d983f71](https://github.com/spring-projects/spring-batch/commit/d983f71da9cf8fa014d5cb2657174a84e966c17c)
 
 ### 内容
 
@@ -1649,8 +1649,8 @@ We're using the Spring Boot auto configuration, and after the upgrade to Spring 
 **関連リンク**:
 - Commits:
   - [5e3df33](https://github.com/spring-projects/spring-batch/commit/5e3df332ab1831ac90d4e8234b52d3ce05601244)
-  - [f04f663](https://github.com/spring-projects/spring-batch/commit/f04f6636362fad92c0a741b0785af699535a5d99)
   - [37a39e2](https://github.com/spring-projects/spring-batch/commit/37a39e2d5d02f02ee4e73400a4ff5a9cf6f850be)
+  - [f04f663](https://github.com/spring-projects/spring-batch/commit/f04f6636362fad92c0a741b0785af699535a5d99)
 
 ### 内容
 

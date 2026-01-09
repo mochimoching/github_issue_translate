@@ -1,0 +1,54 @@
+Issue #5115: MetaDataInstanceFactory.createStepExecution(JobParameters) does not propagate JobParameters to StepExecution
+Reference: PR #5116 (2025-11-27T14:39:23Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5116
+
+--- Diff ---
+diff --git a/spring-batch-test/src/main/java/org/springframework/batch/test/MetaDataInstanceFactory.java b/spring-batch-test/src/main/java/org/springframework/batch/test/MetaDataInstanceFactory.java
+index b8effdf733..a110e13282 100644
+--- a/spring-batch-test/src/main/java/org/springframework/batch/test/MetaDataInstanceFactory.java
++++ b/spring-batch-test/src/main/java/org/springframework/batch/test/MetaDataInstanceFactory.java
+@@ -189,7 +189,7 @@ public static StepExecution createStepExecution(JobParameters jobParameters, Exe
+ 	public static StepExecution createStepExecution(JobParameters jobParameters) {
+ 		JobExecution jobExecution = createJobExecution(DEFAULT_JOB_NAME, DEFAULT_JOB_INSTANCE_ID,
+ 				DEFAULT_JOB_EXECUTION_ID, jobParameters);
+-		StepExecution stepExecution = createStepExecution();
++		StepExecution stepExecution = createStepExecution(jobExecution, DEFAULT_STEP_NAME, DEFAULT_STEP_EXECUTION_ID);
+ 		jobExecution.addStepExecution(stepExecution);
+ 		return stepExecution;
+ 	}
+diff --git a/spring-batch-test/src/test/java/org/springframework/batch/test/MetaDataInstanceFactoryTests.java b/spring-batch-test/src/test/java/org/springframework/batch/test/MetaDataInstanceFactoryTests.java
+index fa0475e8f2..359621349c 100644
+--- a/spring-batch-test/src/test/java/org/springframework/batch/test/MetaDataInstanceFactoryTests.java
++++ b/spring-batch-test/src/test/java/org/springframework/batch/test/MetaDataInstanceFactoryTests.java
+@@ -15,6 +15,7 @@
+  */
+ package org.springframework.batch.test;
+ 
++import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertNotNull;
+ 
+ import java.util.List;
+@@ -22,6 +23,8 @@
+ import org.junit.jupiter.api.Test;
+ import org.springframework.batch.core.job.parameters.JobParameters;
+ import org.springframework.batch.core.converter.DefaultJobParametersConverter;
++import org.springframework.batch.core.job.parameters.JobParametersBuilder;
++import org.springframework.batch.core.step.StepExecution;
+ import org.springframework.batch.infrastructure.support.PropertiesConverter;
+ 
+ /**
+@@ -90,6 +93,14 @@ void testCreateStepExecutionJobExecutionStringLong() {
+ 		assertNotNull(MetaDataInstanceFactory.createStepExecution(stepName, stepExecutionId));
+ 	}
+ 
++	@Test
++	void testCreateStepExecutionJobParameters() {
++		JobParameters parameters = new JobParametersBuilder().addString("foo", "bar").toJobParameters();
++		StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(parameters);
++		String paramValue = stepExecution.getJobExecution().getJobParameters().getString("foo");
++		assertEquals("bar", paramValue);
++	}
++
+ 	@Test
+ 	void testCreateJobExecutionWithStepExecutions() {
+ 		assertNotNull(MetaDataInstanceFactory.createJobExecutionWithStepExecutions(executionId, List.of(stepName)));

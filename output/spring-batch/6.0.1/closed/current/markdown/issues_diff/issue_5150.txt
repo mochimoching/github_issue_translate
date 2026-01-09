@@ -1,0 +1,97 @@
+Issue #5150: `RemotePartitioningWorkerStepBuilder` doesn't override all configuration methods from `StepBuilder`
+Reference: PR #5151 (2025-12-09T03:13:18Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5151
+
+--- Diff ---
+diff --git a/spring-batch-integration/src/main/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilder.java b/spring-batch-integration/src/main/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilder.java
+index f260419544..a1fd9a9a02 100644
+--- a/spring-batch-integration/src/main/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilder.java
++++ b/spring-batch-integration/src/main/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilder.java
+@@ -26,6 +26,7 @@
+ import org.springframework.batch.core.partition.Partitioner;
+ import org.springframework.batch.core.repository.JobRepository;
+ import org.springframework.batch.core.step.StepLocator;
++import org.springframework.batch.core.step.builder.ChunkOrientedStepBuilder;
+ import org.springframework.batch.core.step.builder.FlowStepBuilder;
+ import org.springframework.batch.core.step.builder.JobStepBuilder;
+ import org.springframework.batch.core.step.builder.PartitionStepBuilder;
+@@ -62,7 +63,9 @@
+  *
+  * @since 4.1
+  * @author Mahmoud Ben Hassine
++ * @author Yanming Zhou
+  */
++@SuppressWarnings("removal")
+ public class RemotePartitioningWorkerStepBuilder extends StepBuilder {
+ 
+ 	private static final String SERVICE_ACTIVATOR_METHOD_NAME = "handle";
+@@ -162,6 +165,18 @@ public TaskletStepBuilder tasklet(Tasklet tasklet, PlatformTransactionManager tr
+ 		return super.tasklet(tasklet, transactionManager);
+ 	}
+ 
++	@Override
++	public TaskletStepBuilder tasklet(Tasklet tasklet) {
++		configureWorkerIntegrationFlow();
++		return super.tasklet(tasklet);
++	}
++
++	@Override
++	public <I, O> ChunkOrientedStepBuilder<I, O> chunk(int chunkSize) {
++		configureWorkerIntegrationFlow();
++		return super.chunk(chunkSize);
++	}
++
+ 	@Override
+ 	public <I, O> SimpleStepBuilder<I, O> chunk(int chunkSize, PlatformTransactionManager transactionManager) {
+ 		configureWorkerIntegrationFlow();
+diff --git a/spring-batch-integration/src/test/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilderTests.java b/spring-batch-integration/src/test/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilderTests.java
+index 556b9aaf2f..ce3e0df908 100644
+--- a/spring-batch-integration/src/test/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilderTests.java
++++ b/spring-batch-integration/src/test/java/org/springframework/batch/integration/partition/RemotePartitioningWorkerStepBuilderTests.java
+@@ -16,18 +16,24 @@
+ 
+ package org.springframework.batch.integration.partition;
+ 
++import java.lang.reflect.Method;
++import java.lang.reflect.Modifier;
++
+ import org.junit.jupiter.api.Test;
+ import org.mockito.Mock;
+ 
+ import org.springframework.batch.core.repository.JobRepository;
++import org.springframework.batch.core.step.builder.StepBuilder;
+ import org.springframework.batch.core.step.tasklet.Tasklet;
+ import org.springframework.transaction.PlatformTransactionManager;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
++import static org.assertj.core.api.Assertions.fail;
+ import static org.junit.jupiter.api.Assertions.assertThrows;
+ 
+ /**
+  * @author Mahmoud Ben Hassine
++ * @author Yanming Zhou
+  */
+ class RemotePartitioningWorkerStepBuilderTests {
+ 
+@@ -110,4 +116,21 @@ void testMandatoryInputChannel() {
+ 		assertThat(expectedException).hasMessage("An InputChannel must be provided");
+ 	}
+ 
++	@Test
++	void testAllMethodsAreOverridden() throws Exception {
++		for (Method method : StepBuilder.class.getDeclaredMethods()) {
++			if (!Modifier.isPublic(method.getModifiers())) {
++				continue;
++			}
++			try {
++				RemotePartitioningWorkerStepBuilder.class.getDeclaredMethod(method.getName(),
++						method.getParameterTypes());
++			}
++			catch (NoSuchMethodException ex) {
++				fail(RemotePartitioningWorkerStepBuilder.class.getName() + " should override method [" + method
++						+ "] to configure worker integration flow.");
++			}
++		}
++	}
++
+ }
