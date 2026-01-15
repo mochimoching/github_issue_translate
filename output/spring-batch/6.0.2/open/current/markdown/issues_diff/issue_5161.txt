@@ -1,0 +1,77 @@
+Issue #5161: OptimisticLockingFailureException in JobRepositoryTestUtils.removeJobExecutions() since Spring Batch 5.2.3
+Reference: PR #5173 (2025-12-18T02:02:59Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5173
+
+--- Diff ---
+diff --git a/spring-batch-test/src/main/java/org/springframework/batch/test/JobRepositoryTestUtils.java b/spring-batch-test/src/main/java/org/springframework/batch/test/JobRepositoryTestUtils.java
+index bbb6ad4d33..4cc3c8f0a3 100644
+--- a/spring-batch-test/src/main/java/org/springframework/batch/test/JobRepositoryTestUtils.java
++++ b/spring-batch-test/src/main/java/org/springframework/batch/test/JobRepositoryTestUtils.java
+@@ -151,7 +151,11 @@ public void removeJobExecutions(Collection<JobExecution> jobExecutions) {
+ 	 * @param jobExecution the {@link JobExecution} to delete
+ 	 */
+ 	public void removeJobExecution(JobExecution jobExecution) {
+-		this.jobRepository.deleteJobExecution(jobExecution);
++		// query latest version of JobExecution to avoid OptimisticLockingFailureException
++		jobExecution = this.jobRepository.getJobExecution(jobExecution.getId());
++		if (jobExecution != null) {
++			this.jobRepository.deleteJobExecution(jobExecution);
++		}
+ 	}
+ 
+ 	/**
+@@ -165,7 +169,7 @@ public void removeJobExecutions() {
+ 			List<JobInstance> jobInstances = this.jobRepository.findJobInstances(jobName);
+ 			for (JobInstance jobInstance : jobInstances) {
+ 				List<JobExecution> jobExecutions = this.jobRepository.getJobExecutions(jobInstance);
+-				if (jobExecutions != null && !jobExecutions.isEmpty()) {
++				if (!jobExecutions.isEmpty()) {
+ 					removeJobExecutions(jobExecutions);
+ 				}
+ 			}
+diff --git a/spring-batch-test/src/test/java/org/springframework/batch/test/JobRepositoryTestUtilsTests.java b/spring-batch-test/src/test/java/org/springframework/batch/test/JobRepositoryTestUtilsTests.java
+index b9d893a78d..d5b0ef85e5 100644
+--- a/spring-batch-test/src/test/java/org/springframework/batch/test/JobRepositoryTestUtilsTests.java
++++ b/spring-batch-test/src/test/java/org/springframework/batch/test/JobRepositoryTestUtilsTests.java
+@@ -41,6 +41,7 @@
+ /**
+  * @author Dave Syer
+  * @author Mahmoud Ben Hassine
++ * @author Yanming Zhou
+  *
+  */
+ @SpringJUnitConfig(locations = "/simple-job-launcher-context.xml")
+@@ -139,4 +140,33 @@ void testRemoveJobExecutions() throws Exception {
+ 		assertEquals(0, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_JOB_EXECUTION"));
+ 	}
+ 
++	@Test
++	void testRemoveJobExecution() throws Exception {
++		// given
++		utils = new JobRepositoryTestUtils(jobRepository);
++		JobExecution jobExecution = utils.createJobExecutions(1).get(0);
++		assertEquals(1, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_JOB_EXECUTION"));
++		assertEquals(1, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_STEP_EXECUTION"));
++
++		// when
++		jobExecution.setVersion(-1); // simulate stale version
++		utils.removeJobExecution(jobExecution);
++
++		// then
++		assertEquals(0, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_STEP_EXECUTION"));
++		assertEquals(0, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_JOB_EXECUTION"));
++
++		List<JobExecution> jobExecutions = utils.createJobExecutions("test", new String[] { "step1", "step2" }, 2);
++		assertEquals(2, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_JOB_EXECUTION"));
++		assertEquals(4, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_STEP_EXECUTION"));
++
++		// when
++		jobExecutions.forEach(je -> je.setVersion(-1)); // simulate stale version
++		utils.removeJobExecutions(jobExecutions);
++
++		// then
++		assertEquals(0, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_STEP_EXECUTION"));
++		assertEquals(0, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_JOB_EXECUTION"));
++	}
++
+ }

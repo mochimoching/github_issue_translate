@@ -1,8 +1,8 @@
 # Spring Batch GitHub Issues
 
-取得日時: 2026年01月14日 14:42:20
+取得日時: 2026年01月14日 14:43:06
 
-取得件数: 10件
+取得件数: 11件
 
 ---
 
@@ -1242,6 +1242,38 @@ so that chunk processing and metadata updates share the same transactional bound
 
 please let me know if you’d like me to provide a reproducer or a failing test for this issue. 🙏
 
+
+---
+
+## Issue #5207: Fix typo in whatsnew.adoc and in integration tests
+
+**状態**: closed | **作成者**: wocks1123 | **作成日**: 2026-01-10
+
+**ラベル**: in: documentation, type: bug
+
+**URL**: https://github.com/spring-projects/spring-batch/issues/5207
+
+### 内容
+
+fixed typo in the test method and an example code in the 'whatsnew.adoc' document
+
+- wrong : faultToleranChunkOrientedStep, nonRetrybaleExceptions
+- correct : faultToleran**t**ChunkOrientedStep, nonRetry**ab**leExceptions
+
+
+### コメント
+
+#### コメント 1 by wocks1123
+
+**作成日**: 2026-01-10
+
+fix this issue in this PR #5206
+
+#### コメント 2 by fmbenhassine
+
+**作成日**: 2026-01-12
+
+Resolved with #5206 . Thank you for opening the issue and for providing a fix 🙏
 
 ---
 

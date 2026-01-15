@@ -1,0 +1,111 @@
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
+
+# マルチスレッドのChunkOrientedStepで@StepScope ItemProcessorを使用するとScopeNotActiveExceptionが発生する
+
+**Issue番号**: [#5183](https://github.com/spring-projects/spring-batch/issues/5183)
+
+**状態**: open | **作成者**: KILL9-NO-MERCY | **作成日**: 2025-12-23
+
+**ラベル**: type: bug, in: core
+
+**URL**: https://github.com/spring-projects/spring-batch/issues/5183
+
+## 内容
+
+Spring Batchチームの皆さん、こんにちは。
+
+バージョン6.0で導入された新しい`ChunkOrientedStep`に関する問題を報告します。ステップがマルチスレッドとして構成されている場合、`@StepScope`で定義された`ItemProcessor`がワーカースレッド内で正しく解決できないようです。
+
+## バグの説明
+`ChunkOrientedStep`の実装、特に`processChunkConcurrently`を使用する場合、`StepContext`が`TaskExecutor`によって管理されるワーカースレッドに伝播されないようです。
+
+その結果、ワーカースレッドが`ItemProcessor`（`@StepScope`プロキシ）を呼び出そうとすると、そのスレッドの`StepSynchronizationManager`にアクティブなコンテキストがないため、`ScopeNotActiveException`がスローされます。
+
+## 環境
+Spring Batchバージョン: v6
+ステップ実装: ChunkOrientedStep
+構成: TaskExecutor（例: SimpleAsyncTaskExecutor）+ @StepScope ItemProcessor
+
+## 再現可能な構成
+```java
+@Bean
+public Step issueReproductionStep(
+        JobRepository jobRepository,
+        ItemReader<TestItem> reader,
+        ItemProcessor<TestItem, TestItem> itemProcessor, // @StepScope Bean
+        ItemWriter<TestItem> writer
+) {
+    return new StepBuilder(jobRepository)
+            .<TestItem, TestItem>chunk(1)
+            .reader(reader)
+            .processor(itemProcessor)
+            .writer(writer)
+            .taskExecutor(new SimpleAsyncTaskExecutor()) // マルチスレッドを有効化
+            .build();
+}
+
+@Bean
+@StepScope
+public ItemProcessor<TestItem, TestItem> issueReproductionProcessor() {
+    return item -> {
+        log.info("[Thread: {}] Processing item: {}", Thread.currentThread().getName(), item.getName());
+        return item;
+    };
+}
+```
+
+## 実際の結果（スタックトレース）
+ワーカースレッドがスコープ付き`ItemProcessor`にアクセスしようとするとエラーが発生します:
+```bash
+Caused by: org.springframework.beans.factory.support.ScopeNotActiveException: Error creating bean with name 'scopedTarget.issueReproductionProcessor': Scope 'step' is not active for the current thread
+    at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:381)
+    ...
+    at jdk.proxy2/jdk.proxy2.$Proxy134.process(Unknown Source)
+    at org.springframework.batch.core.step.item.ChunkOrientedStep.doProcess(ChunkOrientedStep.java:655)
+    ...
+Caused by: java.lang.IllegalStateException: No context holder available for step scope
+    at org.springframework.batch.core.scope.StepScope.getContext(StepScope.java:167)
+```
+
+## 期待される動作
+これが意図的なアーキテクチャ変更なのか、新しい実装の見落としなのか確信がありません。ただし、これがバグの場合、以前のバージョンと同様に、`@StepScope` `ItemProcessor`はワーカースレッド内で正しく機能するべきです。
+
+
+## ChunkOrientedStep.processChunkConcurrentlyでの提案される変更:
+```java
+// processChunkConcurrentlyメソッド内
+Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
+    try {
+        // 現在のワーカースレッドのStepSynchronizationManagerにステップ実行を登録
+        StepSynchronizationManager.register(stepExecution);
+        return processItem(item, contribution);
+    } finally {
+        // メモリリークを防ぐため、処理後にコンテキストをクリア
+        StepSynchronizationManager.close();
+    }
+});
+```
+
+このプロジェクトをメンテナンスしていただきありがとうございます！さらに情報や動作する再現リポジトリが必要な場合はお知らせください！
+
+## コメント
+
+### コメント 1 by LeeHyungGeol
+
+**作成日**: 2026-01-07
+
+@fmbenhassine さん、こんにちは。
+
+この課題に取り組んでみてもよいでしょうか？
+
+### コメント 2 by fmbenhassine
+
+**作成日**: 2026-01-13
+
+@KILL9-NO-MERCY この問題の報告ありがとうございます！
+
+> これが意図的なアーキテクチャ変更なのか、新しい実装の見落としなのか確信がありません。
+
+これは新しい実装の見落としです。実際、[このItemProcessor](https://github.com/spring-projects/spring-batch/blob/a6a53c46fca3aa920f4f07ac7ddbf39493081f66/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/TestConfiguration.java#L56)がstep-scopedの場合、`org.springframework.batch.core.step.item.ChunkOrientedStepIntegrationTests#testConcurrentChunkOrientedStepSuccess`が失敗します。提案された変更は良さそうです（変更を適用すると、step-scoped ItemProcessorでテストがパスします）。提案ありがとうございます。
+
+@LeeHyungGeol もちろん！お手伝いのご提案ありがとうございます 🙏 ここで提案された変更と、先ほど言及したItemProcessorをstep-scopedにするPRを提供していただけると嬉しいです。今後の6.0.2で修正を予定します。

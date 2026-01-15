@@ -1,6 +1,8 @@
-# MetaDataInstanceFactory default values cause StepContext collision in StepScopeTestUtils when @SpringBatchTest is active
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
 
-**Issue番号**: #5181
+# @SpringBatchTestがアクティブな状態でStepScopeTestUtilsを使用するとMetaDataInstanceFactoryのデフォルト値がStepContextの衝突を引き起こす
+
+**Issue番号**: [#5181](https://github.com/spring-projects/spring-batch/issues/5181)
 
 **状態**: open | **作成者**: KILL9-NO-MERCY | **作成日**: 2025-12-23
 
@@ -10,22 +12,22 @@
 
 ## 内容
 
-## Bug description: 
-There is a logical collision in StepSynchronizationManager when using StepScopeTestUtils in a test environment managed by @SpringBatchTest.
+## バグの説明:
+`@SpringBatchTest`で管理されるテスト環境で`StepScopeTestUtils`を使用する際、`StepSynchronizationManager`で論理的な衝突が発生します。
 
-StepExecution determines equality based on stepName, jobExecutionId, and id. Since MetaDataInstanceFactory provides static default values for all these fields, multiple instances created by the factory are treated as identical keys in the SynchronizationManagerSupport.contexts map.
+`StepExecution`はstepName、jobExecutionId、idに基づいて等価性を判定します。`MetaDataInstanceFactory`がこれらすべてのフィールドに対して静的なデフォルト値を提供するため、ファクトリーで作成された複数のインスタンスは`SynchronizationManagerSupport.contexts`マップで同一のキーとして扱われます。
 
-This prevents StepScopeTestUtils from registering a new context with custom JobParameters, as the computeIfAbsent logic finds the existing context registered by StepScopeTestExecutionListener (which is part of @SpringBatchTest).
+これにより、`StepScopeTestUtils`がカスタム`JobParameters`を持つ新しいコンテキストを登録できなくなります。`computeIfAbsent`ロジックが`StepScopeTestExecutionListener`（`@SpringBatchTest`の一部）によって登録された既存のコンテキストを見つけてしまうためです。
 
-## Steps to reproduce:
-Annotate a test class with @SpringBatchTest.
+## 再現手順:
+テストクラスに`@SpringBatchTest`アノテーションを付与します。
 
-Inside a test method, use StepScopeTestUtils.doInStepScope() with a StepExecution created via MetaDataInstanceFactory.createStepExecution(jobParameters).
+テストメソッド内で、`MetaDataInstanceFactory.createStepExecution(jobParameters)`で作成した`StepExecution`を使用して`StepScopeTestUtils.doInStepScope()`を使用します。
 
-The Tasklet or ItemStream inside the scope will fail to see the jobParameters because it is bound to the listener's initial context.
+スコープ内の`Tasklet`や`ItemStream`は、リスナーの初期コンテキスト（`JobParameters`がない）にバインドされているため、jobParametersを参照できません。
 
-## Failing Example: 
-example job
+## 失敗する例:
+ジョブの例
 ```java
 @Slf4j
 @Configuration
@@ -59,7 +61,7 @@ public class IssueReproductionJobConfiguration {
 }
 ```
 
-test class
+テストクラス
 ```java
 @SpringBatchTest
 @SpringBootTest
@@ -82,7 +84,7 @@ public class IssueReproductionTest {
                 .addString("testParam", expectedValue)
                 .toJobParameters();
 
-        // MetadataInstanceFactory in 6.x / maybe after 5.2.3?? creates StepExecution with fixed ID 1234L
+        // 6.x以降の（おそらく5.2.3以降も？）MetadataInstanceFactoryは固定ID 1234LでStepExecutionを作成する
         StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);
 
         // When
@@ -93,9 +95,9 @@ public class IssueReproductionTest {
         // Then
         String actualValue = stepExecution.getExecutionContext().getString("result");
 
-        // This will FAIL because 'actualValue' will be null.
-        // The Tasklet retrieved the listener's context (which has no JobParameters)
-        // instead of the one passed via StepScopeTestUtils due to ID collision (1234L).
+        // これは失敗します。'actualValue'はnullになります。
+        // TaskletはID衝突（1234L）により、StepScopeTestUtilsで渡されたコンテキストではなく、
+        // リスナーのコンテキスト（JobParametersがない）を取得しました。
         assertEquals(expectedValue, actualValue);
     }
 }
@@ -112,39 +114,39 @@ spring:
     job:
       enabled: false
 ```
-test result:
+
+テスト結果:
 ```bash
 Value for key=[result] is not of type: [class java.lang.String], it is [null]
 java.lang.ClassCastException: Value for key=[result] is not of type: [class java.lang.String], it is [null]
 ```
 
-## Expected behavior:
-The StepExecution and its corresponding StepContext created within StepScopeTestUtils.doInStepScope() should be correctly registered and accessible through the StepSynchronizationManager, even when @SpringBatchTest is active.
+## 期待される動作:
+`StepScopeTestUtils.doInStepScope()`内で作成された`StepExecution`とそれに対応する`StepContext`は、`@SpringBatchTest`がアクティブな状態でも、`StepSynchronizationManager`を通じて正しく登録されアクセス可能であるべきです。
 
-(Note: Deciding on the best fix seems non-trivial to me, as it could involve changing the ID generation strategy in MetaDataInstanceFactory or adjusting how StepSynchronizationManager handles overlapping registrations in a test environment.)
-Workaround: Users must manually provide a unique name or ID to bypass the equals/hashCode collision:
+（注意: 最適な修正方法を決定するのは私には簡単ではないようです。`MetaDataInstanceFactory`のID生成戦略を変更するか、テスト環境で重複する登録を`StepSynchronizationManager`がどのように処理するかを調整する必要があるかもしれません。）
 
-## Workaround: 
-To bypass the current collision, users can explicitly define a getStepExecution() method within their test class. By returning a StepExecution with a unique name or a different ID (e.g., -1L), you can prevent the StepScopeTestExecutionListener from occupying the default ID (1234L), thus allowing StepScopeTestUtils to work as intended:
+## 回避策:
+現在の衝突を回避するため、テストクラス内で`getStepExecution()`メソッドを明示的に定義できます。一意の名前または別のID（例: -1L）を持つ`StepExecution`を返すことで、`StepScopeTestExecutionListener`がデフォルトのID（1234L）を占有することを防ぎ、`StepScopeTestUtils`が意図通りに動作するようになります:
 
 ```java
 /**
- * Workaround: Define getStepExecution() in the test class to avoid ID collision.
- * By providing a non-default ID or name, we ensure that the listener-registered 
- * context does not conflict with the one created in StepScopeTestUtils.
+ * 回避策: テストクラスでgetStepExecution()を定義してID衝突を回避。
+ * デフォルト以外のIDまたは名前を提供することで、リスナーが登録したコンテキストが
+ * StepScopeTestUtilsで作成されたものと衝突しないようにします。
  */
 public StepExecution getStepExecution() {
     return MetaDataInstanceFactory.createStepExecution("uniqueStep", -1L);
 }
 ```
 
-test result:
+テスト結果:
 ```bash
 > Task :test
 BUILD SUCCESSFUL in 3s
 ```
 
-Thanks for your time and for maintaining this great project!
+この素晴らしいプロジェクトをメンテナンスしていただきありがとうございます！
 
 ## コメント
 
@@ -152,15 +154,15 @@ Thanks for your time and for maintaining this great project!
 
 **作成日**: 2026-01-11
 
-FYI) Fix PR: https://github.com/spring-projects/spring-batch/pull/5208 👍
+参考）修正PR: https://github.com/spring-projects/spring-batch/pull/5208 👍
 
 ### コメント 2 by fmbenhassine
 
 **作成日**: 2026-01-13
 
-I am trying to reproduce this issue but I am not able to. The test you shared uses Spring Boot, but I want to make sure this is a valid issue by only using Spring Batch first.
+この問題を再現しようとしていますが、できませんでした。共有していただいたテストはSpring Bootを使用していますが、まずSpring Batchのみを使用してこれが有効な問題であることを確認したいと思います。
 
-At 9ae777572a0978572e25f04d4cb93c0ad02b9a0f, when I add the following classes (the same you shared but without Spring Boot) in the `org.springframework.batch.test` package, the test you mentioned passes:
+9ae777572a0978572e25f04d4cb93c0ad02b9a0fの時点で、以下のクラス（共有されたものと同じですがSpring Bootなし）を`org.springframework.batch.test`パッケージに追加すると、言及されたテストはパスします:
 
 ```java
 package org.springframework.batch.test;
@@ -252,7 +254,7 @@ public class IssueReproductionTest {
                 .addString("testParam", expectedValue)
                 .toJobParameters();
 
-        // MetadataInstanceFactory in 6.x / maybe after 5.2.3?? creates StepExecution with fixed ID 1234L
+        // 6.x以降の（おそらく5.2.3以降も？）MetadataInstanceFactoryは固定ID 1234LでStepExecutionを作成する
         StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);
 
         // When
@@ -263,13 +265,12 @@ public class IssueReproductionTest {
         // Then
         String actualValue = stepExecution.getExecutionContext().getString("result");
 
-        // This will FAIL because 'actualValue' will be null.
-        // The Tasklet retrieved the listener's context (which has no JobParameters)
-        // instead of the one passed via StepScopeTestUtils due to ID collision (1234L).
+        // これは失敗します。'actualValue'はnullになります。
+        // TaskletはID衝突（1234L）により、StepScopeTestUtilsで渡されたコンテキストではなく、
+        // リスナーのコンテキスト（JobParametersがない）を取得しました。
         assertEquals(expectedValue, actualValue);
     }
 }
 ```
 
-Can you please check?
-
+確認していただけますか？

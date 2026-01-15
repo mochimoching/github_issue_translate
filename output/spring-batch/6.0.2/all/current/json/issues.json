@@ -316,5 +316,35 @@
       "pull_requests": [],
       "commits": []
     }
+  },
+  {
+    "number": 5207,
+    "title": "Fix typo in whatsnew.adoc and in integration tests",
+    "state": "closed",
+    "created_at": "2026-01-10T08:11:09Z",
+    "updated_at": "2026-01-12T18:44:53Z",
+    "author": "wocks1123",
+    "url": "https://github.com/spring-projects/spring-batch/issues/5207",
+    "body": "fixed typo in the test method and an example code in the 'whatsnew.adoc' document\n\n- wrong : faultToleranChunkOrientedStep, nonRetrybaleExceptions\n- correct : faultToleran**t**ChunkOrientedStep, nonRetry**ab**leExceptions\n",
+    "labels": [
+      "in: documentation",
+      "type: bug"
+    ],
+    "comments": [
+      {
+        "author": "wocks1123",
+        "created_at": "2026-01-10T08:14:42Z",
+        "body": "fix this issue in this PR #5206"
+      },
+      {
+        "author": "fmbenhassine",
+        "created_at": "2026-01-12T18:44:52Z",
+        "body": "Resolved with #5206 . Thank you for opening the issue and for providing a fix 🙏"
+      }
+    ],
+    "closing_references": {
+      "pull_requests": [],
+      "commits": []
+    }
   }
 ]
