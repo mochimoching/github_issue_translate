@@ -1,8 +1,8 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
 
 # Spring Batch 5.2.3以降でJobRepositoryTestUtils.removeJobExecutions()がOptimisticLockingFailureExceptionをスローする
 
-**Issue番号**: [#5161](https://github.com/spring-projects/spring-batch/issues/5161)
+**課題番号**: [#5161](https://github.com/spring-projects/spring-batch/issues/5161)
 
 **状態**: open | **作成者**: szopal24 | **作成日**: 2025-12-11
 
@@ -16,16 +16,17 @@
 
 ## 内容
 
-Spring Batch 5.2.3以降、テストのクリーンアップメソッドで`JobRepositoryTestUtils.removeJobExecutions()`を呼び出すと、ジョブ実行を削除しようとした際に`OptimisticLockingFailureException`がスローされるようになりました。
+Spring Batch 5.2.3以降、テストのクリーンアップメソッドで`JobRepositoryTestUtils.removeJobExecutions()`を呼び出すと、ジョブ実行を削除しようとする際に`OptimisticLockingFailureException`がスローされます。
 
-**環境**
+環境
 Spring Batch: 5.2.3, 5.2.4
 Spring Boot: 3.4.5, 3.5.8
 Java: 17
 データベース: PostgreSQL（テーブルプレフィックス BOOT3_BATCH_）
 
 **テストコード例:**
-```java
+```
+
     @Test
     public void testJob() throws Exception {
         JobExecution jobExecution = jobLauncherTestUtils.launchJob(defaultJobParameters());
@@ -36,7 +37,7 @@ Java: 17
 
     @After
     public void cleanUp() {
-        // 5.2.3以降、ここでOptimisticLockingFailureExceptionがスローされる
+        // 5.2.3以降でOptimisticLockingFailureExceptionがスローされる
         jobRepositoryTestUtils.removeJobExecutions(jobExecutionList);
     }
 ```
@@ -74,7 +75,7 @@ org.springframework.dao.OptimisticLockingFailureException: Attempt to delete ste
 	at org.springframework.test.context.junit4.SpringJUnit4ClassRunner.run(SpringJUnit4ClassRunner.java:191)
 ```
 
-これは、クリーンアップメソッドで`JobRepositoryTestUtils.removeJobExecutions()`を使用している既存のすべてのSpring Batch統合テストを破壊します。これは5.2.2から5.2.3+へアップグレードするすべてのプロジェクトに影響を与える破壊的変更です。Spring BatchのドキュメントおよびJobRepositoryTestUtils.removeJobExecutions()のJavadocには、この破壊的変更や既存のテストの更新方法に関するガイダンスが記載されていません。
+これは、クリーンアップメソッドで`JobRepositoryTestUtils.removeJobExecutions()`を使用しているすべての既存のSpring Batch統合テストを破壊します。これは5.2.2から5.2.3以降にアップグレードするすべてのプロジェクトに影響する破壊的変更です。Spring Batchのドキュメントと`JobRepositoryTestUtils.removeJobExecutions()`のJavadocには、この破壊的変更や既存のテストを更新する方法についてのガイダンスが記載されていません。
 
 ## コメント
 
@@ -82,19 +83,19 @@ org.springframework.dao.OptimisticLockingFailureException: Attempt to delete ste
 
 **作成日**: 2025-12-12
 
-これは[#4793](https://github.com/spring-projects/spring-batch/issues/4793)で導入されました。削除用の最新バージョンを取得するために、`jobExecutionList`から各`JobExecution`をクエリする必要があります。
+これは [#4793](https://github.com/spring-projects/spring-batch/issues/4793) で導入されました。削除のために最新バージョンを取得するには、`jobExecutionList`から各`JobExecution`をクエリする必要があります。
 
 ### コメント 2 by szopal24
 
 **作成日**: 2025-12-17
 
-ありがとうございます、問題を解決できました。残念ながら、これはこのメソッドを使用して`BATCH_JOB_EXECUTION`テーブルをクリーンアップしていた100以上のSpring Batchアプリケーションに変更を適用する必要があることを意味します。変更の理由は理解していますが、既存のテスト設定にはかなりの影響があります。
+ありがとうございます、問題を解決できました。残念ながら、このメソッドを使用して`BATCH_JOB_EXECUTION`テーブルをクリーンアップしていた100以上のSpring Batchアプリケーションに変更を適用する必要があります。変更の理由は理解できますが、既存のテストセットアップにかなりの影響があります。
 
 ### コメント 3 by quaff
 
 **作成日**: 2025-12-18
 
-@szopal24 修正のため[#5173](https://github.com/spring-projects/spring-batch/issues/5173)を作成しました。
+@szopal24 修正のために [#5173](https://github.com/spring-projects/spring-batch/issues/5173) を作成しました。
 
 ### コメント 4 by szopal24
 
@@ -106,6 +107,6 @@ org.springframework.dao.OptimisticLockingFailureException: Attempt to delete ste
 
 **作成日**: 2026-01-13
 
-@szopal24 この問題の報告ありがとうございます。@quaff PRもありがとうございます。
+@szopal24 この課題を報告いただき、また@quaff さんPRを提供いただきありがとうございます。
 
-6.0.2で修正を予定し、5.2.5にもバックポートします。
+6.0.2で修正を予定し、5.2.5にバックポートします。

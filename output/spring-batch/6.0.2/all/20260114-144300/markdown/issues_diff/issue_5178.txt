@@ -1,0 +1,773 @@
+Issue #5178: Add ZonedDateTime and OffsetDateTime support to JobParametersConverter
+Reference: PR #5186 (2025-12-28T17:28:19Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5186
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/support/JdbcDefaultBatchConfiguration.java b/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/support/JdbcDefaultBatchConfiguration.java
+index 9c0c2aaf01..6842c1f481 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/support/JdbcDefaultBatchConfiguration.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/configuration/support/JdbcDefaultBatchConfiguration.java
+@@ -16,14 +16,7 @@
+ package org.springframework.batch.core.configuration.support;
+ 
+ import org.springframework.batch.core.configuration.BatchConfigurationException;
+-import org.springframework.batch.core.converter.DateToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateTimeToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateToStringConverter;
+-import org.springframework.batch.core.converter.LocalTimeToStringConverter;
+-import org.springframework.batch.core.converter.StringToDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateTimeConverter;
+-import org.springframework.batch.core.converter.StringToLocalTimeConverter;
++import org.springframework.batch.core.converter.ConversionServiceFactory;
+ import org.springframework.batch.core.job.DefaultJobKeyGenerator;
+ import org.springframework.batch.core.job.JobInstance;
+ import org.springframework.batch.core.job.JobKeyGenerator;
+@@ -42,7 +35,6 @@
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
+ import org.springframework.core.convert.support.ConfigurableConversionService;
+-import org.springframework.core.convert.support.DefaultConversionService;
+ import org.springframework.jdbc.core.JdbcOperations;
+ import org.springframework.jdbc.core.JdbcTemplate;
+ import org.springframework.jdbc.support.MetaDataAccessException;
+@@ -242,21 +234,12 @@ protected String getDatabaseType() throws MetaDataAccessException {
+ 
+ 	/**
+ 	 * Return the conversion service to use in the job repository and job explorer. This
+-	 * service is used to convert job parameters from String literal to typed values and
+-	 * vice versa.
++	 * service is used to convert job parameters from {@code String} literal to typed
++	 * values and vice versa.
+ 	 * @return the {@link ConfigurableConversionService} to use.
+ 	 */
+ 	protected ConfigurableConversionService getConversionService() {
+-		DefaultConversionService conversionService = new DefaultConversionService();
+-		conversionService.addConverter(new DateToStringConverter());
+-		conversionService.addConverter(new StringToDateConverter());
+-		conversionService.addConverter(new LocalDateToStringConverter());
+-		conversionService.addConverter(new StringToLocalDateConverter());
+-		conversionService.addConverter(new LocalTimeToStringConverter());
+-		conversionService.addConverter(new StringToLocalTimeConverter());
+-		conversionService.addConverter(new LocalDateTimeToStringConverter());
+-		conversionService.addConverter(new StringToLocalDateTimeConverter());
+-		return conversionService;
++		return ConversionServiceFactory.createConversionService();
+ 	}
+ 
+ 	/**
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/AbstractDateTimeConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/AbstractDateTimeConverter.java
+index 7600ef670c..48615f1ad8 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/AbstractDateTimeConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/AbstractDateTimeConverter.java
+@@ -22,7 +22,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ class AbstractDateTimeConverter {
+ 
+ 	protected DateTimeFormatter instantFormatter = DateTimeFormatter.ISO_INSTANT;
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/ConversionServiceFactory.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/ConversionServiceFactory.java
+new file mode 100644
+index 0000000000..3ba26a76d5
+--- /dev/null
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/ConversionServiceFactory.java
+@@ -0,0 +1,53 @@
++/*
++ * Copyright 2025 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      https://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.springframework.batch.core.converter;
++
++import org.springframework.core.convert.support.ConfigurableConversionService;
++import org.springframework.format.datetime.standard.DateTimeFormatterRegistrar;
++import org.springframework.format.support.DefaultFormattingConversionService;
++import org.springframework.format.support.FormattingConversionService;
++
++import java.util.Date;
++
++/**
++ * Factory for the creation of {@link ConfigurableConversionService} instances,
++ * appropriately configured for Spring Batch use cases.
++ *
++ * @author Stefano Cordio
++ * @since 6.1
++ */
++public final class ConversionServiceFactory {
++
++	private ConversionServiceFactory() {
++		// nothing to instantiate
++	}
++
++	/**
++	 * Create a {@link ConfigurableConversionService}.
++	 * @return a {@link ConfigurableConversionService} instance
++	 */
++	public static ConfigurableConversionService createConversionService() {
++		FormattingConversionService conversionService = new DefaultFormattingConversionService();
++		conversionService.addFormatterForFieldType(Date.class, new DateFormatter());
++
++		DateTimeFormatterRegistrar dateTimeFormatterRegistrar = new DateTimeFormatterRegistrar();
++		dateTimeFormatterRegistrar.setUseIsoFormat(true);
++		dateTimeFormatterRegistrar.registerFormatters(conversionService);
++
++		return conversionService;
++	}
++
++}
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DateFormatter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DateFormatter.java
+new file mode 100644
+index 0000000000..1e7f262f7a
+--- /dev/null
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DateFormatter.java
+@@ -0,0 +1,48 @@
++/*
++ * Copyright 2025 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      https://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.springframework.batch.core.converter;
++
++import org.springframework.format.Formatter;
++
++import java.time.Instant;
++import java.time.format.DateTimeFormatter;
++import java.util.Date;
++import java.util.Locale;
++
++/**
++ * {@link Formatter} implementation for {@link Date}.
++ * <p>
++ * This formatter parses and prints dates according to the
++ * {@link DateTimeFormatter#ISO_INSTANT} format.
++ *
++ * @author Stefano Cordio
++ * @since 6.1.0
++ */
++class DateFormatter implements Formatter<Date> {
++
++	private final DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
++
++	@Override
++	public Date parse(String text, Locale locale) {
++		return Date.from(formatter.parse(text, Instant::from));
++	}
++
++	@Override
++	public String print(Date object, Locale locale) {
++		return formatter.format(object.toInstant());
++	}
++
++}
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DateToStringConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DateToStringConverter.java
+index 698f0cbafd..447a2eb9c6 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DateToStringConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DateToStringConverter.java
+@@ -27,7 +27,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class DateToStringConverter extends AbstractDateTimeConverter implements Converter<Date, String> {
+ 
+ 	@Override
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DefaultJobParametersConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DefaultJobParametersConverter.java
+index 9775ef7644..1b8d429007 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DefaultJobParametersConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/DefaultJobParametersConverter.java
+@@ -24,7 +24,6 @@
+ import org.springframework.batch.core.job.parameters.JobParameters;
+ import org.springframework.batch.core.job.parameters.JobParametersBuilder;
+ import org.springframework.core.convert.support.ConfigurableConversionService;
+-import org.springframework.core.convert.support.DefaultConversionService;
+ import org.springframework.util.Assert;
+ import org.springframework.util.StringUtils;
+ 
+@@ -64,29 +63,20 @@
+  * {@link java.time.format.DateTimeFormatter#ISO_LOCAL_TIME} format</li>
+  * <li>{@link java.time.LocalDateTime}: in the
+  * {@link java.time.format.DateTimeFormatter#ISO_LOCAL_DATE_TIME} format</li>
++ * <li>{@link java.time.ZonedDateTime}: in the
++ * {@link java.time.format.DateTimeFormatter#ISO_ZONED_DATE_TIME} format</li>
++ * <li>{@link java.time.OffsetDateTime}: in the
++ * {@link java.time.format.DateTimeFormatter#ISO_OFFSET_DATE_TIME} format</li>
+  * </ul>
+  *
+  * @author Dave Syer
+  * @author Michael Minella
+  * @author Mahmoud Ben Hassine
+- *
++ * @author Stefano Cordio
+  */
+ public class DefaultJobParametersConverter implements JobParametersConverter {
+ 
+-	protected ConfigurableConversionService conversionService;
+-
+-	public DefaultJobParametersConverter() {
+-		DefaultConversionService conversionService = new DefaultConversionService();
+-		conversionService.addConverter(new DateToStringConverter());
+-		conversionService.addConverter(new StringToDateConverter());
+-		conversionService.addConverter(new LocalDateToStringConverter());
+-		conversionService.addConverter(new StringToLocalDateConverter());
+-		conversionService.addConverter(new LocalTimeToStringConverter());
+-		conversionService.addConverter(new StringToLocalTimeConverter());
+-		conversionService.addConverter(new LocalDateTimeToStringConverter());
+-		conversionService.addConverter(new StringToLocalDateTimeConverter());
+-		this.conversionService = conversionService;
+-	}
++	protected ConfigurableConversionService conversionService = ConversionServiceFactory.createConversionService();
+ 
+ 	/**
+ 	 * @see org.springframework.batch.core.converter.JobParametersConverter#getJobParameters(java.util.Properties)
+@@ -176,8 +166,7 @@ private Class<?> parseType(String encodedJobParameter) {
+ 			return String.class;
+ 		}
+ 		try {
+-			Class<?> type = Class.forName(tokens[1]);
+-			return type;
++			return Class.forName(tokens[1]);
+ 		}
+ 		catch (ClassNotFoundException e) {
+ 			throw new JobParametersConversionException("Unable to parse job parameter " + encodedJobParameter, e);
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateTimeToStringConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateTimeToStringConverter.java
+index e434b68af6..b7094dfe60 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateTimeToStringConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateTimeToStringConverter.java
+@@ -28,7 +28,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class LocalDateTimeToStringConverter extends AbstractDateTimeConverter
+ 		implements Converter<LocalDateTime, String> {
+ 
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateToStringConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateToStringConverter.java
+index af38941b23..deb3e76d5a 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateToStringConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalDateToStringConverter.java
+@@ -27,7 +27,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class LocalDateToStringConverter extends AbstractDateTimeConverter implements Converter<LocalDate, String> {
+ 
+ 	@Override
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalTimeToStringConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalTimeToStringConverter.java
+index 077614b503..e96c649647 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalTimeToStringConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/LocalTimeToStringConverter.java
+@@ -28,7 +28,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class LocalTimeToStringConverter extends AbstractDateTimeConverter implements Converter<LocalTime, String> {
+ 
+ 	@Override
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToDateConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToDateConverter.java
+index 1c31221fc0..8469136792 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToDateConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToDateConverter.java
+@@ -28,7 +28,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class StringToDateConverter extends AbstractDateTimeConverter implements Converter<String, Date> {
+ 
+ 	@Override
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateConverter.java
+index ddf1dafd8e..f66f8fc48d 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateConverter.java
+@@ -27,7 +27,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class StringToLocalDateConverter extends AbstractDateTimeConverter implements Converter<String, LocalDate> {
+ 
+ 	@Override
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateTimeConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateTimeConverter.java
+index 3ea8dbabac..8d91ebe6d8 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateTimeConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalDateTimeConverter.java
+@@ -27,7 +27,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class StringToLocalDateTimeConverter extends AbstractDateTimeConverter
+ 		implements Converter<String, LocalDateTime> {
+ 
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalTimeConverter.java b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalTimeConverter.java
+index 3b56e22350..cfb0eae8a0 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalTimeConverter.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/converter/StringToLocalTimeConverter.java
+@@ -27,7 +27,11 @@
+  *
+  * @author Mahmoud Ben Hassine
+  * @since 5.0.1
++ * @deprecated since 6.1 in favor of
++ * {@link ConversionServiceFactory#createConversionService()}. Scheduled for removal in
++ * 6.3 or later.
+  */
++@Deprecated(since = "6.1", forRemoval = true)
+ public class StringToLocalTimeConverter extends AbstractDateTimeConverter implements Converter<String, LocalTime> {
+ 
+ 	@Override
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/AbstractJdbcBatchMetadataDao.java b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/AbstractJdbcBatchMetadataDao.java
+index 846bfe094a..2e7437a1b9 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/AbstractJdbcBatchMetadataDao.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/AbstractJdbcBatchMetadataDao.java
+@@ -20,17 +20,9 @@
+ 
+ import org.jspecify.annotations.Nullable;
+ 
+-import org.springframework.batch.core.converter.DateToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateTimeToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateToStringConverter;
+-import org.springframework.batch.core.converter.LocalTimeToStringConverter;
+-import org.springframework.batch.core.converter.StringToDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateTimeConverter;
+-import org.springframework.batch.core.converter.StringToLocalTimeConverter;
++import org.springframework.batch.core.converter.ConversionServiceFactory;
+ import org.springframework.beans.factory.InitializingBean;
+ import org.springframework.core.convert.support.ConfigurableConversionService;
+-import org.springframework.core.convert.support.DefaultConversionService;
+ import org.springframework.jdbc.core.JdbcOperations;
+ import org.springframework.util.Assert;
+ import org.springframework.util.StringUtils;
+@@ -59,7 +51,7 @@ public abstract class AbstractJdbcBatchMetadataDao implements InitializingBean {
+ 
+ 	private @Nullable JdbcOperations jdbcTemplate;
+ 
+-	private @Nullable ConfigurableConversionService conversionService;
++	private ConfigurableConversionService conversionService = ConversionServiceFactory.createConversionService();
+ 
+ 	protected String getQuery(String base) {
+ 		return StringUtils.replace(base, "%PREFIX%", tablePrefix);
+@@ -103,25 +95,13 @@ public void setConversionService(ConfigurableConversionService conversionService
+ 		this.conversionService = conversionService;
+ 	}
+ 
+-	@Nullable public ConfigurableConversionService getConversionService() {
++	public ConfigurableConversionService getConversionService() {
+ 		return conversionService;
+ 	}
+ 
+ 	@Override
+ 	public void afterPropertiesSet() throws Exception {
+ 		Assert.state(jdbcTemplate != null, "JdbcOperations is required");
+-		if (this.conversionService == null) {
+-			DefaultConversionService conversionService = new DefaultConversionService();
+-			conversionService.addConverter(new DateToStringConverter());
+-			conversionService.addConverter(new StringToDateConverter());
+-			conversionService.addConverter(new LocalDateToStringConverter());
+-			conversionService.addConverter(new StringToLocalDateConverter());
+-			conversionService.addConverter(new LocalTimeToStringConverter());
+-			conversionService.addConverter(new StringToLocalTimeConverter());
+-			conversionService.addConverter(new LocalDateTimeToStringConverter());
+-			conversionService.addConverter(new StringToLocalDateTimeConverter());
+-			this.conversionService = conversionService;
+-		}
+ 	}
+ 
+ }
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/explore/support/JobExplorerFactoryBean.java b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/explore/support/JobExplorerFactoryBean.java
+index 2ae557629b..e7dde1d3ea 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/explore/support/JobExplorerFactoryBean.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/explore/support/JobExplorerFactoryBean.java
+@@ -21,17 +21,10 @@
+ 
+ import javax.sql.DataSource;
+ 
++import org.springframework.batch.core.converter.ConversionServiceFactory;
+ import org.springframework.batch.core.job.DefaultJobKeyGenerator;
+ 
+ import org.springframework.batch.core.job.JobKeyGenerator;
+-import org.springframework.batch.core.converter.DateToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateTimeToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateToStringConverter;
+-import org.springframework.batch.core.converter.LocalTimeToStringConverter;
+-import org.springframework.batch.core.converter.StringToDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateTimeConverter;
+-import org.springframework.batch.core.converter.StringToLocalTimeConverter;
+ import org.springframework.batch.core.repository.ExecutionContextSerializer;
+ import org.springframework.batch.core.repository.dao.AbstractJdbcBatchMetadataDao;
+ import org.springframework.batch.core.repository.dao.DefaultExecutionContextSerializer;
+@@ -48,7 +41,6 @@
+ import org.springframework.beans.factory.FactoryBean;
+ import org.springframework.beans.factory.InitializingBean;
+ import org.springframework.core.convert.support.ConfigurableConversionService;
+-import org.springframework.core.convert.support.DefaultConversionService;
+ import org.springframework.jdbc.core.JdbcOperations;
+ import org.springframework.jdbc.core.JdbcTemplate;
+ import org.springframework.jdbc.support.incrementer.AbstractDataFieldMaxValueIncrementer;
+@@ -88,7 +80,7 @@ protected long getNextKey() {
+ 
+ 	protected Charset charset = StandardCharsets.UTF_8;
+ 
+-	protected ConfigurableConversionService conversionService;
++	protected ConfigurableConversionService conversionService = ConversionServiceFactory.createConversionService();
+ 
+ 	/**
+ 	 * A custom implementation of {@link ExecutionContextSerializer}. The default, if not
+@@ -179,24 +171,11 @@ public void afterPropertiesSet() throws Exception {
+ 			serializer = new DefaultExecutionContextSerializer();
+ 		}
+ 
+-		if (this.conversionService == null) {
+-			DefaultConversionService conversionService = new DefaultConversionService();
+-			conversionService.addConverter(new DateToStringConverter());
+-			conversionService.addConverter(new StringToDateConverter());
+-			conversionService.addConverter(new LocalDateToStringConverter());
+-			conversionService.addConverter(new StringToLocalDateConverter());
+-			conversionService.addConverter(new LocalTimeToStringConverter());
+-			conversionService.addConverter(new StringToLocalTimeConverter());
+-			conversionService.addConverter(new LocalDateTimeToStringConverter());
+-			conversionService.addConverter(new StringToLocalDateTimeConverter());
+-			this.conversionService = conversionService;
+-		}
+-
+ 		super.afterPropertiesSet();
+ 	}
+ 
+ 	@Override
+-	protected ExecutionContextDao createExecutionContextDao() throws Exception {
++	protected ExecutionContextDao createExecutionContextDao() {
+ 		JdbcExecutionContextDao dao = new JdbcExecutionContextDao();
+ 		dao.setJdbcTemplate(jdbcOperations);
+ 		dao.setTablePrefix(tablePrefix);
+@@ -206,7 +185,7 @@ protected ExecutionContextDao createExecutionContextDao() throws Exception {
+ 	}
+ 
+ 	@Override
+-	protected JobInstanceDao createJobInstanceDao() throws Exception {
++	protected JobInstanceDao createJobInstanceDao() {
+ 		JdbcJobInstanceDao dao = new JdbcJobInstanceDao();
+ 		dao.setJdbcTemplate(jdbcOperations);
+ 		dao.setJobInstanceIncrementer(incrementer);
+@@ -216,7 +195,7 @@ protected JobInstanceDao createJobInstanceDao() throws Exception {
+ 	}
+ 
+ 	@Override
+-	protected JobExecutionDao createJobExecutionDao() throws Exception {
++	protected JobExecutionDao createJobExecutionDao() {
+ 		JdbcJobExecutionDao dao = new JdbcJobExecutionDao();
+ 		dao.setJdbcTemplate(jdbcOperations);
+ 		dao.setJobExecutionIncrementer(incrementer);
+@@ -226,7 +205,7 @@ protected JobExecutionDao createJobExecutionDao() throws Exception {
+ 	}
+ 
+ 	@Override
+-	protected StepExecutionDao createStepExecutionDao() throws Exception {
++	protected StepExecutionDao createStepExecutionDao() {
+ 		JdbcStepExecutionDao dao = new JdbcStepExecutionDao();
+ 		dao.setJdbcTemplate(jdbcOperations);
+ 		dao.setStepExecutionIncrementer(incrementer);
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/JobRepositoryFactoryBean.java b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/JobRepositoryFactoryBean.java
+index 8cc5a0132a..77a1d00cc5 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/JobRepositoryFactoryBean.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/support/JobRepositoryFactoryBean.java
+@@ -20,21 +20,10 @@
+ import org.apache.commons.logging.LogFactory;
+ import org.jspecify.annotations.NullUnmarked;
+ 
+-import org.springframework.batch.core.converter.DateToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateTimeToStringConverter;
+-import org.springframework.batch.core.converter.LocalDateToStringConverter;
+-import org.springframework.batch.core.converter.LocalTimeToStringConverter;
+-import org.springframework.batch.core.converter.StringToDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateConverter;
+-import org.springframework.batch.core.converter.StringToLocalDateTimeConverter;
+-import org.springframework.batch.core.converter.StringToLocalTimeConverter;
++import org.springframework.batch.core.converter.ConversionServiceFactory;
+ import org.springframework.batch.core.repository.ExecutionContextSerializer;
+ import org.springframework.batch.core.repository.dao.AbstractJdbcBatchMetadataDao;
+ import org.springframework.batch.core.repository.dao.DefaultExecutionContextSerializer;
+-import org.springframework.batch.core.repository.dao.ExecutionContextDao;
+-import org.springframework.batch.core.repository.dao.JobExecutionDao;
+-import org.springframework.batch.core.repository.dao.JobInstanceDao;
+-import org.springframework.batch.core.repository.dao.StepExecutionDao;
+ import org.springframework.batch.core.repository.dao.jdbc.JdbcExecutionContextDao;
+ import org.springframework.batch.core.repository.dao.jdbc.JdbcJobExecutionDao;
+ import org.springframework.batch.core.repository.dao.jdbc.JdbcJobInstanceDao;
+@@ -46,7 +35,6 @@
+ import org.springframework.beans.factory.FactoryBean;
+ import org.springframework.beans.factory.InitializingBean;
+ import org.springframework.core.convert.support.ConfigurableConversionService;
+-import org.springframework.core.convert.support.DefaultConversionService;
+ import org.springframework.jdbc.core.JdbcOperations;
+ import org.springframework.jdbc.core.JdbcTemplate;
+ import org.springframework.util.Assert;
+@@ -99,9 +87,9 @@ public class JobRepositoryFactoryBean extends AbstractJobRepositoryFactoryBean i
+ 
+ 	protected Charset charset = StandardCharsets.UTF_8;
+ 
+-	protected ConfigurableConversionService conversionService;
++	protected ConfigurableConversionService conversionService = ConversionServiceFactory.createConversionService();
+ 
+-	protected Object getTarget() throws Exception {
++	protected Object getTarget() {
+ 		JdbcJobInstanceDao jobInstanceDao = createJobInstanceDao();
+ 		JdbcJobExecutionDao jobExecutionDao = createJobExecutionDao();
+ 		jobExecutionDao.setJobInstanceDao(jobInstanceDao);
+@@ -266,19 +254,6 @@ public void afterPropertiesSet() throws Exception {
+ 			Assert.state(isValidTypes(clobType), "lobType must be a value from the java.sql.Types class");
+ 		}
+ 
+-		if (this.conversionService == null) {
+-			DefaultConversionService conversionService = new DefaultConversionService();
+-			conversionService.addConverter(new DateToStringConverter());
+-			conversionService.addConverter(new StringToDateConverter());
+-			conversionService.addConverter(new LocalDateToStringConverter());
+-			conversionService.addConverter(new StringToLocalDateConverter());
+-			conversionService.addConverter(new LocalTimeToStringConverter());
+-			conversionService.addConverter(new StringToLocalTimeConverter());
+-			conversionService.addConverter(new LocalDateTimeToStringConverter());
+-			conversionService.addConverter(new StringToLocalDateTimeConverter());
+-			this.conversionService = conversionService;
+-		}
+-
+ 		super.afterPropertiesSet();
+ 	}
+ 
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/converter/DateFormatterTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/converter/DateFormatterTests.java
+new file mode 100644
+index 0000000000..e2bab6f87a
+--- /dev/null
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/converter/DateFormatterTests.java
+@@ -0,0 +1,57 @@
++/*
++ * Copyright 2025 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      https://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.springframework.batch.core.converter;
++
++import org.junit.jupiter.api.Test;
++
++import java.time.Instant;
++import java.util.Date;
++import java.util.Locale;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++/**
++ * @author Stefano Cordio
++ */
++class DateFormatterTests {
++
++	private final DateFormatter underTest = new DateFormatter();
++
++	@Test
++	void testParse() {
++		// given
++		String date = "1970-01-01T00:00:00Z";
++
++		// when
++		Date converted = underTest.parse(date, Locale.getDefault());
++
++		// then
++		assertEquals(Date.from(Instant.EPOCH), converted);
++	}
++
++	@Test
++	void testPrint() {
++		// given
++		Date date = Date.from(Instant.EPOCH);
++
++		// when
++		String converted = underTest.print(date, Locale.getDefault());
++
++		// then
++		assertEquals("1970-01-01T00:00:00Z", converted);
++	}
++
++}
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/converter/DefaultJobParametersConverterTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/converter/DefaultJobParametersConverterTests.java
+index 558163150a..e5b3475357 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/converter/DefaultJobParametersConverterTests.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/converter/DefaultJobParametersConverterTests.java
+@@ -16,6 +16,10 @@
+ package org.springframework.batch.core.converter;
+ 
+ import java.time.LocalDate;
++import java.time.OffsetDateTime;
++import java.time.ZoneId;
++import java.time.ZoneOffset;
++import java.time.ZonedDateTime;
+ import java.util.Properties;
+ 
+ import org.junit.jupiter.api.Test;
+@@ -25,6 +29,7 @@
+ import org.springframework.batch.core.job.parameters.JobParametersBuilder;
+ import org.springframework.util.StringUtils;
+ 
++import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertFalse;
+ import static org.junit.jupiter.api.Assertions.assertNotNull;
+@@ -34,7 +39,7 @@
+  * @author Dave Syer
+  * @author Michael Minella
+  * @author Mahmoud Ben Hassine
+- *
++ * @author Stefano Cordio
+  */
+ class DefaultJobParametersConverterTests {
+ 
+@@ -101,7 +106,7 @@ void testGetParametersMixed() {
+ 	}
+ 
+ 	@Test
+-	void testGetParameters() throws Exception {
++	void testGetParameters() {
+ 		String jobKey = "job.key=myKey";
+ 		String scheduleDate = "schedule.date=2008-01-23,java.time.LocalDate,true";
+ 		String vendorId = "vendor.id=33243243,java.lang.Long,true";
+@@ -152,13 +157,9 @@ void testGetParametersWithDoubleValueDeclaredAsLong() {
+ 
+ 		String[] args = new String[] { "value=1.03,java.lang.Long" };
+ 
+-		try {
+-			factory.getJobParameters(StringUtils.splitArrayElementsIntoProperties(args, "="));
+-		}
+-		catch (JobParametersConversionException e) {
+-			String message = e.getMessage();
+-			assertTrue(message.contains("1.03"), "Message should contain wrong number: " + message);
+-		}
++		assertThatExceptionOfType(JobParametersConversionException.class)
++			.isThrownBy(() -> factory.getJobParameters(StringUtils.splitArrayElementsIntoProperties(args, "=")))
++			.withMessageContaining("1.03");
+ 	}
+ 
+ 	@Test
+@@ -166,13 +167,9 @@ void testGetParametersWithBogusDouble() {
+ 
+ 		String[] args = new String[] { "value=foo,java.lang.Double" };
+ 
+-		try {
+-			factory.getJobParameters(StringUtils.splitArrayElementsIntoProperties(args, "="));
+-		}
+-		catch (JobParametersConversionException e) {
+-			String message = e.getMessage();
+-			assertTrue(message.contains("foo"), "Message should contain wrong number: " + message);
+-		}
++		assertThatExceptionOfType(JobParametersConversionException.class)
++			.isThrownBy(() -> factory.getJobParameters(StringUtils.splitArrayElementsIntoProperties(args, "=")))
++			.withMessageContaining("foo");
+ 	}
+ 
+ 	@Test
+@@ -206,7 +203,41 @@ void testGetParametersWithVeryRoundDouble() {
+ 	}
+ 
+ 	@Test
+-	void testGetProperties() throws Exception {
++	void testGetParametersWithZonedDateTime() {
++		// given
++		String[] args = new String[] { "parameter=2023-12-25T10:30:00+01:00[Europe/Paris],java.time.ZonedDateTime" };
++
++		// when
++		JobParameters jobParameters = factory.getJobParameters(StringUtils.splitArrayElementsIntoProperties(args, "="));
++
++		// then
++		assertEquals(1, jobParameters.parameters().size());
++		JobParameter<?> parameter = jobParameters.getParameter("parameter");
++		assertEquals("parameter", parameter.name());
++		assertEquals(ZonedDateTime.of(2023, 12, 25, 10, 30, 0, 0, ZoneId.of("Europe/Paris")), parameter.value());
++		assertEquals(ZonedDateTime.class, parameter.type());
++		assertTrue(parameter.identifying());
++	}
++
++	@Test
++	void testGetParametersWithOffsetDateTime() {
++		// given
++		String[] args = new String[] { "parameter=2023-12-25T10:30:00+01:00,java.time.OffsetDateTime" };
++
++		// when
++		JobParameters jobParameters = factory.getJobParameters(StringUtils.splitArrayElementsIntoProperties(args, "="));
++
++		// then
++		assertEquals(1, jobParameters.parameters().size());
++		JobParameter<?> parameter = jobParameters.getParameter("parameter");
++		assertEquals("parameter", parameter.name());
++		assertEquals(OffsetDateTime.of(2023, 12, 25, 10, 30, 0, 0, ZoneOffset.of("+01:00")), parameter.value());
++		assertEquals(OffsetDateTime.class, parameter.type());
++		assertTrue(parameter.identifying());
++	}
++
++	@Test
++	void testGetProperties() {
+ 		LocalDate date = LocalDate.of(2008, 1, 23);
+ 		JobParameters parameters = new JobParametersBuilder()
+ 			.addJobParameter("schedule.date", date, LocalDate.class, true)

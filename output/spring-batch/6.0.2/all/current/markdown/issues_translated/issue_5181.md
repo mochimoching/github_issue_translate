@@ -1,8 +1,8 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
 
-# @SpringBatchTestがアクティブな状態でStepScopeTestUtilsを使用するとMetaDataInstanceFactoryのデフォルト値がStepContextの衝突を引き起こす
+# @SpringBatchTestがアクティブな場合、MetaDataInstanceFactoryのデフォルト値がStepScopeTestUtilsでStepContextの衝突を引き起こす
 
-**Issue番号**: [#5181](https://github.com/spring-projects/spring-batch/issues/5181)
+**課題番号**: [#5181](https://github.com/spring-projects/spring-batch/issues/5181)
 
 **状態**: open | **作成者**: KILL9-NO-MERCY | **作成日**: 2025-12-23
 
@@ -12,21 +12,21 @@
 
 ## 内容
 
-## バグの説明:
-`@SpringBatchTest`で管理されるテスト環境で`StepScopeTestUtils`を使用する際、`StepSynchronizationManager`で論理的な衝突が発生します。
+## バグの説明: 
+`@SpringBatchTest`で管理されるテスト環境で`StepScopeTestUtils`を使用する際、`StepSynchronizationManager`で論理的な衝突が発生しています。
 
-`StepExecution`はstepName、jobExecutionId、idに基づいて等価性を判定します。`MetaDataInstanceFactory`がこれらすべてのフィールドに対して静的なデフォルト値を提供するため、ファクトリーで作成された複数のインスタンスは`SynchronizationManagerSupport.contexts`マップで同一のキーとして扱われます。
+`StepExecution`は`stepName`、`jobExecutionId`、`id`に基づいて等価性を判定します。`MetaDataInstanceFactory`はこれらすべてのフィールドに静的なデフォルト値を提供するため、ファクトリで作成された複数のインスタンスは`SynchronizationManagerSupport.contexts`マップで同一のキーとして扱われます。
 
-これにより、`StepScopeTestUtils`がカスタム`JobParameters`を持つ新しいコンテキストを登録できなくなります。`computeIfAbsent`ロジックが`StepScopeTestExecutionListener`（`@SpringBatchTest`の一部）によって登録された既存のコンテキストを見つけてしまうためです。
+これにより、`StepScopeTestUtils`はカスタム`JobParameters`を持つ新しいコンテキストを登録できません。`computeIfAbsent`ロジックが`StepScopeTestExecutionListener`（`@SpringBatchTest`の一部）によって登録された既存のコンテキストを見つけてしまうためです。
 
 ## 再現手順:
 テストクラスに`@SpringBatchTest`アノテーションを付与します。
 
 テストメソッド内で、`MetaDataInstanceFactory.createStepExecution(jobParameters)`で作成した`StepExecution`を使用して`StepScopeTestUtils.doInStepScope()`を使用します。
 
-スコープ内の`Tasklet`や`ItemStream`は、リスナーの初期コンテキスト（`JobParameters`がない）にバインドされているため、jobParametersを参照できません。
+スコープ内の`Tasklet`や`ItemStream`は、リスナーの初期コンテキスト（`JobParameters`を持たない）にバインドされているため、`jobParameters`を参照できません。
 
-## 失敗する例:
+## 失敗する例: 
 ジョブの例
 ```java
 @Slf4j
@@ -76,7 +76,7 @@ public class IssueReproductionTest {
     }
 
     @Test
-    @DisplayName("MetadataInstanceFactory ID collision causes JobParameter injection failure")
+    @DisplayName("MetadataInstanceFactoryのID衝突によりJobParameterのインジェクションが失敗する")
     void reproduceIdCollisionBug() throws Exception {
         // Given
         String expectedValue = "HelloBatch";
@@ -84,7 +84,7 @@ public class IssueReproductionTest {
                 .addString("testParam", expectedValue)
                 .toJobParameters();
 
-        // 6.x以降の（おそらく5.2.3以降も？）MetadataInstanceFactoryは固定ID 1234LでStepExecutionを作成する
+        // 6.x（おそらく5.2.3以降も？）のMetadataInstanceFactoryは固定ID 1234LでStepExecutionを作成する
         StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);
 
         // When
@@ -96,8 +96,8 @@ public class IssueReproductionTest {
         String actualValue = stepExecution.getExecutionContext().getString("result");
 
         // これは失敗します。'actualValue'はnullになります。
-        // TaskletはID衝突（1234L）により、StepScopeTestUtilsで渡されたコンテキストではなく、
-        // リスナーのコンテキスト（JobParametersがない）を取得しました。
+        // ID衝突（1234L）により、StepScopeTestUtilsで渡されたコンテキストではなく、
+        // リスナーのコンテキスト（JobParametersを持たない）をTaskletが取得したためです。
         assertEquals(expectedValue, actualValue);
     }
 }
@@ -114,7 +114,6 @@ spring:
     job:
       enabled: false
 ```
-
 テスト結果:
 ```bash
 Value for key=[result] is not of type: [class java.lang.String], it is [null]
@@ -122,18 +121,19 @@ java.lang.ClassCastException: Value for key=[result] is not of type: [class java
 ```
 
 ## 期待される動作:
-`StepScopeTestUtils.doInStepScope()`内で作成された`StepExecution`とそれに対応する`StepContext`は、`@SpringBatchTest`がアクティブな状態でも、`StepSynchronizationManager`を通じて正しく登録されアクセス可能であるべきです。
+`StepScopeTestUtils.doInStepScope()`内で作成された`StepExecution`とそれに対応する`StepContext`は、`@SpringBatchTest`がアクティブな場合でも、`StepSynchronizationManager`を通じて正しく登録されアクセス可能であるべきです。
 
-（注意: 最適な修正方法を決定するのは私には簡単ではないようです。`MetaDataInstanceFactory`のID生成戦略を変更するか、テスト環境で重複する登録を`StepSynchronizationManager`がどのように処理するかを調整する必要があるかもしれません。）
+（注: 最適な修正方法を決定するのは簡単ではないように思えます。`MetaDataInstanceFactory`のID生成戦略を変更するか、テスト環境で重複する登録を`StepSynchronizationManager`が処理する方法を調整する必要があるかもしれません。）
+回避策: ユーザーはequals/hashCode衝突を回避するために、手動で一意の名前またはIDを提供する必要があります:
 
-## 回避策:
-現在の衝突を回避するため、テストクラス内で`getStepExecution()`メソッドを明示的に定義できます。一意の名前または別のID（例: -1L）を持つ`StepExecution`を返すことで、`StepScopeTestExecutionListener`がデフォルトのID（1234L）を占有することを防ぎ、`StepScopeTestUtils`が意図通りに動作するようになります:
+## 回避策: 
+現在の衝突を回避するには、テストクラス内で`getStepExecution()`メソッドを明示的に定義できます。一意の名前または異なるID（例: -1L）を持つ`StepExecution`を返すことで、`StepScopeTestExecutionListener`がデフォルトのID（1234L）を占有するのを防ぎ、`StepScopeTestUtils`が意図したとおりに動作するようにできます:
 
 ```java
 /**
- * 回避策: テストクラスでgetStepExecution()を定義してID衝突を回避。
- * デフォルト以外のIDまたは名前を提供することで、リスナーが登録したコンテキストが
- * StepScopeTestUtilsで作成されたものと衝突しないようにします。
+ * 回避策: テストクラスでgetStepExecution()を定義してID衝突を回避する。
+ * デフォルトではないIDまたは名前を提供することで、リスナーが登録した
+ * コンテキストがStepScopeTestUtilsで作成されたものと競合しないようにする。
  */
 public StepExecution getStepExecution() {
     return MetaDataInstanceFactory.createStepExecution("uniqueStep", -1L);
@@ -146,7 +146,7 @@ public StepExecution getStepExecution() {
 BUILD SUCCESSFUL in 3s
 ```
 
-この素晴らしいプロジェクトをメンテナンスしていただきありがとうございます！
+お時間をいただき、この素晴らしいプロジェクトをメンテナンスしていただきありがとうございます！
 
 ## コメント
 
@@ -154,15 +154,15 @@ BUILD SUCCESSFUL in 3s
 
 **作成日**: 2026-01-11
 
-参考）修正PR: https://github.com/spring-projects/spring-batch/pull/5208 👍
+参考情報）修正PR: https://github.com/spring-projects/spring-batch/pull/5208 👍
 
 ### コメント 2 by fmbenhassine
 
 **作成日**: 2026-01-13
 
-この問題を再現しようとしていますが、できませんでした。共有していただいたテストはSpring Bootを使用していますが、まずSpring Batchのみを使用してこれが有効な問題であることを確認したいと思います。
+この課題を再現しようとしていますが、再現できていません。共有いただいたテストはSpring Bootを使用していますが、まずSpring Batchのみを使用してこれが有効な課題であることを確認したいと思います。
 
-9ae777572a0978572e25f04d4cb93c0ad02b9a0fの時点で、以下のクラス（共有されたものと同じですがSpring Bootなし）を`org.springframework.batch.test`パッケージに追加すると、言及されたテストはパスします:
+9ae777572a0978572e25f04d4cb93c0ad02b9a0fの時点で、以下のクラス（共有いただいたものと同じですが、Spring Bootなし）を`org.springframework.batch.test`パッケージに追加すると、言及されたテストは成功します:
 
 ```java
 package org.springframework.batch.test;
@@ -254,7 +254,7 @@ public class IssueReproductionTest {
                 .addString("testParam", expectedValue)
                 .toJobParameters();
 
-        // 6.x以降の（おそらく5.2.3以降も？）MetadataInstanceFactoryは固定ID 1234LでStepExecutionを作成する
+        // MetadataInstanceFactory in 6.x / maybe after 5.2.3?? creates StepExecution with fixed ID 1234L
         StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);
 
         // When
@@ -265,9 +265,9 @@ public class IssueReproductionTest {
         // Then
         String actualValue = stepExecution.getExecutionContext().getString("result");
 
-        // これは失敗します。'actualValue'はnullになります。
-        // TaskletはID衝突（1234L）により、StepScopeTestUtilsで渡されたコンテキストではなく、
-        // リスナーのコンテキスト（JobParametersがない）を取得しました。
+        // This will FAIL because 'actualValue' will be null.
+        // The Tasklet retrieved the listener's context (which has no JobParameters)
+        // instead of the one passed via StepScopeTestUtils due to ID collision (1234L).
         assertEquals(expectedValue, actualValue);
     }
 }

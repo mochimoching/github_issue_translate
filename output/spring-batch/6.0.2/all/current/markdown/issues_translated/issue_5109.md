@@ -1,8 +1,8 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
 
-# AbstractCursorItemReader#doCloseでのリソースクリーンアップ順序の誤りにより一貫性のない動作が発生する
+# AbstractCursorItemReader#doCloseのリソースクリーンアップ順序が不正で一貫性のない動作を引き起こす
 
-**Issue番号**: [#5109](https://github.com/spring-projects/spring-batch/issues/5109)
+**課題番号**: [#5109](https://github.com/spring-projects/spring-batch/issues/5109)
 
 **状態**: open | **作成者**: banseok1216 | **作成日**: 2025-11-25
 
@@ -23,17 +23,17 @@ Java: Java 21
 問題を再現する手順。
 
 **期待される動作**
-1. カーソルを開く単純な`JdbcCursorItemReader`を作成
-2. `reader.open(executionContext)`を呼び出す
-3. `reader.close()`を呼び出す
-4. 以下を確認:
-   - `cleanupOnClose(connection)`がコネクションがすでにクローズされた後に呼び出される
-   - コネクションがクローズされているため`setAutoCommit(initialAutoCommit)`が実行されない
+1. カーソルを開くシンプルな`JdbcCursorItemReader`を作成します。
+2. `reader.open(executionContext)`を呼び出します。
+3. `reader.close()`を呼び出します。
+4. 以下を確認します:
+   - `cleanupOnClose(connection)`がコネクションがすでにクローズされた後に呼び出される。
+   - `setAutoCommit(initialAutoCommit)`はコネクションがクローズされているため実行されない。
 
 問題のある実行順序の例:
 
 ```java
-JdbcUtils.closeConnection(this.con);   // コネクションはここでクローズされる
+JdbcUtils.closeConnection(this.con);   // ここでコネクションがクローズされる
 
 cleanupOnClose(this.con);              // クローズ後に実行される
 // con.isClosed() == true
@@ -43,14 +43,14 @@ if (this.con != null && !this.con.isClosed()) {
 }
 ```
 
-**責任分担に関する追加メモ**
+**責任の所在に関する補足**
 
-現在、`doClose()`は`Connection`をクローズすることになってしまっていますが、コネクションは`AbstractCursorItemReader`によって作成・所有されています。これにより、所有モデルが混在してしまっています:
+現在、`doClose()`はコネクションを作成し所有しているのが`AbstractCursorItemReader`であるにもかかわらず、最終的に`Connection`をクローズしています。これは所有権モデルの混在を招いています:
 
 - 親がコネクションを開く
 - 子がカーソルレベルのクリーンアップを実行する
-- しかし子もコネクションをクローズする
+- しかし子がコネクションもクローズする
 
-コネクションを作成したコンポーネントがクローズの責任も持つ方がより一貫性があります。リーダーサブクラスは、`ResultSet`や`PreparedStatement`などのカーソル関連リソースのみを解放すべきです。
+コネクションを作成したコンポーネントがそのクローズも担当する方が一貫性があります。リーダーのサブクラスは`ResultSet`や`PreparedStatement`などのカーソル関連リソースのみを解放すべきです。
 
-提案された変更は、クローズ動作をその所有モデルに合わせるものです。
+提案する変更は、クローズの動作をその所有権モデルに合わせるものです。

@@ -108,3 +108,14 @@ This is an oversight in the new implementation. In fact `org.springframework.bat
 
 @LeeHyungGeol Sure! Thank you for your offer to help 🙏 You are welcome to contribute a PR with the suggested change here and making the item processor that I mentioned earlier step-scoped. I will plan the fix for the upcoming 6.0.2.
 
+### コメント 3 by LeeHyungGeol
+
+**作成日**: 2026-01-14
+
+ @fmbenhassine Thank you for the confirmation!
+
+  I'll work on a PR with the suggested fix and update the integration test
+  to use a step-scoped item processor.
+
+  Could you please assign this issue to me?
+

@@ -2,11 +2,16 @@
 
 **Issue番号**: #5106
 
-**状態**: open | **作成者**: scottgongsg | **作成日**: 2025-11-25
+**状態**: closed | **作成者**: scottgongsg | **作成日**: 2025-11-25
 
 **ラベル**: type: bug, in: core, has: votes, has: minimal-example
 
 **URL**: https://github.com/spring-projects/spring-batch/issues/5106
+
+**関連リンク**:
+- Commits:
+  - [b024116](https://github.com/spring-projects/spring-batch/commit/b024116968ac5dd89ea84a8a3048d0e4a39d7519)
+  - [76e723e](https://github.com/spring-projects/spring-batch/commit/76e723e41939b1ab6910f9ce8d61053abb1d0575)
 
 ## 内容
 

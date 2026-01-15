@@ -1,192 +1,194 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
 
 ## 課題概要
 
-Spring Batch 6.xの`ChunkOrientedStep`において、チャンク処理が失敗してロールバックした場合でも`ExecutionContext`が更新されてしまい、再起動時にデータ損失が発生するバグです。
+Spring Batch 6.xで新しく導入された`ChunkOrientedStep`において、チャンク処理が失敗してロールバックされた場合でも、`ExecutionContext`と`ItemStream`の状態が更新されてしまう問題です。これにより、リスタート時にデータ損失が発生する可能性があります。
 
-### Spring Batchの背景知識
+**`ChunkOrientedStep`とは**: Spring Batch 6.0で新しく導入されたステップ実装で、チャンク指向の処理（読み込み→処理→書き込み）を行います。
 
-| 用語 | 説明 |
-|------|------|
-| `ChunkOrientedStep` | Spring Batch 6.xで導入されたチャンク指向ステップの実装 |
-| `ExecutionContext` | ステップ/ジョブの実行状態を保持するオブジェクト。再起動時に復元される |
-| `ItemStream` | 読み取り位置などの状態を管理するインターフェース |
-| `compositeItemStream.update()` | ItemStreamの状態をExecutionContextに書き込むメソッド |
+**`ExecutionContext`とは**: Spring Batchがジョブ/ステップの実行状態（読み込み位置など）を永続化するためのコンテナです。
 
-### 問題の発生状況
+**`ItemStream`とは**: リーダーやライターがリスタート時に状態を復元するためのインターフェースです。
+
+### Spring Batch 5.xと6.xの比較
 
 ```plantuml
 @startuml
-title Spring Batch 6.x - チャンク失敗時の問題
+title Spring Batch 5.x vs 6.x のExecutionContext更新タイミング
 
-participant "ChunkOrientedStep" as Step
-participant "TransactionManager" as TxMgr
-participant "ItemStream" as Stream
-participant "JobRepository" as Repo
-database "DB\n(業務データ)" as BizDB
-database "DB\n(メタデータ)" as MetaDB
+rectangle "Spring Batch 5.x (TaskletStep)" {
+    (チャンク処理) --> (成功?)
+    (成功?) --> [Yes] (ExecutionContext更新)
+    (成功?) --> [No] (更新なし)
+    note right of (ExecutionContext更新): 成功時のみ更新\n→ リスタート安全
+}
 
-Step -> TxMgr: トランザクション開始
-Step -> BizDB: チャンク処理\n(read/process/write)
-BizDB -> Step: 例外発生!
-Step -> TxMgr: ロールバック
-TxMgr -> BizDB: ROLLBACK
-note right #lightgreen: 業務データは\nロールバック
-
-== finallyブロック ==
-Step -> Stream: update(executionContext)
-note right #pink: 読み取り位置が\n更新される
-Step -> Repo: updateExecutionContext()
-Repo -> MetaDB: UPDATE
-note right #pink: メタデータは\nコミットされる!
-
-note over BizDB, MetaDB #pink
-業務データ: ロールバック済み
-メタデータ: 更新済み（不整合）
-→ 再起動時にスキップされる
-end note
+rectangle "Spring Batch 6.x (ChunkOrientedStep) - 問題あり" {
+    (チャンク処理2) --> (try/catch)
+    (try/catch) --> (finally)
+    (finally) --> (ExecutionContext更新2)
+    note right of (ExecutionContext更新2): finallyで常に更新\n→ 失敗時も更新される\n→ データ損失の危険
+}
 
 @enduml
 ```
 
-### コード比較
-
-#### Spring Batch 5.x（TaskletStep.java）- 正しい動作
+### 問題のあるコード構造
 
 ```java
-// TaskletStep.java (Line 452)
-// 成功時のみ状態を更新
-stream.update(stepExecution.getExecutionContext());
-getJobRepository().updateExecutionContext(stepExecution);
-stepExecution.incrementCommitCount();
-```
-
-#### Spring Batch 6.x（ChunkOrientedStep.java）- 問題のあるコード
-
-```java
+// ChunkOrientedStep.java - 問題のあるコード
 private void processChunkSequentially(...) {
     try {
-        // チャンク処理 (read/process/write)
+        // チャンク読み込み/処理/書き込み
     } catch (Exception e) {
         // 例外処理
         throw e;
     } finally {
-        // BUG: ロールバック時も必ず実行される!
+        // ❌ BUG: トランザクションがロールバックされても実行される
         this.compositeItemStream.update(stepExecution.getExecutionContext());
         getJobRepository().updateExecutionContext(stepExecution);
     }
 }
 ```
 
-### 影響
+### データ損失のシナリオ
 
-| 問題 | 説明 |
-|------|------|
-| トランザクション不整合 | 業務データはロールバック、メタデータはコミット |
-| データ損失 | 再起動時、失敗したチャンクがスキップされる |
+```plantuml
+@startuml
+title チャンク失敗時のデータ損失シナリオ
+
+participant "ItemReader" as Reader
+participant "ItemWriter" as Writer
+participant "JobRepository" as Repo
+database "Business DB" as BizDB
+database "Batch Meta DB" as MetaDB
+
+== 初回実行 ==
+Reader -> Reader: read() items 1-10
+note right: currentIndex = 10
+Writer -> BizDB: write items 1-10
+BizDB --> Writer: ❌ 書き込み失敗
+Writer -> Writer: 例外発生
+
+== ロールバック ==
+BizDB -> BizDB: ROLLBACK
+note right: items 1-10 は未処理
+
+== finally ブロック実行（問題） ==
+Reader -> MetaDB: update(currentIndex=10)
+note right: ❌ 処理位置が\n更新されてしまう
+MetaDB --> Reader: OK
+
+== リスタート時 ==
+Reader -> MetaDB: getExecutionContext()
+MetaDB --> Reader: currentIndex=10
+Reader -> Reader: jumpToItem(10)
+note right: ❌ items 1-10 が\nスキップされる\n→ データ損失！
+
+@enduml
+```
 
 ## 原因
 
-`ChunkOrientedStep`の`processChunkSequentially`および`processChunkConcurrently`メソッド内で、`ItemStream`と`ExecutionContext`の更新処理が`finally`ブロックに配置されているため、トランザクションがロールバックされた場合でも状態が更新されてしまいます。
+`ChunkOrientedStep`の`processChunkSequentially`および`processChunkConcurrently`メソッドで、`ItemStream.update()`と`JobRepository.updateExecutionContext()`が`finally`ブロック内に配置されているため、チャンク処理の成否に関わらず常に実行されます。
+
+Spring Batch 5.xの`TaskletStep`では、これらの更新はチャンクが成功した場合のみ実行されていました。
 
 ## 対応方針
 
-### PR [#5195](https://github.com/spring-projects/spring-batch/pull/5195)での修正内容
+### diffファイルの分析結果
 
-状態更新処理を`finally`ブロックから`doExecute`メソッド（トランザクション成功後）に移動：
+[PR #5195](https://github.com/spring-projects/spring-batch/pull/5195)において、以下の修正が行われました：
 
-#### ChunkOrientedStep.java の変更
+**ChunkOrientedStep.java の修正**:
 
-```diff
- @Override
- protected void doExecute(StepExecution stepExecution) throws Exception {
-     stepExecution.getExecutionContext().put(STEP_TYPE_KEY, this.getClass().getName());
-     
-     while (this.chunkTracker.get().moreItems() && !interrupted(stepExecution)) {
+```java
+// 変更前: finallyブロック内で更新（常に実行）
+private void processChunkSequentially(...) {
+    try {
+        // ...
+    } finally {
+        stepExecution.apply(contribution);
+        compositeItemStream.update(stepExecution.getExecutionContext());
+        getJobRepository().updateExecutionContext(stepExecution);
+    }
+}
+
+// 変更後: finallyでは apply のみ、update は doExecute で実行
+private void processChunkSequentially(...) {
+    try {
+        // ...
+    } finally {
+        stepExecution.apply(contribution);
+        // update 処理を削除
+    }
+}
+
+@Override
+protected void doExecute(StepExecution stepExecution) throws Exception {
+    while (this.chunkTracker.get().moreItems() && !interrupted(stepExecution)) {
         this.transactionTemplate.executeWithoutResult(transactionStatus -> {
-           // チャンク処理
+            processNextChunk(transactionStatus, contribution, stepExecution);
         });
- 
         getJobRepository().update(stepExecution);
-+       // FIX: トランザクション成功後にのみ状態を更新
-+       this.compositeItemStream.update(stepExecution.getExecutionContext());
-+       getJobRepository().updateExecutionContext(stepExecution);
-     }
- }
+        // ✅ トランザクション成功後にのみ更新
+        this.compositeItemStream.update(stepExecution.getExecutionContext());
+        getJobRepository().updateExecutionContext(stepExecution);
+    }
+}
+```
 
- private void processChunkSequentially(...) {
-     try {
-         // チャンク処理
-     } catch (Exception e) {
-         throw new FatalStepExecutionException("Unable to process chunk", e);
-     }
-     finally {
--        // apply contribution and update streams
-+        // apply contribution
-         stepExecution.apply(contribution);
--        compositeItemStream.update(stepExecution.getExecutionContext());
--        getJobRepository().updateExecutionContext(stepExecution);
-     }
- }
+### 修正後の状態更新フロー
+
+```plantuml
+@startuml
+title 修正後のExecutionContext更新フロー
+
+start
+:チャンク処理開始;
+:トランザクション開始;
+
+:items読み込み;
+:items処理;
+:items書き込み;
+
+if (成功?) then (yes)
+    :トランザクションコミット;
+    :JobRepository.update(stepExecution);
+    :ItemStream.update(executionContext);
+    :JobRepository.updateExecutionContext();
+    note right: ✅ 成功時のみ更新
+else (no)
+    :トランザクションロールバック;
+    note right: ✅ 状態更新なし\nリスタート時に\n同じ位置から再開
+endif
+
+stop
+
+@enduml
 ```
 
 ### 追加されたテストケース
+
+PR #5195では、ロールバック時にItemStreamが更新されないことを確認するテストが追加されています：
 
 ```java
 @Test
 void testItemStreamUpdateStillOccursWhenChunkRollsBack_bugReproduction() throws Exception {
     TrackingItemStream trackingItemStream = new TrackingItemStream();
-    ItemReader<String> reader = new ListItemReader<>(List.of("item1"));
     ItemWriter<String> writer = chunk -> {
         throw new RuntimeException("Simulated failure");
     };
-    // ... step設定 ...
+    // ... 設定 ...
     
     step.execute(stepExecution);
-
-    // チャンクがロールバックした場合、ItemStreamは更新されるべきではない
+    
+    // チャンクがロールバックされた場合、ItemStreamは更新されないべき
     assertEquals(0, trackingItemStream.getUpdateCount(),
         "ItemStream should not be updated when chunk transaction fails");
 }
 ```
 
-### 修正後の動作フロー
-
-```plantuml
-@startuml
-title 修正後 - チャンク失敗時の正しい動作
-
-participant "ChunkOrientedStep" as Step
-participant "TransactionManager" as TxMgr
-participant "ItemStream" as Stream
-participant "JobRepository" as Repo
-database "DB" as DB
-
-Step -> TxMgr: トランザクション開始
-Step -> DB: チャンク処理
-DB -> Step: 例外発生!
-Step -> TxMgr: ロールバック
-TxMgr -> DB: ROLLBACK
-
-== finallyブロック ==
-Step -> Step: stepExecution.apply(contribution)
-note right #lightgreen: contributionの適用のみ\n状態更新なし
-
-== doExecuteに戻る ==
-note over Step #lightgreen
-例外が上位に伝播
-状態更新は実行されない
-→ 再起動時に同じ位置から再開
-end note
-
-@enduml
-```
-
 ### 関連Issue
 
-Issue [#5199](https://github.com/spring-projects/spring-batch/issues/5199)（`JobRepository.update(stepExecution)`のトランザクション境界に関する問題）と連携した修正が検討されています。
-
-### 関連リンク
-
-- Issue: https://github.com/spring-projects/spring-batch/issues/5182
-- PR: https://github.com/spring-projects/spring-batch/pull/5195
+- [#5199](https://github.com/spring-projects/spring-batch/issues/5199): `JobRepository.update(stepExecution)`のトランザクション境界に関する問題。#5182と合わせて対応することで、より一貫性のある修正が可能。

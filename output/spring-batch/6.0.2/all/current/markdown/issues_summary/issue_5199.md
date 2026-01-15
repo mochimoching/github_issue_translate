@@ -1,49 +1,36 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
 
 ## 課題概要
 
-`ChunkOrientedStep#doExecute`において、`StepExecution`の更新（`JobRepository.update(stepExecution)`）がチャンクトランザクションの外で実行されるため、メタデータと業務データの整合性が保証されない問題です。
+Spring Batch 6.0の`ChunkOrientedStep`において、`JobRepository.update(stepExecution)`がチャンクのトランザクション境界の外で実行されている問題です。これにより、チャンク処理とバッチメタデータの更新が原子的（atomic）ではなくなり、不整合が発生する可能性があります。
 
-### Spring Batchの背景知識
+**トランザクション境界とは**: データベース操作がコミットまたはロールバックされる範囲のことです。同じトランザクション内の操作は、すべて成功するかすべて失敗するかのどちらかになります。
 
-| 用語 | 説明 |
-|------|------|
-| `ChunkOrientedStep` | Spring Batch 6.xで導入されたチャンク指向ステップの新実装 |
-| `StepExecution` | ステップの実行状態（コミット数、読み取り数など）を保持 |
-| `JobRepository` | バッチメタデータの永続化を担当するリポジトリ |
-| トランザクション境界 | データの整合性が保証される範囲 |
+**`JobRepository`とは**: Spring Batchのメタデータ（ジョブ/ステップの実行状態）を永続化するためのリポジトリです。
 
-### 問題の発生状況
+### Spring Batch 5.x（TaskletStep）との比較
 
 ```plantuml
 @startuml
-title 現状のトランザクション境界の問題
+title トランザクション境界の比較
 
-participant "ChunkOrientedStep" as Step
-participant "TransactionManager" as TxMgr
-participant "JobRepository" as Repo
-database "DB\n(業務データ)" as BizDB
-database "DB\n(メタデータ)" as MetaDB
+rectangle "Spring Batch 5.x (TaskletStep)" {
+    rectangle "トランザクション" as Tx5 {
+        (チャンク処理) --> (ビジネスデータ更新)
+        (ビジネスデータ更新) --> (StepExecution更新)
+        (StepExecution更新) --> (コミット)
+    }
+    note right of Tx5: すべてが同じトランザクション内\n→ 原子的に更新
+}
 
-== チャンクトランザクション ==
-Step -> TxMgr: トランザクション開始
-Step -> BizDB: チャンク処理\n(read/process/write)
-Step -> TxMgr: コミット
-TxMgr -> BizDB: COMMIT
-note right #lightgreen: 業務データコミット完了
-
-== トランザクション外 ==
-Step -> Repo: update(stepExecution)
-note right #pink: トランザクション外での更新
-Repo -> MetaDB: UPDATE
-MetaDB --> Repo: 失敗!
-note right #pink: メタデータ更新失敗\nしかし業務データは\n既にコミット済み
-
-note over BizDB, MetaDB #pink
-業務データ: コミット済み
-メタデータ: 更新失敗
-→ 状態の不整合
-end note
+rectangle "Spring Batch 6.x (ChunkOrientedStep) - 問題あり" {
+    rectangle "トランザクション" as Tx6 {
+        (チャンク処理2) --> (ビジネスデータ更新2)
+        (ビジネスデータ更新2) --> (コミット2)
+    }
+    (コミット2) --> (StepExecution更新2)
+    note right of Tx6: StepExecution更新が\nトランザクション外
+}
 
 @enduml
 ```
@@ -51,86 +38,113 @@ end note
 ### 問題のあるコード
 
 ```java
-// ChunkOrientedStep#doExecute()
+// ChunkOrientedStep#doExecute - 現在の実装
 this.transactionTemplate.executeWithoutResult(transactionStatus -> {
     processNextChunk(transactionStatus, contribution, stepExecution);
 });
 
-// トランザクション完了後に実行される！
+// ❌ トランザクション完了後に実行される
 getJobRepository().update(stepExecution);
 ```
 
-### 従来の実装（TaskletStep）との比較
+### 発生しうる不整合シナリオ
 
-| 実装 | `JobRepository.update()`の位置 |
-|------|------------------------------|
-| TaskletStep（従来） | トランザクション内（コミット前） |
-| ChunkOrientedStep（6.x） | トランザクション外（コミット後）|
+```plantuml
+@startuml
+title メタデータ更新失敗時の不整合
+
+participant "ChunkOrientedStep" as Step
+participant "TransactionManager" as Tx
+participant "ビジネスDB" as BizDB
+participant "JobRepository" as Repo
+database "Batch Meta DB" as MetaDB
+
+Step -> Tx: トランザクション開始
+Step -> BizDB: ビジネスデータ更新
+BizDB --> Step: ✅ 成功
+Step -> Tx: コミット
+Tx --> Step: ✅ トランザクション完了
+
+Step -> Repo: update(stepExecution)
+Repo -> MetaDB: UPDATE
+MetaDB --> Repo: ❌ 失敗（DB接続エラー等）
+Repo --> Step: 例外
+
+note over BizDB, MetaDB
+ビジネスデータ: 更新済み（コミット済み）
+バッチメタデータ: 更新失敗
+→ 不整合状態！
+end note
+
+@enduml
+```
 
 ## 原因
 
-PR [#5165](https://github.com/spring-projects/spring-batch/pull/5165)での変更により、`JobRepository.update(stepExecution)`がトランザクション外に配置され、チャンク処理とメタデータ更新のアトミック性が失われています。
+[PR #5165](https://github.com/spring-projects/spring-batch/pull/5165)での変更で、`JobRepository.update(stepExecution)`がトランザクションの外に配置されてしまいました。
+
+Spring Batch 5.xの`TaskletStep`では、この更新はトランザクションコミット前に実行されていたため、チャンク処理とメタデータ更新が原子的でした。
 
 ## 対応方針
 
-### PR [#5195](https://github.com/spring-projects/spring-batch/pull/5195)での修正内容
+### diffファイルの分析結果
 
-`ItemStream.update()`と`JobRepository.updateExecutionContext()`をトランザクション完了後に移動し、失敗時に状態が更新されないよう修正：
+[PR #5195](https://github.com/spring-projects/spring-batch/pull/5195)において、関連する修正が行われています（Issue [#5182](https://github.com/spring-projects/spring-batch/issues/5182)との統合修正）。
 
-#### ChunkOrientedStep.java の変更
+**注意**: このIssue #5199自体のdiffは、PR #5195に含まれるより広範な修正の一部として対応されています。
 
-```diff
- protected void doExecute(StepExecution stepExecution) throws Exception {
-     stepExecution.getExecutionContext().put(STEP_TYPE_KEY, this.getClass().getName());
-     
-     while (this.chunkTracker.get().moreItems() && !interrupted(stepExecution)) {
-        this.transactionTemplate.executeWithoutResult(transactionStatus -> {
-            processNextChunk(transactionStatus, contribution, stepExecution);
-        });
- 
-        getJobRepository().update(stepExecution);
-+       // トランザクション成功後にのみ実行
-+       this.compositeItemStream.update(stepExecution.getExecutionContext());
-+       getJobRepository().updateExecutionContext(stepExecution);
-     }
- }
-
- private void processChunkSequentially(...) {
-     try {
-         // チャンク処理
-     } finally {
--        // apply contribution and update streams
-+        // apply contribution
-         stepExecution.apply(contribution);
--        compositeItemStream.update(stepExecution.getExecutionContext());
--        getJobRepository().updateExecutionContext(stepExecution);
-     }
- }
-```
-
-### 関連Issue
-
-Issue [#5182](https://github.com/spring-projects/spring-batch/issues/5182)（チャンク失敗時にもExecutionContextが更新される問題）と連携しており、同一のPRで修正が提案されています。
-
-### 報告者からの追加提案
-
-報告者は、`JobRepository.update(stepExecution)`自体もトランザクション内に移動することを提案しています：
+### 提案された修正
 
 ```java
+// 修正案: StepExecution更新をトランザクション内に移動
 this.transactionTemplate.executeWithoutResult(transactionStatus -> {
     processNextChunk(transactionStatus, contribution, stepExecution);
-    // すべての更新をトランザクション内に
+    getJobRepository().update(stepExecution);  // ✅ トランザクション内
+});
+```
+
+### Issue #5182との関連
+
+報告者（KILL9-NO-MERCY）は、この問題がIssue [#5182](https://github.com/spring-projects/spring-batch/issues/5182)（ExecutionContext更新の問題）と関連していることを指摘しています。
+
+両方の問題を一貫して修正するためには、以下のすべての操作を同じトランザクション内で実行する必要があります：
+
+1. チャンク処理（読み込み/処理/書き込み）
+2. `ItemStream.update(executionContext)`
+3. `JobRepository.updateExecutionContext(stepExecution)`
+4. `JobRepository.update(stepExecution)`
+
+```java
+// 統合修正案
+this.transactionTemplate.executeWithoutResult(transactionStatus -> {
+    processNextChunk(transactionStatus, contribution, stepExecution);
     this.compositeItemStream.update(stepExecution.getExecutionContext());
     getJobRepository().updateExecutionContext(stepExecution);
     getJobRepository().update(stepExecution);
 });
 ```
 
-この提案により、チャンク処理・`ExecutionContext`更新・`StepExecution`更新がすべて同一トランザクション境界内で実行され、完全な整合性が保証されます。
+### 修正後のトランザクション境界
 
-### 関連リンク
+```plantuml
+@startuml
+title 修正後のトランザクション境界
 
-- Issue: https://github.com/spring-projects/spring-batch/issues/5199
-- 関連PR: https://github.com/spring-projects/spring-batch/pull/5195
-- 関連Issue: [#5182](https://github.com/spring-projects/spring-batch/issues/5182)（ExecutionContext更新の問題）
-- 原因となったPR: [#5165](https://github.com/spring-projects/spring-batch/pull/5165)
+rectangle "トランザクション" as Tx {
+    (チャンク処理) --> (ビジネスデータ更新)
+    (ビジネスデータ更新) --> (ItemStream更新)
+    (ItemStream更新) --> (ExecutionContext更新)
+    (ExecutionContext更新) --> (StepExecution更新)
+    (StepExecution更新) --> (コミット)
+}
+
+note bottom of Tx
+すべての操作が同じトランザクション内
+→ 原子的に更新される
+→ 失敗時は全てロールバック
+end note
+
+@enduml
+```
+
+これにより、チャンク処理とバッチメタデータの更新が完全に原子的になり、部分的な更新による不整合が防止されます。

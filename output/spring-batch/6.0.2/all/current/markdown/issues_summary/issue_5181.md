@@ -1,130 +1,145 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月14日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
 
 ## 課題概要
 
-`@SpringBatchTest`アノテーションが有効な環境で`StepScopeTestUtils`を使用した際、`MetaDataInstanceFactory`のデフォルト値が原因で`StepContext`の衝突が発生するバグです。
+`@SpringBatchTest`アノテーションを使用したテスト環境で、`StepScopeTestUtils`と`MetaDataInstanceFactory`を組み合わせて使用すると、`StepContext`の衝突が発生する問題です。
 
-### Spring Batchの背景知識
+**`@SpringBatchTest`とは**: Spring Batchのテスト用アノテーションで、`StepScopeTestExecutionListener`等のリスナーを自動的に登録します。
 
-| 用語 | 説明 |
-|------|------|
-| `@SpringBatchTest` | Spring Batchのテスト用アノテーション。`StepScopeTestExecutionListener`等を自動登録 |
-| `StepScopeTestUtils` | テスト内でStep Scopeをシミュレートするユーティリティ |
-| `MetaDataInstanceFactory` | テスト用の`JobExecution`や`StepExecution`を作成するファクトリ |
-| `StepSynchronizationManager` | `StepExecution`と`StepContext`の関連を管理するクラス |
+**`StepScopeTestUtils`とは**: `@StepScope` Beanをテストするためのユーティリティクラスです。テスト用の`StepExecution`コンテキスト内でコードを実行できます。
 
-### 問題の発生状況
+**`MetaDataInstanceFactory`とは**: テスト用の`JobExecution`や`StepExecution`インスタンスを簡単に生成するファクトリクラスです。
 
-`StepExecution`の等価性は`stepName`、`jobExecutionId`、`id`で判定されます。`MetaDataInstanceFactory`がこれらに静的なデフォルト値を使用するため、複数インスタンスが同一キーとして扱われます。
+### 問題の発生メカニズム
 
 ```plantuml
 @startuml
-title StepContext衝突の発生メカニズム
+title StepExecutionの等価性とID衝突
 
-participant "StepScopeTestExecutionListener" as Listener
-participant "StepSynchronizationManager\n.contexts (Map)" as Contexts
-participant "StepScopeTestUtils" as Utils
-participant "テストメソッド" as Test
+class StepExecution {
+    - stepName: String
+    - jobExecutionId: Long
+    - id: Long
+    + equals(): boolean
+    + hashCode(): int
+}
 
-== @SpringBatchTest初期化時 ==
-Listener -> Listener: MetaDataInstanceFactory\n.createStepExecution()
-note right: StepExecution\nid=1234L (デフォルト値)
-Listener -> Contexts: register(stepExecution1)
-note right: contexts.put(key=1234L, context1)
+note right of StepExecution
+equals/hashCode は以下で判定:
+- stepName
+- jobExecutionId  
+- id (stepExecutionId)
+end note
 
-== テストメソッド実行 ==
-Test -> Utils: doInStepScope(stepExecution2)
-note right: 別のJobParametersで作成。しかしid=1234L(同じ)
-Utils -> Contexts: computeIfAbsent(stepExecution2)
-note right #pink: key=1234Lは既に存在。context1が返される
+rectangle "MetaDataInstanceFactory のデフォルト値" {
+    card "DEFAULT_STEP_NAME = 'step'" as name
+    card "DEFAULT_JOB_EXECUTION_ID = 12L" as jobId
+    card "DEFAULT_STEP_EXECUTION_ID = 1234L" as stepId
+}
 
-Utils -> Test: Tasklet実行
-note right #pink: context1のJobParametersを参照(期待したパラメータが見えない)
+rectangle "StepSynchronizationManager.contexts" as Contexts {
+    map "HashMap" as map {
+        StepExecution(1234L) => StepContext(A)
+    }
+}
+
+note bottom of Contexts
+同じID(1234L)を持つStepExecutionは
+同一キーとして扱われる
+→ 新しいコンテキストが登録できない
+end note
 
 @enduml
 ```
 
-### 具体的な問題
+### 衝突の流れ
 
-```java
-// @SpringBatchTestにより、リスナーが事前にStepExecutionを登録（id=1234L）
+```plantuml
+@startuml
+title ID衝突によるJobParameters取得失敗
 
-// テストメソッド内で別のJobParametersでStepExecutionを作成
-StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);
-// ↑ id=1234Lで作成される
+participant "@SpringBatchTest\nListener" as Listener
+participant "StepSynchronizationManager" as Manager
+participant "StepScopeTestUtils" as Utils
+participant "テストコード" as Test
 
-// StepScopeTestUtilsは既存のcontextを参照してしまう
-StepScopeTestUtils.doInStepScope(stepExecution, () -> {
-    // TaskletはjobParametersを取得できない（null）
-    issueReproductionTasklet.execute(...);
-});
+== テスト初期化時（@SpringBatchTestによる） ==
+Listener -> Listener: createStepExecution()
+note right: id=1234L, params=empty
+Listener -> Manager: register(stepExecution_A)
+Manager -> Manager: contexts.put(1234L, contextA)
+note right: contextAにはJobParametersなし
+
+== テストメソッド実行時 ==
+Test -> Utils: doInStepScope(stepExecution_B, ...)
+note right: id=1234L, params={testParam: "Hello"}
+Utils -> Manager: register(stepExecution_B)
+Manager -> Manager: contexts.computeIfAbsent(1234L, ...)
+note right: 既にキー1234Lが存在\n→ contextAがそのまま使われる
+
+Utils -> Utils: Tasklet実行
+note right: ❌ JobParametersが空のcontextAを参照
+Utils --> Test: testParamがnull
+
+@enduml
 ```
 
 ## 原因
 
-`MetaDataInstanceFactory.createStepExecution(JobParameters)`メソッドが固定のID（`DEFAULT_JOB_EXECUTION_ID = 4321L`、`DEFAULT_STEP_EXECUTION_ID = 1234L`）を使用するため、`@SpringBatchTest`で登録されたコンテキストとIDが衝突し、`computeIfAbsent`で既存コンテキストが返されます。
+`MetaDataInstanceFactory`が全てのインスタンスに対して固定のデフォルトID（`DEFAULT_STEP_EXECUTION_ID = 1234L`）を使用するため、複数の`StepExecution`インスタンスが`equals()`メソッドで同一と判定されます。
+
+`StepSynchronizationManager`は`computeIfAbsent`で新しいコンテキストを登録しようとしますが、既に同じキーが存在するため、リスナーが登録した空のコンテキストが返され、テストで指定した`JobParameters`にアクセスできません。
 
 ## 対応方針
 
-### PR [#5208](https://github.com/spring-projects/spring-batch/pull/5208)での修正内容
+### diffファイルの分析結果
 
-`MetaDataInstanceFactory`に`AtomicLong`カウンターを導入し、呼び出しごとにユニークなIDを生成するよう変更：
+[PR #5208](https://github.com/spring-projects/spring-batch/pull/5208)において、以下の修正が行われました：
 
-#### MetaDataInstanceFactory.java の変更
-
-```diff
- public class MetaDataInstanceFactory {
-+    /**
-+     * Atomic counter for generating unique job execution IDs in tests
-+     */
-+    private static final AtomicLong jobExecutionIdCounter = 
-+        new AtomicLong(DEFAULT_JOB_EXECUTION_ID);
-+
-+    /**
-+     * Atomic counter for generating unique step execution IDs in tests
-+     */
-+    private static final AtomicLong stepExecutionIdCounter = 
-+        new AtomicLong(DEFAULT_STEP_EXECUTION_ID);
-
-     public static StepExecution createStepExecution(JobParameters jobParameters) {
--        JobExecution jobExecution = createJobExecution(DEFAULT_JOB_NAME, 
--            DEFAULT_JOB_INSTANCE_ID, DEFAULT_JOB_EXECUTION_ID, jobParameters);
--        StepExecution stepExecution = createStepExecution(jobExecution, 
--            DEFAULT_STEP_NAME, DEFAULT_STEP_EXECUTION_ID);
-+        Long jobExecutionId = jobExecutionIdCounter.incrementAndGet();
-+        Long stepExecutionId = stepExecutionIdCounter.incrementAndGet();
-+        JobExecution jobExecution = createJobExecution(DEFAULT_JOB_NAME, 
-+            DEFAULT_JOB_INSTANCE_ID, jobExecutionId, jobParameters);
-+        StepExecution stepExecution = createStepExecution(jobExecution, 
-+            DEFAULT_STEP_NAME, stepExecutionId);
-         jobExecution.addStepExecution(stepExecution);
-         return stepExecution;
-     }
- }
-```
-
-### 追加されたテストケース
+**MetaDataInstanceFactory.java の修正**:
 
 ```java
-@Test
-void testCreateStepExecutionWithJobParametersShouldGenerateUniqueIds() {
-    JobParameters params1 = new JobParametersBuilder()
-        .addString("key", "value1").toJobParameters();
-    JobParameters params2 = new JobParametersBuilder()
-        .addString("key", "value2").toJobParameters();
+// 変更前
+public static StepExecution createStepExecution(JobParameters jobParameters) {
+    JobExecution jobExecution = createJobExecution(DEFAULT_JOB_NAME, DEFAULT_JOB_INSTANCE_ID,
+            DEFAULT_JOB_EXECUTION_ID, jobParameters);
+    StepExecution stepExecution = createStepExecution(jobExecution, DEFAULT_STEP_NAME, DEFAULT_STEP_EXECUTION_ID);
+    jobExecution.addStepExecution(stepExecution);
+    return stepExecution;
+}
 
-    StepExecution step1 = MetaDataInstanceFactory.createStepExecution(params1);
-    StepExecution step2 = MetaDataInstanceFactory.createStepExecution(params2);
+// 変更後
+private static final AtomicLong jobExecutionIdCounter = new AtomicLong(DEFAULT_JOB_EXECUTION_ID);
+private static final AtomicLong stepExecutionIdCounter = new AtomicLong(DEFAULT_STEP_EXECUTION_ID);
 
-    assertNotEquals(step1.getId(), step2.getId());
-    assertNotEquals(step1.getJobExecutionId(), step2.getJobExecutionId());
-    assertNotEquals(step1, step2);
+public static StepExecution createStepExecution(JobParameters jobParameters) {
+    Long jobExecutionId = jobExecutionIdCounter.incrementAndGet();
+    Long stepExecutionId = stepExecutionIdCounter.incrementAndGet();
+    JobExecution jobExecution = createJobExecution(DEFAULT_JOB_NAME, DEFAULT_JOB_INSTANCE_ID, jobExecutionId,
+            jobParameters);
+    StepExecution stepExecution = createStepExecution(jobExecution, DEFAULT_STEP_NAME, stepExecutionId);
+    jobExecution.addStepExecution(stepExecution);
+    return stepExecution;
 }
 ```
 
-### 暫定的な回避策
+### 修正のポイント
 
-テストクラスに`getStepExecution()`メソッドを定義し、ユニークなIDを指定：
+1. **AtomicLongカウンターの導入**: `jobExecutionIdCounter`と`stepExecutionIdCounter`を追加
+2. **インクリメントによる一意性の保証**: `incrementAndGet()`で呼び出しごとに異なるIDを生成
+3. **スレッドセーフ**: `AtomicLong`を使用しているため、並列テストでも安全
+
+### 修正後の動作
+
+| 呼び出し | jobExecutionId | stepExecutionId |
+|---------|----------------|-----------------|
+| 1回目 | 13 | 1235 |
+| 2回目 | 14 | 1236 |
+| 3回目 | 15 | 1237 |
+
+### ワークアラウンド（修正版リリース前）
+
+テストクラスに`getStepExecution()`メソッドを定義し、一意なID/名前を指定：
 
 ```java
 public StepExecution getStepExecution() {
@@ -132,7 +147,4 @@ public StepExecution getStepExecution() {
 }
 ```
 
-### 関連リンク
-
-- Issue: https://github.com/spring-projects/spring-batch/issues/5181
-- PR: https://github.com/spring-projects/spring-batch/pull/5208
+これにより、`StepScopeTestExecutionListener`がこのメソッドを使用し、デフォルトID(1234L)との衝突を回避できます。

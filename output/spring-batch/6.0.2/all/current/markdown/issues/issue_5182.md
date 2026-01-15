@@ -143,3 +143,9 @@ Yes please. That would be helpful! Many thanks upfront.
 
 EDIT: It looks like we have a PR for this issue: #5195. Can you please check if it suggests the same/similar fix that you have in mind?
 
+### コメント 3 by KILL9-NO-MERCY
+
+**作成日**: 2026-01-14
+
+Thanks for the information! I'll check PR #5195 and leave a comment there.
+
