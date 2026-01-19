@@ -1,0 +1,51 @@
+Issue #5109: Incorrect resource cleanup order in AbstractCursorItemReader#doClose leads to inconsistent behavior
+Reference: PR #5110 (2025-11-25T15:36:50Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5110
+
+--- Diff ---
+diff --git a/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/JdbcCursorItemReader.java b/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/JdbcCursorItemReader.java
+index 271cde659a..05b658b013 100644
+--- a/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/JdbcCursorItemReader.java
++++ b/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/JdbcCursorItemReader.java
+@@ -144,13 +144,15 @@ protected void openCursor(Connection con) {
+ 	}
+ 
+ 	/**
+-	 * Close the cursor and database connection.
+-	 * @param connection to the database
++	 * Releases JDBC resources associated with this reader.
++	 * Closes the PreparedStatement used for the cursor.
++	 * The Connection is not closed here; it is managed by the parent class.
++	 *
++	 * @param connection the active database connection used for the cursor
+ 	 */
+ 	@Override
+ 	protected void cleanupOnClose(Connection connection) {
+ 		JdbcUtils.closeStatement(this.preparedStatement);
+-		JdbcUtils.closeConnection(connection);
+ 	}
+ 
+ 	@Override
+diff --git a/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/StoredProcedureItemReader.java b/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/StoredProcedureItemReader.java
+index 57ba1bd213..dfd1305060 100644
+--- a/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/StoredProcedureItemReader.java
++++ b/spring-batch-infrastructure/src/main/java/org/springframework/batch/infrastructure/item/database/StoredProcedureItemReader.java
+@@ -234,13 +234,15 @@ protected void openCursor(Connection con) {
+ 	}
+ 
+ 	/**
+-	 * Close the cursor and database connection.
+-	 * @param connection to the database
++	 * Releases JDBC resources associated with this reader.
++	 * Closes the PreparedStatement used for the cursor.
++	 * The Connection is not closed here; it is managed by the parent class.
++	 *
++	 * @param connection the active database connection used for the cursor
+ 	 */
+ 	@Override
+ 	protected void cleanupOnClose(Connection connection) {
+ 		JdbcUtils.closeStatement(this.callableStatement);
+-		JdbcUtils.closeConnection(connection);
+ 	}
+ 
+ 	@Override

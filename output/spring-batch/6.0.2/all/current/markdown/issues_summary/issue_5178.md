@@ -1,187 +1,140 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月18日に生成されました）*
 
 ## 課題概要
 
-Spring Batchの`JobParametersConverter`で、`ZonedDateTime`と`OffsetDateTime`をジョブパラメータとしてサポートしてほしいという機能要望です。
+`JobParametersConverter`に`ZonedDateTime`と`OffsetDateTime`のサポートを追加する機能リクエストです。
 
-**`JobParametersConverter`とは**: Spring Batchでジョブパラメータを文字列から型付きの値に変換（またはその逆）するためのインターフェースです。
+**JobParametersとは**: Spring Batchでジョブを起動する際に渡すパラメータです。実行日時や処理対象IDなどを指定できます。
 
-**`ZonedDateTime`と`OffsetDateTime`とは**: Java 8で導入された日時API（java.time）の一部で、タイムゾーン情報を含む日時を表現するクラスです。
+**ZonedDateTime / OffsetDateTimeとは**: Java 8で導入されたタイムゾーン情報を含む日時型です。グローバルサービスで複数のタイムゾーンを扱う場合に重要です。
 
-### 現在サポートされている型
-
-| 型 | フォーマット | タイムゾーン |
-|----|------------|------------|
-| `LocalDate` | ISO_LOCAL_DATE | なし |
-| `LocalTime` | ISO_LOCAL_TIME | なし |
-| `LocalDateTime` | ISO_LOCAL_DATE_TIME | なし |
-| `Date` | ISO_INSTANT | UTC |
-
-### 要望される追加サポート
-
-| 型 | フォーマット | タイムゾーン |
-|----|------------|------------|
-| `ZonedDateTime` | ISO_ZONED_DATE_TIME | ✅ あり |
-| `OffsetDateTime` | ISO_OFFSET_DATE_TIME | ✅ あり |
-
-### ユースケース
+### 現状の問題
 
 ```plantuml
 @startuml
-title タイムゾーン対応が必要なユースケース
-
-rectangle "グローバルサービス" {
-    node "日本 (Asia/Tokyo)" as JP
-    node "米国 (America/New_York)" as US
-    node "欧州 (Europe/London)" as EU
+rectangle "現在サポートされている日時型" {
+  card "LocalDateTime" as local
+  card "LocalDate" as date
+  card "LocalTime" as time
 }
 
-database "バッチジョブ" as Batch
+rectangle "サポートされていない日時型" {
+  card "ZonedDateTime" as zoned
+  card "OffsetDateTime" as offset
+}
 
-JP --> Batch: schedule.time=\n2023-12-25T10:30:00+09:00[Asia/Tokyo]
-US --> Batch: schedule.time=\n2023-12-24T20:30:00-05:00[America/New_York]
-EU --> Batch: schedule.time=\n2023-12-25T01:30:00Z[Europe/London]
-
-note bottom of Batch
-  タイムゾーン情報を保持したまま
-  ジョブパラメータとして渡したい
+note bottom of zoned
+  タイムゾーン情報が必要な
+  グローバルサービスで使用
 end note
 
 @enduml
 ```
 
-**利用シーン**:
-- グローバルサービスでタイムゾーンごとにバッチジョブを実行
-- ログ分析でUTCとローカルタイムゾーンの両方が必要
-- 複数国対応サービスで国ごとのタイムゾーン情報を含める
+### ユースケース
+
+| シナリオ | 必要な情報 | 現状の対応 |
+|---------|----------|----------|
+| グローバルサービスでのバッチ実行 | タイムゾーン付き日時 | ❌ 非対応 |
+| ログ分析（UTC + ローカル時刻） | オフセット付き日時 | ❌ 非対応 |
+| 多国籍サービスでの国別処理 | 国別タイムゾーン | ❌ 非対応 |
+
+### 期待される使用方法
+
+```java
+ZonedDateTime scheduleTime = ZonedDateTime.of(
+    2023, 12, 25, 10, 30, 0, 0, 
+    ZoneId.of("Asia/Seoul")
+);
+
+JobParameters parameters = new JobParametersBuilder()
+    .addJobParameter("schedule.time", scheduleTime, ZonedDateTime.class, true)
+    .toJobParameters();
+```
 
 ## 原因
 
-Spring Batchの`DefaultJobParametersConverter`に`ZonedDateTime`と`OffsetDateTime`のコンバーターが登録されていないため。
+（機能リクエストのため、バグではありません）
+
+Spring Batchの`DefaultJobParametersConverter`に`ZonedDateTime`と`OffsetDateTime`用のコンバーターが登録されていませんでした。
 
 ## 対応方針
 
 ### diffファイルの分析結果
 
-[PR #5186](https://github.com/spring-projects/spring-batch/pull/5186)において、アーキテクチャを改善する形で修正が行われています。
+[PR #5186](https://github.com/spring-projects/spring-batch/pull/5186) で大幅なリファクタリングが実施されました。
 
-### 主な変更点
+#### 主な変更点
 
-#### 1. ConversionServiceFactoryの導入
-
-新しいファクトリクラス`ConversionServiceFactory`が追加され、コンバーターの登録を一元化：
+1. **ConversionServiceFactoryの新規作成**
 
 ```java
 public final class ConversionServiceFactory {
-
     public static ConfigurableConversionService createConversionService() {
-        FormattingConversionService conversionService = new DefaultFormattingConversionService();
+        FormattingConversionService conversionService = 
+            new DefaultFormattingConversionService();
+        
+        // Date用フォーマッター
         conversionService.addFormatterForFieldType(Date.class, new DateFormatter());
-
-        DateTimeFormatterRegistrar dateTimeFormatterRegistrar = new DateTimeFormatterRegistrar();
+        
+        // ISO形式で日時をフォーマット
+        DateTimeFormatterRegistrar dateTimeFormatterRegistrar = 
+            new DateTimeFormatterRegistrar();
         dateTimeFormatterRegistrar.setUseIsoFormat(true);
         dateTimeFormatterRegistrar.registerFormatters(conversionService);
-
+        
         return conversionService;
     }
 }
 ```
 
-#### 2. Spring Frameworkのコンバーターを活用
+2. **既存コンバーターの非推奨化**
 
-`DefaultConversionService`から`DefaultFormattingConversionService`に変更し、Spring Framework側のフォーマッターを活用：
+以下のコンバーターは6.1で非推奨となり、6.3以降で削除予定：
+- `DateToStringConverter`
+- `StringToDateConverter`
+- `LocalDateToStringConverter` / `StringToLocalDateConverter`
+- `LocalTimeToStringConverter` / `StringToLocalTimeConverter`
+- `LocalDateTimeToStringConverter` / `StringToLocalDateTimeConverter`
+
+3. **Spring Frameworkのコンバーターを活用**
+
+`DefaultFormattingConversionService`を使用することで、Spring Frameworkの`DateTimeFormatterRegistrar`が自動的に以下の型をサポート：
+- `LocalDate`, `LocalTime`, `LocalDateTime`
+- `ZonedDateTime`, `OffsetDateTime` ← **新規サポート**
+- `Instant`, `Duration`, `Period`
 
 ```plantuml
 @startuml
 title コンバーター構成の変更
 
-package "変更前（6.0.x）" {
-    class DefaultConversionService {
-        + DateToStringConverter
-        + StringToDateConverter
-        + LocalDateToStringConverter
-        + LocalDateTimeToStringConverter
-        + LocalTimeToStringConverter
-        + ...
-    }
+rectangle "変更前 (6.0.x)" {
+  card "DefaultConversionService" as old
+  card "個別のカスタム\nコンバーター群" as custom
+  old --> custom
 }
 
-package "変更後（6.1.0）" {
-    class DefaultFormattingConversionService {
-        + DateFormatter (新規)
-        + DateTimeFormatterRegistrar
-    }
-    
-    note right of DefaultFormattingConversionService
-    Spring Frameworkの
-    DateTimeFormatterRegistrarが
-    ZonedDateTime, OffsetDateTime等を
-    自動的にサポート
-    end note
+rectangle "変更後 (6.1+)" {
+  card "DefaultFormattingConversionService" as new
+  card "DateTimeFormatterRegistrar\n(Spring Framework)" as registrar
+  card "ConversionServiceFactory" as factory
+  
+  factory --> new
+  new --> registrar
+  
+  note bottom of registrar
+    ZonedDateTime, OffsetDateTime
+    を自動的にサポート
+  end note
 }
 
 @enduml
 ```
 
-#### 3. 既存コンバーターの非推奨化
+### リリース計画
 
-以下のクラスが`@Deprecated`としてマークされ、6.3以降で削除予定：
-
-- `AbstractDateTimeConverter`
-- `DateToStringConverter`
-- `StringToDateConverter`
-- `LocalDateToStringConverter`
-- `LocalDateTimeToStringConverter`
-- `LocalTimeToStringConverter`
-- その他関連コンバーター
-
-### サポートされる日時型（修正後）
-
-| 型 | フォーマット | サポート状況 |
-|----|------------|-------------|
-| `Date` | ISO_INSTANT | ✅ |
-| `LocalDate` | ISO_LOCAL_DATE | ✅ |
-| `LocalTime` | ISO_LOCAL_TIME | ✅ |
-| `LocalDateTime` | ISO_LOCAL_DATE_TIME | ✅ |
-| `ZonedDateTime` | ISO_ZONED_DATE_TIME | ✅ **新規** |
-| `OffsetDateTime` | ISO_OFFSET_DATE_TIME | ✅ **新規** |
-| `OffsetTime` | ISO_OFFSET_TIME | ✅ **新規** |
-| `Instant` | ISO_INSTANT | ✅ **新規** |
-
-### 使用例
-
-```java
-// ZonedDateTimeの使用
-ZonedDateTime scheduleTime = ZonedDateTime.of(
-    2023, 12, 25, 10, 30, 0, 0, 
-    ZoneId.of("Asia/Seoul")
-);
-JobParameters parameters = new JobParametersBuilder()
-    .addJobParameter("schedule.time", scheduleTime, ZonedDateTime.class, true)
-    .toJobParameters();
-
-// OffsetDateTimeの使用
-OffsetDateTime deadline = OffsetDateTime.of(
-    2023, 12, 31, 23, 59, 59, 0,
-    ZoneOffset.ofHours(9)
-);
-JobParameters params = new JobParametersBuilder()
-    .addJobParameter("deadline", deadline, OffsetDateTime.class, true)
-    .toJobParameters();
-```
-
-### ワークアラウンド（6.0.x向け）
-
-修正版リリース前の暫定対応として、`DefaultFormattingConversionService` Beanを定義：
-
-```java
-@Bean
-DefaultFormattingConversionService conversionService() {
-    return new DefaultFormattingConversionService();
-}
-```
-
-### リリース予定
-
-- **6.0.2**: PR #5179（個別コンバーター追加）をマージ
-- **6.1.0**: PR #5186（Spring Frameworkコンバーター活用）をマージ
+| バージョン | 対応内容 |
+|-----------|---------|
+| 6.0.2 | PR [#5179](https://github.com/spring-projects/spring-batch/pull/5179) - 個別コンバーター追加 |
+| 6.1.0 | PR [#5186](https://github.com/spring-projects/spring-batch/pull/5186) - Spring Framework統合 |
+| 5.2.x | バックポート対象 |

@@ -1,20 +1,17 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月18日に生成されました）*
 
 ## 課題概要
 
-Spring Batchのドキュメント（`whatsnew.adoc`）およびテストメソッドにタイポ（誤字）があるという軽微な問題です。
+whatsnew.adocドキュメントおよび統合テストにおけるタイポの修正です。
 
-### 誤字の内容
+**whatsnew.adocとは**: Spring Batchの各バージョンでの新機能や変更点を説明するドキュメントファイルです。
 
-| 誤 | 正 | 箇所 |
-|---|---|------|
-| `faultToleranChunkOrientedStep` | `faultToleran**t**ChunkOrientedStep` | テストメソッド名、ドキュメント |
-| `nonRetrybaleExceptions` | `nonRetry**ab**leExceptions` | テストメソッド名、ドキュメント |
+### 修正対象のタイポ
 
-### 修正対象
-
-1. **whatsnew.adoc**: Spring Batch 6.0の新機能を説明するドキュメント
-2. **統合テスト**: `ChunkOrientedStep`関連のテストクラス
+| 誤り | 正しい表記 |
+|------|-----------|
+| faultToleran**C**hunkOrientedStep | faultToleran**tC**hunkOrientedStep |
+| nonRetrybale**E**xceptions | nonRetryable**E**xceptions |
 
 ## 原因
 
@@ -22,21 +19,19 @@ Spring Batchのドキュメント（`whatsnew.adoc`）およびテストメソ�
 
 ## 対応方針
 
-**注意**: このIssueにはdiffファイルが存在しませんが、Issue内でPR #5206によって修正されたことが記載されています。
+diffファイルは存在しません。
+
+[PR #5206](https://github.com/spring-projects/spring-batch/pull/5206) で修正されました。
 
 ### 修正内容
 
-[PR #5206](https://github.com/spring-projects/spring-batch/pull/5206)において、以下の修正が行われました：
+1. `whatsnew.adoc`ドキュメント内のサンプルコード
+2. 統合テストのメソッド名
 
-1. `faultToleranChunkOrientedStep` → `faultTolerantChunkOrientedStep`
-   - 「t」が欠落していた
+## バグの発生タイミング
 
-2. `nonRetrybaleExceptions` → `nonRetryableExceptions`
-   - 「a」と「b」の順序が逆になっていた
-
-### 対象ファイル
-
-- `spring-batch-docs/src/main/asciidoc/whatsnew.adoc`
-- テストクラス内のメソッド名
-
-この修正は、コードの動作には影響しませんが、ドキュメントの可読性とコードの一貫性を向上させます。
+| 項目 | 内容 |
+|------|------|
+| ラベル | type: bug, in: documentation |
+| 修正PR | [#5206](https://github.com/spring-projects/spring-batch/pull/5206) |
+| 解決日 | 2026-01-12 |

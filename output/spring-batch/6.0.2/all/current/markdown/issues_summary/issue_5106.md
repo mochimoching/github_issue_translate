@@ -1,73 +1,84 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月18日に生成されました）*
 
 ## 課題概要
 
-Spring Batchにおいて、`JobOperator.start()`メソッドで非同期タスクエグゼキュータ（`asyncTaskExecutor`）を使用してジョブを開始すると、間欠的に`OptimisticLockingFailureException`が発生する問題です。
+Spring Batchにおいて、`jobOperator.start()`を非同期タスクエグゼキュータ（`asyncTaskExecutor`）で使用してジョブを開始すると、間欠的に`OptimisticLockingFailureException`が発生するバグです。
 
-**Spring Batchとは**: Javaでバッチ処理を実装するためのフレームワークです。大量データの処理、定期的なジョブ実行などに使用されます。
+**Spring Batchとは**: Javaでバッチ処理を実装するためのフレームワークです。大量データの一括処理やスケジュールされたジョブ実行に使用されます。
 
-**`JobOperator`とは**: Spring Batchでジョブの開始、停止、再起動などの操作を行うためのインターフェースです。
+**楽観的ロック（Optimistic Locking）とは**: データベースの同時更新制御の方式で、更新時にバージョン番号をチェックし、他のトランザクションによる変更を検出する仕組みです。
 
 ### 問題の発生メカニズム
 
 ```plantuml
 @startuml
-participant "呼び出し元スレッド" as Caller
+participant "メインスレッド" as Main
 participant "TaskExecutorJobLauncher" as Launcher
 participant "非同期スレッド" as Async
 participant "JobRepository" as Repo
 database "BATCH_JOB_EXECUTION" as DB
 
-Caller -> Launcher: start()
+Main -> Launcher: jobOperator.start()
 Launcher -> Repo: createJobExecution()
 Repo -> DB: INSERT (version=0)
-Launcher -> Async: execute(Runnable)
-note right: 非同期でジョブ実行開始
+Launcher -> Async: タスク実行開始
+note right of Async: 非同期でジョブ実行
 
-par 並列実行（レースコンディション）
-    Async -> Repo: update(jobExecution)
-    Repo -> DB: UPDATE (version=0→1)
-    note right: ジョブ実行による更新
+par 競合状態の発生
+  Async -> Repo: updateJobExecution()
+  Repo -> DB: UPDATE (version=0→1)
 else
-    Launcher -> Repo: update(jobExecution)
-    note left: finallyブロックでの更新
-    Repo -> DB: UPDATE失敗
-    note over DB: version不一致で例外発生
+  Launcher -> Launcher: finally ブロック実行
+  Launcher -> Repo: update(jobExecution)
+  note right: version=0で更新を試みる
+  Repo -> DB: UPDATE失敗
+  note over DB: version不一致!\n(期待:0, 実際:1)
 end
+
+Launcher --> Main: OptimisticLockingFailureException
 
 @enduml
 ```
 
-### 影響を受ける環境
+### 状態遷移図
 
-| 項目 | バージョン |
-|------|-----------|
-| Spring Boot | 4.0.0 |
-| Spring Batch | 6.0.0 / 6.0.1 |
-| Java | 21 |
-| データベース | JDBC / MongoDB |
+```plantuml
+@startuml
+[*] --> JobCreated : createJobExecution()
+
+JobCreated --> AsyncStarted : TaskExecutor.execute()
+AsyncStarted --> JobRunning : 非同期スレッドで実行開始
+
+state "競合状態" as Race {
+  JobRunning --> VersionUpdated : 非同期スレッドがupdate()\nversion: 0→1
+  JobRunning --> FinallyBlock : メインスレッドがfinally実行
+  FinallyBlock --> LockingError : version不一致
+}
+
+VersionUpdated --> JobCompleted : 正常終了
+LockingError --> [*] : OptimisticLockingFailureException
+
+@enduml
+```
 
 ## 原因
 
-Spring Batch 6.0.0で導入された変更（Issue [#3637](https://github.com/spring-projects/spring-batch/issues/3637)）において、`TaskExecutorJobLauncher.launchJobExecution()`メソッドに`finally`ブロックが追加され、**無条件に**`jobRepository.update(jobExecution)`が呼び出されるようになりました。
+`TaskExecutorJobLauncher.launchJobExecution()`メソッドの`finally`ブロックで無条件に`jobRepository.update(jobExecution)`が呼び出されるようになったことが原因です。
 
-これにより、以下のレースコンディションが発生：
-
-1. 非同期タスクエグゼキュータでジョブがサブミットされる
-2. 非同期スレッドでジョブが実行され、`JobExecution`のバージョンが更新される
-3. 呼び出し元スレッドの`finally`ブロックでも`update()`が実行される
-4. バージョン番号の不一致により`OptimisticLockingFailureException`が発生
-
-**補足**: Spring Batch 5.xでは、`finally`ブロックは存在せず、`TaskRejectedException`が発生した場合にのみ更新が行われていました。
+- Spring Batch 5.xでは、タスクが`TaskExecutor`に正常に投入できなかった場合のみ更新していた
+- Spring Batch 6.0.0で導入されたIssue [#3637](https://github.com/spring-projects/spring-batch/issues/3637) の変更により、`finally`ブロックで常に更新するよう変更された
+- これにより、非同期スレッドでのジョブ実行と、メインスレッドでの更新処理が競合する
 
 ## 対応方針
 
 ### diffファイルの分析結果
 
-[Commit b024116](https://github.com/spring-projects/spring-batch/commit/b024116968ac5dd89ea84a8a3048d0e4a39d7519)において、以下の修正が行われました：
+[Commit b024116](https://github.com/spring-projects/spring-batch/commit/b024116968ac5dd89ea84a8a3048d0e4a39d7519) での修正内容：
 
-**変更前（6.0.0/6.0.1）**:
+`finally`ブロックを削除し、`jobRepository.update()`を`TaskRejectedException`のcatchブロック内でのみ実行するよう変更されました。
+
 ```java
+// 修正前（問題のあるコード）
 catch (TaskRejectedException e) {
     jobExecution.upgradeStatus(BatchStatus.FAILED);
     if (jobExecution.getExitStatus().equals(ExitStatus.UNKNOWN)) {
@@ -75,41 +86,27 @@ catch (TaskRejectedException e) {
     }
 }
 finally {
-    this.jobRepository.update(jobExecution);  // 常に実行される
+    this.jobRepository.update(jobExecution);  // ← 常に実行される（問題）
 }
-```
 
-**変更後（6.0.2）**:
-```java
+// 修正後
 catch (TaskRejectedException e) {
     jobExecution.upgradeStatus(BatchStatus.FAILED);
     if (jobExecution.getExitStatus().equals(ExitStatus.UNKNOWN)) {
         jobExecution.setExitStatus(ExitStatus.FAILED.addExitDescription(e));
     }
-    this.jobRepository.update(jobExecution);  // TaskRejectedExceptionの場合のみ実行
+    this.jobRepository.update(jobExecution);  // ← 例外時のみ実行
 }
-// finallyブロックを削除
+// finally ブロック削除
 ```
 
-### 修正内容の要点
+この修正により、タスクが正常に投入された場合はジョブスレッド側で`JobExecution`の更新が行われ、競合状態が発生しなくなります。
 
-1. `finally`ブロックを削除
-2. `jobRepository.update()`を`TaskRejectedException`のcatchブロック内に移動
-3. タスクが正常にサブミットされた場合、呼び出し元スレッドからの更新は行わない（ジョブスレッド側で更新される）
+## バグの発生タイミング
 
-### ワークアラウンド（6.0.2未満のバージョン向け）
-
-6.0.2へのアップグレードができない場合の一時的な対処法：
-
-```java
-@Bean
-public JobOperatorFactoryBean jobOperator(JobRepository jobRepository) {
-    var taskExecutor = new SyncTaskExecutor();  // 同期実行
-    var jobOperatorFactoryBean = new JobOperatorFactoryBean();
-    jobOperatorFactoryBean.setJobRepository(jobRepository);
-    jobOperatorFactoryBean.setTaskExecutor(taskExecutor);
-    return jobOperatorFactoryBean;
-}
-```
-
-**注意**: `SyncTaskExecutor`を使用すると、ジョブは呼び出し元スレッドで同期的に実行されるため、非同期実行のメリットが失われます。
+| 項目 | 内容 |
+|------|------|
+| バグ発生バージョン | Spring Batch 6.0.0, 6.0.1 |
+| 原因となったコミット | Issue [#3637](https://github.com/spring-projects/spring-batch/issues/3637) での変更 |
+| 修正コミット | [b024116](https://github.com/spring-projects/spring-batch/commit/b024116968ac5dd89ea84a8a3048d0e4a39d7519) |
+| 修正予定バージョン | Spring Batch 6.0.2 |

@@ -1,81 +1,77 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月18日に生成されました）*
 
 ## 課題概要
 
-Spring Batch 5.2.3以降で、`JobRepositoryTestUtils.removeJobExecutions()`メソッドをテストのクリーンアップで呼び出すと、`OptimisticLockingFailureException`がスローされる問題です。
+Spring Batch 5.2.3以降で、`JobRepositoryTestUtils.removeJobExecutions()`をテストのクリーンアップで呼び出すと`OptimisticLockingFailureException`がスローされるバグです。
 
-**`JobRepositoryTestUtils`とは**: Spring Batchのテストユーティリティクラスで、テスト実行後にジョブ実行履歴をクリーンアップするための機能を提供します。
+**JobRepositoryTestUtilsとは**: Spring Batchのテスト用ユーティリティクラスで、テスト実行後にジョブ実行履歴を削除するなどのクリーンアップ処理を提供します。
 
-**楽観的ロック（Optimistic Locking）とは**: データベースの同時更新制御の手法で、更新時にバージョン番号をチェックし、不一致があれば例外をスローする仕組みです。
-
-### 問題の発生メカニズム
+### 問題の発生状況
 
 ```plantuml
 @startuml
-title バージョン不一致による削除失敗
-
-participant "テストコード" as Test
+participant "テストメソッド" as Test
+participant "JobLauncherTestUtils" as Launcher
+participant "JobExecution" as Exec
 participant "JobRepositoryTestUtils" as Utils
 participant "JobRepository" as Repo
-database "BATCH_JOB_EXECUTION" as DB
 
-== ジョブ実行時 ==
-Test -> Repo: launchJob()
-Repo -> DB: INSERT (version=0)
-note right: JobExecutionをローカル変数に保存
-DB --> Repo: JobExecution (version=0)
-Repo --> Test: jobExecution (version=0)
+Test -> Launcher: launchJob()
+Launcher -> Exec: 作成 (version=0)
+Launcher --> Test: jobExecution (version=0)
+Test -> Test: リストに保存
 
-Test -> Test: jobExecutionList.add(jobExecution)
-note right: version=0のまま保持
+note over Exec: ジョブ実行中に\nversion が更新される\n(version=1, 2, ...)
 
-... ジョブ実行中にバージョンが更新される ...
-
-Repo -> DB: UPDATE (version=0→1)
-
-== クリーンアップ時 ==
-Test -> Utils: removeJobExecutions(jobExecutionList)
+Test -> Utils: removeJobExecutions(list)
 Utils -> Repo: deleteJobExecution(jobExecution)
-note right: version=0で削除を試みる
-Repo -> DB: DELETE WHERE version=0
-DB --> Repo: ❌ version=1なので削除できない
-note over Repo: OptimisticLockingFailureException
+note right: 古いversion (0) で削除を試みる
+
+Repo --> Utils: OptimisticLockingFailureException
+note right: DBのversion (1) と不一致!
 
 @enduml
 ```
 
-### 影響を受ける環境
+### 典型的なテストコード例
 
-| 項目 | バージョン |
-|------|-----------|
-| Spring Batch | 5.2.3, 5.2.4, 6.0.x |
-| Spring Boot | 3.4.5, 3.5.8 |
-| Java | 17 |
-| データベース | PostgreSQL |
+```java
+@Test
+public void testJob() throws Exception {
+    JobExecution jobExecution = jobLauncherTestUtils.launchJob(defaultJobParameters());
+    jobExecutionList.add(jobExecution);  // version=0 の状態で保存
+    
+    assertThat(jobExecution.getExitStatus()).isEqualTo(ExitStatus.COMPLETED);
+}
+
+@After
+public void cleanUp() {
+    // 5.2.3以降で OptimisticLockingFailureException が発生
+    jobRepositoryTestUtils.removeJobExecutions(jobExecutionList);
+}
+```
 
 ## 原因
 
-Issue [#4793](https://github.com/spring-projects/spring-batch/issues/4793) で導入された変更により、`deleteJobExecution()`メソッドがバージョンチェックを行うようになりました。
+Issue [#4793](https://github.com/spring-projects/spring-batch/issues/4793) で導入された変更により、`deleteJobExecution()`がバージョンチェックを行うようになりました。
 
-テストコードでは、ジョブ実行直後の`JobExecution`オブジェクト（古いバージョン番号）をリストに保存していますが、ジョブ実行中にバージョン番号が更新されるため、削除時にバージョンの不一致が発生します。
+テスト実行時にリストに保存した`JobExecution`オブジェクトのバージョンは古いままですが、ジョブ実行中にデータベース上のバージョンは更新されます。クリーンアップ時に古いバージョンで削除を試みるため、楽観的ロックエラーが発生します。
 
 ## 対応方針
 
 ### diffファイルの分析結果
 
-[PR #5173](https://github.com/spring-projects/spring-batch/pull/5173)において、以下の修正が行われました：
-
-**JobRepositoryTestUtils.java の修正**:
+[PR #5173](https://github.com/spring-projects/spring-batch/pull/5173) での修正内容：
 
 ```java
-// 変更前
+// 修正前
 public void removeJobExecution(JobExecution jobExecution) {
     this.jobRepository.deleteJobExecution(jobExecution);
 }
 
-// 変更後
+// 修正後
 public void removeJobExecution(JobExecution jobExecution) {
-    // query latest version of JobExecution to avoid OptimisticLockingFailureException
+    // 最新バージョンを取得してから削除
     jobExecution = this.jobRepository.getJobExecution(jobExecution.getId());
     if (jobExecution != null) {
         this.jobRepository.deleteJobExecution(jobExecution);
@@ -85,56 +81,38 @@ public void removeJobExecution(JobExecution jobExecution) {
 
 ### 修正のポイント
 
-1. **最新バージョンの取得**: 削除前に`jobRepository.getJobExecution()`で最新のバージョン番号を持つ`JobExecution`を取得
-2. **null チェック**: 既に削除されている場合を考慮してnullチェックを追加
-3. **不要なnullチェックの削除**: `removeJobExecutions()`内の冗長なnullチェックを削除
+1. 削除前に`jobRepository.getJobExecution()`で最新バージョンの`JobExecution`を取得
+2. nullチェックを追加（既に削除されている場合への対応）
+3. 最新バージョンで削除を実行
 
 ```plantuml
 @startuml
-title 修正後の削除フロー
+title 修正後の動作
 
-participant "テストコード" as Test
 participant "JobRepositoryTestUtils" as Utils
 participant "JobRepository" as Repo
-database "BATCH_JOB_EXECUTION" as DB
-
-Test -> Utils: removeJobExecution(staleJobExecution)
-note right: version=0（古い）
+database "DB" as DB
 
 Utils -> Repo: getJobExecution(id)
-Repo -> DB: SELECT
-DB --> Repo: JobExecution (version=1)
-Repo --> Utils: freshJobExecution (version=1)
+Repo -> DB: SELECT (最新データ取得)
+DB --> Repo: JobExecution (version=2)
+Repo --> Utils: 最新の JobExecution
 
 Utils -> Utils: null チェック
-Utils -> Repo: deleteJobExecution(freshJobExecution)
-note right: version=1で削除
-Repo -> DB: DELETE WHERE version=1
-DB --> Repo: ✅ 削除成功
+
+Utils -> Repo: deleteJobExecution(jobExecution)
+note right: version=2 で削除
+Repo -> DB: DELETE (version一致)
+DB --> Repo: 成功
 
 @enduml
 ```
 
-### 追加されたテストケース
+## バグの発生タイミング
 
-PR #5173では、古いバージョンの`JobExecution`でも削除が成功することを確認するテストが追加されています：
-
-```java
-@Test
-void testRemoveJobExecution() throws Exception {
-    // given
-    JobExecution jobExecution = utils.createJobExecutions(1).get(0);
-    
-    // when
-    jobExecution.setVersion(-1); // simulate stale version
-    utils.removeJobExecution(jobExecution);
-    
-    // then
-    assertEquals(0, JdbcTestUtils.countRowsInTable(jdbcTemplate, "BATCH_JOB_EXECUTION"));
-}
-```
-
-### 対象バージョン
-
-- 6.0.2: 修正予定
-- 5.2.5: バックポート予定
+| 項目 | 内容 |
+|------|------|
+| バグ発生バージョン | Spring Batch 5.2.3, 5.2.4 |
+| 原因となった変更 | Issue [#4793](https://github.com/spring-projects/spring-batch/issues/4793) |
+| 修正コミット | [12b16b3](https://github.com/spring-projects/spring-batch/commit/12b16b32adbbf35ead57b5e3b8d0ec84c56789ec) |
+| 修正予定バージョン | Spring Batch 6.0.2, 5.2.5（バックポート） |

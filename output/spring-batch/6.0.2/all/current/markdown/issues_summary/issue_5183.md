@@ -1,180 +1,158 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月18日に生成されました）*
 
 ## 課題概要
 
-Spring Batch 6.0で新しく導入された`ChunkOrientedStep`において、マルチスレッド処理を有効にした場合、`@StepScope`で定義された`ItemProcessor`がワーカースレッドで正しく解決できず、`ScopeNotActiveException`が発生する問題です。
+Spring Batch 6.0の新しい`ChunkOrientedStep`でマルチスレッド処理を使用する際、`@StepScope`で定義された`ItemProcessor`がワーカースレッドで`ScopeNotActiveException`をスローするバグです。
 
-**`@StepScope`とは**: Spring Batchのスコープアノテーションで、Beanのライフサイクルをステップ実行にバインドし、`JobParameters`や`StepExecution`へのアクセスを可能にします。
+**@StepScopeとは**: Spring Batchが提供するスコープアノテーションで、Beanのインスタンスをステップ実行ごとに生成し、`StepExecution`の情報（JobParametersなど）を遅延バインディングで注入できます。
 
-**`TaskExecutor`とは**: Spring Frameworkの非同期タスク実行インターフェースです。Spring Batchでは、チャンク処理を並列化するために使用されます。
+**ChunkOrientedStepのマルチスレッド処理とは**: `TaskExecutor`を設定することで、アイテムの処理（process/write）を複数のワーカースレッドで並列実行する機能です。
 
-### 問題の発生状況
+### 問題のシナリオ
 
 ```plantuml
 @startuml
-title @StepScopeとマルチスレッドの問題
+title マルチスレッド時の @StepScope 問題
 
 participant "メインスレッド" as Main
 participant "StepSynchronizationManager" as Manager
 participant "TaskExecutor" as Executor
 participant "ワーカースレッド" as Worker
-participant "ItemProcessor Proxy" as Proxy
+participant "@StepScope\nItemProcessor" as Processor
 
-== ステップ実行開始 ==
 Main -> Manager: register(stepExecution)
 note right: メインスレッドに\nStepContextを登録
 
-== マルチスレッドチャンク処理 ==
 Main -> Executor: submit(processItem)
-Executor -> Worker: 新規スレッドで実行
+Executor -> Worker: 新しいスレッドで実行
 
-Worker -> Proxy: process(item)
-Proxy -> Manager: getContext()
-Manager --> Proxy: ❌ null
-note right: ワーカースレッドには\nStepContextが登録されていない
+Worker -> Processor: process(item)
+Processor -> Manager: getContext()
+note over Manager #Pink: ワーカースレッドには\nStepContextが未登録!
 
-Proxy -> Proxy: ScopeNotActiveException
-note right: "Scope 'step' is not active\nfor the current thread"
+Manager --> Processor: ScopeNotActiveException
+note right #Red: "Scope 'step' is not active\nfor the current thread"
 
 @enduml
 ```
 
-### エラースタックトレース
+### 再現するコード
+
+```java
+@Bean
+public Step issueReproductionStep(
+        JobRepository jobRepository,
+        ItemReader<TestItem> reader,
+        ItemProcessor<TestItem, TestItem> itemProcessor, // @StepScope
+        ItemWriter<TestItem> writer
+) {
+    return new StepBuilder(jobRepository)
+            .<TestItem, TestItem>chunk(1)
+            .reader(reader)
+            .processor(itemProcessor)
+            .writer(writer)
+            .taskExecutor(new SimpleAsyncTaskExecutor()) // マルチスレッド有効
+            .build();
+}
+
+@Bean
+@StepScope
+public ItemProcessor<TestItem, TestItem> issueReproductionProcessor() {
+    return item -> {
+        log.info("[Thread: {}] Processing item: {}", 
+            Thread.currentThread().getName(), item.getName());
+        return item;
+    };
+}
+```
+
+### 発生するエラー
 
 ```
 Caused by: org.springframework.beans.factory.support.ScopeNotActiveException: 
-    Error creating bean with name 'scopedTarget.issueReproductionProcessor': 
-    Scope 'step' is not active for the current thread
-    at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(...)
-    at jdk.proxy2/jdk.proxy2.$Proxy134.process(Unknown Source)
-    at org.springframework.batch.core.step.item.ChunkOrientedStep.doProcess(...)
+  Error creating bean with name 'scopedTarget.issueReproductionProcessor': 
+  Scope 'step' is not active for the current thread
+    at org.springframework.batch.core.step.item.ChunkOrientedStep.doProcess(ChunkOrientedStep.java:655)
+    ...
 Caused by: java.lang.IllegalStateException: 
-    No context holder available for step scope
+  No context holder available for step scope
     at org.springframework.batch.core.scope.StepScope.getContext(StepScope.java:167)
 ```
 
 ## 原因
 
-`ChunkOrientedStep.processChunkConcurrently()`メソッドでは、`TaskExecutor`を使用して複数のアイテムを並列処理しますが、ワーカースレッドに`StepExecution`コンテキストが伝播されていません。
+`ChunkOrientedStep.processChunkConcurrently`メソッドで、`TaskExecutor`を使用してワーカースレッドでアイテム処理を実行する際、`StepExecution`の`StepContext`がワーカースレッドに伝播されていません。
 
-`@StepScope`のプロキシBeanは、`StepSynchronizationManager`から現在のスレッドの`StepContext`を取得しようとしますが、ワーカースレッドにはコンテキストが登録されていないため、`ScopeNotActiveException`がスローされます。
-
-### スコープ解決の仕組み
-
-```plantuml
-@startuml
-title StepScopeの解決フロー
-
-class StepScope {
-    + get(name, objectFactory): Object
-    - getContext(): StepContext
-}
-
-class StepSynchronizationManager {
-    - contexts: Map<Thread, StepContext>
-    + register(stepExecution)
-    + getContext(): StepContext
-    + close()
-}
-
-class ItemProcessorProxy {
-    + process(item): Object
-}
-
-StepScope --> StepSynchronizationManager: getContext()
-ItemProcessorProxy --> StepScope: Bean取得
-
-note bottom of StepSynchronizationManager
-ThreadLocal相当の仕組み
-各スレッドごとにコンテキストを管理
-end note
-
-@enduml
-```
+`@StepScope`のBeanはプロキシとして作成され、実際のインスタンス取得時に`StepSynchronizationManager`から`StepContext`を参照します。しかし、ワーカースレッドでは`StepContext`が登録されていないため、`ScopeNotActiveException`が発生します。
 
 ## 対応方針
 
-**注意**: このIssueにはdiffファイルが存在しませんが、Issue内で提案された修正方針があります。
+diffファイルは存在しませんが、メンテナーの@fmbenhassineがIssue内で提案された修正を承認しています。
 
 ### 提案された修正
-
-`ChunkOrientedStep.processChunkConcurrently()`メソッドで、ワーカースレッドにも`StepExecution`を登録：
 
 ```java
 // processChunkConcurrently メソッド内
 Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
     try {
-        // ✅ ワーカースレッドにStepExecutionを登録
+        // ワーカースレッドに StepExecution を登録
         StepSynchronizationManager.register(stepExecution);
         return processItem(item, contribution);
     } finally {
-        // ✅ メモリリーク防止のためクローズ
+        // メモリリーク防止のためコンテキストをクリア
         StepSynchronizationManager.close();
     }
 });
 ```
 
-### 修正後の動作フロー
+### 修正後の動作
 
 ```plantuml
 @startuml
-title 修正後のマルチスレッド処理フロー
+title 修正後: ワーカースレッドでの StepContext 伝播
 
 participant "メインスレッド" as Main
 participant "StepSynchronizationManager" as Manager
+participant "TaskExecutor" as Executor
 participant "ワーカースレッド" as Worker
-participant "ItemProcessor" as Processor
+participant "@StepScope\nItemProcessor" as Processor
 
-== メインスレッド ==
 Main -> Manager: register(stepExecution)
 
-== ワーカースレッド ==
-Main -> Worker: submit(task)
-activate Worker
+Main -> Executor: submit(processItem)
+Executor -> Worker: 新しいスレッドで実行
 
 Worker -> Manager: register(stepExecution)
-note right: ✅ ワーカースレッドにも登録
+note right #LightGreen: ワーカースレッドにも\nStepContextを登録
 
 Worker -> Processor: process(item)
 Processor -> Manager: getContext()
-Manager --> Processor: ✅ StepContext取得成功
+Manager --> Processor: StepContext (正常取得!)
 Processor --> Worker: 処理結果
 
 Worker -> Manager: close()
-note right: ✅ クリーンアップ
-deactivate Worker
+note right: コンテキストをクリア\n(メモリリーク防止)
 
 @enduml
 ```
 
-### 対応状況
+### 影響を受けるテスト
 
-メンテナーの@fmbenhassineは、この問題を確認し、6.0.2での修正を予定しています。@LeeHyungGeolがPRの作成を担当する予定です。
+@fmbenhassineのコメントによると、以下のテストケースが影響を受けます：
 
-### ワークアラウンド
+[ChunkOrientedStepIntegrationTests#testConcurrentChunkOrientedStepSuccess](https://github.com/spring-projects/spring-batch/blob/a6a53c46fca3aa920f4f07ac7ddbf39493081f66/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepIntegrationTests.java)
 
-修正版リリース前の暫定対応として、`@StepScope`を使用しないか、マルチスレッド処理を無効にする：
+このテストで使用される[ItemProcessor](https://github.com/spring-projects/spring-batch/blob/a6a53c46fca3aa920f4f07ac7ddbf39493081f66/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/TestConfiguration.java#L56)を`@StepScope`にすると現在は失敗しますが、修正後はパスするようになります。
 
-```java
-// オプション1: @StepScopeを使用しない
-@Bean
-// @StepScope を削除
-public ItemProcessor<TestItem, TestItem> processor() {
-    return item -> {
-        // JobParametersへのアクセスが必要な場合は別の方法で取得
-        return item;
-    };
-}
+## バグの発生タイミング
 
-// オプション2: シングルスレッドで実行
-@Bean
-public Step step(...) {
-    return new StepBuilder(...)
-            .<TestItem, TestItem>chunk(10)
-            .reader(reader)
-            .processor(processor)
-            .writer(writer)
-            // .taskExecutor(...) を削除してシングルスレッドで実行
-            .build();
-}
-```
+| 項目 | 内容 |
+|------|------|
+| バグ発生バージョン | Spring Batch 6.0.0, 6.0.1 |
+| 影響を受ける構成 | ChunkOrientedStep + TaskExecutor + @StepScope ItemProcessor |
+| PRの担当者 | @LeeHyungGeol (アサイン予定) |
+| 修正予定バージョン | Spring Batch 6.0.2 |
+
+### 備考
+
+メンテナーはこれを「新実装の見落とし」(oversight) と認識しており、提案された修正で問題が解決することを確認しています。

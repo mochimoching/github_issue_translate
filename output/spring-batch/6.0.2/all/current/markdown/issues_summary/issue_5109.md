@@ -1,132 +1,111 @@
-*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月15日に生成されました）*
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月18日に生成されました）*
 
 ## 課題概要
 
-`AbstractCursorItemReader`の`doClose()`メソッドにおいて、JDBCリソースのクローズ順序が不正であり、一貫性のない動作を引き起こす問題です。
+`AbstractCursorItemReader#doClose`メソッドにおいて、JDBCリソースのクローズ順序が不正であり、一貫性のない動作を引き起こすバグです。
 
-**`AbstractCursorItemReader`とは**: Spring Batchでデータベースからカーソルを使用してデータを読み取るためのリーダーの基底クラスです。`JdbcCursorItemReader`や`StoredProcedureItemReader`の親クラスとして機能します。
+**カーソルベースのItemReaderとは**: Spring Batchでデータベースからデータを読み取る際に、カーソル（結果セットへのポインタ）を使用して逐次的にデータを取得するリーダーです。大量データを効率的にメモリ使用量を抑えて処理できます。
 
 ### 問題の発生状況
 
 ```plantuml
 @startuml
-title リソースクローズ順序の問題
+participant "JdbcCursorItemReader" as Reader
+participant "AbstractCursorItemReader" as Abstract
+participant "Connection" as Conn
+participant "PreparedStatement" as Stmt
 
-participant "AbstractCursorItemReader\n(親クラス)" as Parent
-participant "JdbcCursorItemReader\n(子クラス)" as Child
-participant "Connection" as Con
-participant "PreparedStatement" as PS
+note over Reader, Stmt: 現在の問題のある実行順序
 
-== 現在の問題のある実行順序 ==
+Reader -> Abstract: doClose()
+Abstract -> Reader: cleanupOnClose(connection)
+Reader -> Conn: JdbcUtils.closeConnection(con)
+note right: ① コネクションが先にクローズされる
 
-Parent -> Child: doClose()
-Child -> Con: JdbcUtils.closeConnection(con)
-note right: ❌ 先にConnectionがクローズされる
-Con --> Child: (接続終了)
+Reader -> Conn: con.isClosed()
+note right: ② true を返す
 
-Child -> Child: cleanupOnClose(con)
-note right: Connectionは既にクローズ済み
-
-Child -> Con: con.isClosed()
-Con --> Child: true
-note right: ❌ setAutoCommit()がスキップされる
+Reader -> Conn: setAutoCommit(initialAutoCommit)
+note right: ③ 既にクローズ済みなので\nこの処理はスキップされる
 
 @enduml
 ```
 
-### 現在の問題点
+### 期待される正しいクローズ順序
 
-| 実行順序 | 処理内容 | 問題 |
-|---------|---------|------|
-| 1 | `JdbcUtils.closeConnection(con)` | Connectionがクローズされる |
-| 2 | `cleanupOnClose(con)` | 既にクローズされたConnectionを受け取る |
-| 3 | `setAutoCommit(initialAutoCommit)` | `con.isClosed() == true`のためスキップ |
+```plantuml
+@startuml
+participant "親クラス\nAbstractCursorItemReader" as Parent
+participant "子クラス\nJdbcCursorItemReader" as Child
+participant "PreparedStatement" as Stmt
+participant "Connection" as Conn
 
-### 責任の混在
+note over Parent, Conn: 正しいリソース解放の順序
 
-現在の実装では、リソースの所有権が曖昧になっています：
+Parent -> Child: cleanupOnClose(connection)
+Child -> Stmt: JdbcUtils.closeStatement(stmt)
+note right: ① まずStatementをクローズ
 
-- **親クラス（`AbstractCursorItemReader`）**: Connectionを作成・オープン
-- **子クラス（`JdbcCursorItemReader`等）**: カーソルレベルのクリーンアップを実行
-- **しかし**: 子クラスがConnectionもクローズしている（所有権の不整合）
+Parent -> Conn: setAutoCommit(initialAutoCommit)
+note right: ② AutoCommit設定を復元
+
+Parent -> Conn: JdbcUtils.closeConnection(con)
+note right: ③ 最後にコネクションをクローズ
+
+@enduml
+```
+
+### 責任の所在の問題
+
+| コンポーネント | リソースの作成 | リソースのクローズ（現状） | リソースのクローズ（期待） |
+|---------------|---------------|------------------------|------------------------|
+| AbstractCursorItemReader（親） | Connection作成 | - | Connection クローズ |
+| JdbcCursorItemReader（子） | PreparedStatement作成 | Connection + Statement クローズ | Statement のみクローズ |
 
 ## 原因
 
-`JdbcCursorItemReader.cleanupOnClose()`メソッド内で`JdbcUtils.closeConnection(connection)`を呼び出しており、Connectionの作成者（親クラス）ではなく子クラスがConnectionをクローズしているため、責任範囲が不明確になっています。
+子クラス（`JdbcCursorItemReader`等）の`cleanupOnClose()`メソッド内で、親クラスが作成・所有する`Connection`をクローズしていました。これにより：
+
+1. コネクションが先にクローズされる
+2. 親クラスで`setAutoCommit()`を実行しようとしても、既にコネクションがクローズ済みのためスキップされる
+3. リソースの所有権モデルが混在し、一貫性がない
 
 ## 対応方針
 
 ### diffファイルの分析結果
 
-[PR #5110](https://github.com/spring-projects/spring-batch/pull/5110)において、以下の修正が提案されています：
+[PR #5110](https://github.com/spring-projects/spring-batch/pull/5110) での修正内容：
 
-**修正対象ファイル**:
-1. `JdbcCursorItemReader.java`
-2. `StoredProcedureItemReader.java`
-
-**変更内容**:
-
-`JdbcCursorItemReader`の修正例：
-
+**JdbcCursorItemReader.java**:
 ```java
-// 変更前
+// 修正前
 @Override
 protected void cleanupOnClose(Connection connection) {
     JdbcUtils.closeStatement(this.preparedStatement);
-    JdbcUtils.closeConnection(connection);  // 削除対象
+    JdbcUtils.closeConnection(connection);  // ← 子クラスでConnectionをクローズ（問題）
 }
 
-// 変更後
+// 修正後
 /**
  * Releases JDBC resources associated with this reader.
  * Closes the PreparedStatement used for the cursor.
  * The Connection is not closed here; it is managed by the parent class.
- *
- * @param connection the active database connection used for the cursor
  */
 @Override
 protected void cleanupOnClose(Connection connection) {
     JdbcUtils.closeStatement(this.preparedStatement);
-    // JdbcUtils.closeConnection(connection) を削除
+    // Connection のクローズは親クラスに委譲
 }
 ```
 
-### 修正後のリソースクローズ順序
+**StoredProcedureItemReader.java**: 同様の修正が適用されています。
 
-```plantuml
-@startuml
-title 修正後のリソースクローズ順序
+この修正により、リソースを作成したコンポーネントがそのリソースのクローズ責任を持つという一貫したモデルになります。
 
-participant "AbstractCursorItemReader\n(親クラス)" as Parent
-participant "JdbcCursorItemReader\n(子クラス)" as Child
-participant "Connection" as Con
-participant "PreparedStatement" as PS
+## バグの発生タイミング
 
-== 修正後の正しい実行順序 ==
-
-Parent -> Child: cleanupOnClose(con)
-Child -> PS: JdbcUtils.closeStatement(ps)
-note right: ✅ 先にStatementをクローズ
-PS --> Child: (Statement終了)
-
-Parent -> Con: setAutoCommit(initialAutoCommit)
-note right: ✅ Connectionは有効なまま
-Con --> Parent: (設定完了)
-
-Parent -> Con: JdbcUtils.closeConnection(con)
-note right: ✅ 最後にConnectionをクローズ
-Con --> Parent: (接続終了)
-
-@enduml
-```
-
-### 修正の設計思想
-
-| 責任範囲 | 親クラス | 子クラス |
-|---------|---------|---------|
-| Connectionの作成 | ✅ | - |
-| Connectionのクローズ | ✅ | - |
-| PreparedStatementのクローズ | - | ✅ |
-| ResultSetのクローズ | - | ✅ |
-
-この修正により、「リソースを作成したコンポーネントがそのリソースをクローズする責任を持つ」という設計原則に従った実装となります。
+| 項目 | 内容 |
+|------|------|
+| バグ発生バージョン | Spring Batch 6.0.0 |
+| 修正PR | [#5110](https://github.com/spring-projects/spring-batch/pull/5110) |
+| バックポート対象 | 5.2.x 系 |
