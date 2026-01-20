@@ -1,0 +1,70 @@
+Issue #5220: MongoStepExecutionDao.countStepExecutions() ignores stepName parameter
+Reference: PR #5221 (2026-01-18T19:53:56Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5221
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/mongodb/MongoStepExecutionDao.java b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/mongodb/MongoStepExecutionDao.java
+index f203f3184a..d56ffcee0f 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/mongodb/MongoStepExecutionDao.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/repository/dao/mongodb/MongoStepExecutionDao.java
+@@ -170,9 +170,12 @@ public long countStepExecutions(JobInstance jobInstance, String stepName) {
+ 			.find(query, org.springframework.batch.core.repository.persistence.JobExecution.class,
+ 					JOB_EXECUTIONS_COLLECTION_NAME);
+ 		return this.mongoOperations.count(
+-				query(where("jobExecutionId").in(jobExecutions.stream()
+-					.map(org.springframework.batch.core.repository.persistence.JobExecution::getJobExecutionId)
+-					.toList())),
++				query(where("jobExecutionId")
++					.in(jobExecutions.stream()
++						.map(org.springframework.batch.core.repository.persistence.JobExecution::getJobExecutionId)
++						.toList())
++					.and("name")
++					.is(stepName)),
+ 				org.springframework.batch.core.repository.persistence.StepExecution.class,
+ 				STEP_EXECUTIONS_COLLECTION_NAME);
+ 	}
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/MongoStepExecutionDaoIntegrationTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/MongoStepExecutionDaoIntegrationTests.java
+index 1d1187a946..1251fc0c2a 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/MongoStepExecutionDaoIntegrationTests.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/repository/support/MongoStepExecutionDaoIntegrationTests.java
+@@ -182,15 +182,24 @@ private void assertStepExecutionsAreEqual(StepExecution expected, StepExecution
+ 	}
+ 
+ 	@Test
+-	void testCountStepExecutions() {
+-		// Given
+-		StepExecution stepExecution = dao.createStepExecution("step", jobExecution);
+-
+-		// When
+-		long result = dao.countStepExecutions(jobInstance, stepExecution.getStepName());
+-
+-		// Then
+-		assertEquals(1, result);
++	void testCountStepExecutionsFiltersByStepName() {
++		// given
++		dao.createStepExecution("stepA", jobExecution);
++		dao.createStepExecution("stepA", jobExecution);
++		dao.createStepExecution("stepB", jobExecution);
++		dao.createStepExecution("stepC", jobExecution);
++
++		// when
++		long countA = dao.countStepExecutions(jobInstance, "stepA");
++		long countB = dao.countStepExecutions(jobInstance, "stepB");
++		long countC = dao.countStepExecutions(jobInstance, "stepC");
++		long countNonExistent = dao.countStepExecutions(jobInstance, "nonExistentStep");
++
++		// then
++		assertEquals(2, countA);
++		assertEquals(1, countB);
++		assertEquals(1, countC);
++		assertEquals(0, countNonExistent);
+ 	}
+ 
+ 	@Test
+@@ -205,4 +214,4 @@ void testDeleteStepExecution() {
+ 		assertNull(dao.getStepExecution(stepExecution.getId()));
+ 	}
+ 
+-}
+\ No newline at end of file
++}

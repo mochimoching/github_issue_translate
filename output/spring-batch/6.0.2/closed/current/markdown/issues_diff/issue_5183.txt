@@ -1,0 +1,45 @@
+Issue #5183: ScopeNotActiveException with @StepScope ItemProcessor in Multi-threaded ChunkOrientedStep
+Reference: PR #5218 (2026-01-18T13:40:29Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5218
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+index 87db64826a..ad02f5e00f 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+@@ -398,7 +398,15 @@ private void processChunkConcurrently(TransactionStatus status, StepContribution
+ 			for (int i = 0; i < this.chunkSize && this.chunkTracker.get().moreItems(); i++) {
+ 				I item = readItem(contribution);
+ 				if (item != null) {
+-					Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> processItem(item, contribution));
++					Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
++						try {
++							StepSynchronizationManager.register(stepExecution);
++							return processItem(item, contribution);
++						}
++						finally {
++							StepSynchronizationManager.close();
++						}
++					});
+ 					itemProcessingTasks.add(itemProcessingFuture);
+ 				}
+ 			}
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/TestConfiguration.java b/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/TestConfiguration.java
+index fdcb694a80..6ec841e1f6 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/TestConfiguration.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/TestConfiguration.java
+@@ -53,6 +53,7 @@ public FlatFileItemReader<Person> itemReader(@Value("#{jobParameters['file']}")
+ 	}
+ 
+ 	@Bean
++	@StepScope
+ 	public ItemProcessor<Person, Person> itemProcessor() {
+ 		return item -> {
+ 			if (System.getProperty("fail") != null) {
+@@ -73,4 +74,4 @@ public Job job(JobRepository jobRepository, Step step) {
+ 		return new JobBuilder(jobRepository).start(step).build();
+ 	}
+ 
+-}
+\ No newline at end of file
++}
