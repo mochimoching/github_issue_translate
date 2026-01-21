@@ -1,0 +1,230 @@
+Issue #5188: StepContribution counters are not thread-safe during parallel chunk processing
+Reference: PR #5224 (2026-01-20T08:24:02Z)
+URL: https://github.com/spring-projects/spring-batch/pull/5224
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+index afd6f59448..a5688517bd 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/step/item/ChunkOrientedStep.java
+@@ -15,6 +15,7 @@
+  */
+ package org.springframework.batch.core.step.item;
+ 
++import java.util.ArrayList;
+ import java.util.LinkedList;
+ import java.util.List;
+ import java.util.concurrent.Future;
+@@ -394,15 +395,18 @@ private void processNextChunk(TransactionStatus status, StepContribution contrib
+ 	private void processChunkConcurrently(TransactionStatus status, StepContribution contribution,
+ 			StepExecution stepExecution) {
+ 		List<Future<O>> itemProcessingTasks = new LinkedList<>();
++		List<StepContribution> workerContributions = new ArrayList<>();
+ 		try {
+ 			// read items and submit concurrent item processing tasks
+ 			for (int i = 0; i < this.chunkSize && this.chunkTracker.get().moreItems(); i++) {
+ 				I item = readItem(contribution);
+ 				if (item != null) {
++					StepContribution workerContribution = stepExecution.createStepContribution();
++					workerContributions.add(workerContribution);
+ 					Future<O> itemProcessingFuture = this.taskExecutor.submit(() -> {
+ 						try {
+ 							StepSynchronizationManager.register(stepExecution);
+-							return processItem(item, contribution);
++							return processItem(item, workerContribution);
+ 						}
+ 						finally {
+ 							StepSynchronizationManager.close();
+@@ -425,6 +429,11 @@ private void processChunkConcurrently(TransactionStatus status, StepContribution
+ 				}
+ 			}
+ 
++			// aggregate all worker contributions
++			for (StepContribution workerContribution : workerContributions) {
++				aggregateContribution(contribution, workerContribution);
++			}
++
+ 			// write processed items
+ 			writeChunk(processedChunk, contribution);
+ 			stepExecution.incrementCommitCount();
+@@ -442,6 +451,11 @@ private void processChunkConcurrently(TransactionStatus status, StepContribution
+ 
+ 	}
+ 
++	private void aggregateContribution(StepContribution main, StepContribution worker) {
++		main.incrementFilterCount(worker.getFilterCount());
++		main.incrementProcessSkipCount(worker.getProcessSkipCount());
++	}
++
+ 	private void processChunkSequentially(TransactionStatus status, StepContribution contribution,
+ 			StepExecution stepExecution) {
+ 		Chunk<I> inputChunk = new Chunk<>();
+diff --git a/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java b/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java
+index e1b14b1b4a..e762c38d3f 100644
+--- a/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java
++++ b/spring-batch-core/src/test/java/org/springframework/batch/core/step/item/ChunkOrientedStepTests.java
+@@ -28,6 +28,7 @@
+ import org.springframework.batch.core.repository.JobRepository;
+ import org.springframework.batch.core.repository.support.ResourcelessJobRepository;
+ import org.springframework.batch.core.step.FatalStepExecutionException;
++import org.springframework.batch.core.step.StepContribution;
+ import org.springframework.batch.core.step.StepExecution;
+ import org.springframework.batch.core.step.builder.ChunkOrientedStepBuilder;
+ import org.springframework.batch.core.step.builder.StepBuilder;
+@@ -257,7 +258,7 @@ void testDoSkipInProcessShouldThrowNonSkippableProcessExceptionWhenSkipPolicyRet
+ 		step.setItemProcessor(processor);
+ 		step.setFaultTolerant(true);
+ 		step.setRetryPolicy(RetryPolicy.withMaxRetries(1)); // retry once (initial + 1
+-															// retry)
++		// retry)
+ 		step.setSkipPolicy(new NeverSkipItemSkipPolicy()); // never skip
+ 		step.afterPropertiesSet();
+ 
+@@ -366,4 +367,147 @@ int getUpdateCount() {
+ 
+ 	}
+ 
++	@Test
++	void testFilterCountAccuracyInConcurrentMode() throws Exception {
++		// given
++		int itemCount = 10;
++		AtomicInteger readCounter = new AtomicInteger(0);
++
++		ItemReader<Integer> reader = () -> {
++			int current = readCounter.incrementAndGet();
++			return current <= itemCount ? current : null;
++		};
++
++		ItemProcessor<Integer, Integer> filteringProcessor = item -> null;
++
++		ItemWriter<Integer> writer = chunk -> {
++		};
++
++		JobRepository jobRepository = new ResourcelessJobRepository();
++		ChunkOrientedStep<Integer, Integer> step = new ChunkOrientedStep<>("step", 100, reader, writer, jobRepository);
++		step.setItemProcessor(filteringProcessor);
++		step.setTaskExecutor(new SimpleAsyncTaskExecutor());
++		step.afterPropertiesSet();
++
++		JobInstance jobInstance = new JobInstance(1L, "job");
++		JobExecution jobExecution = new JobExecution(1L, jobInstance, new JobParameters());
++		StepExecution stepExecution = new StepExecution(1L, "step", jobExecution);
++
++		// when
++		step.execute(stepExecution);
++
++		// then
++		assertEquals(itemCount, stepExecution.getFilterCount(), "Race condition detected! Expected " + itemCount
++				+ " filtered items, but got " + stepExecution.getFilterCount());
++	}
++
++	@Test
++	void testFilterCountAccuracyInSequentialMode() throws Exception {
++		// given
++		int itemCount = 10;
++		AtomicInteger readCounter = new AtomicInteger(0);
++
++		ItemReader<Integer> reader = () -> {
++			int current = readCounter.incrementAndGet();
++			return current <= itemCount ? current : null;
++		};
++
++		ItemProcessor<Integer, Integer> filteringProcessor = item -> null;
++		ItemWriter<Integer> writer = chunk -> {
++		};
++
++		JobRepository jobRepository = new ResourcelessJobRepository();
++		ChunkOrientedStep<Integer, Integer> step = new ChunkOrientedStep<>("step", 100, reader, writer, jobRepository);
++		step.setItemProcessor(filteringProcessor);
++		step.afterPropertiesSet();
++
++		JobInstance jobInstance = new JobInstance(1L, "job");
++		JobExecution jobExecution = new JobExecution(1L, jobInstance, new JobParameters());
++		StepExecution stepExecution = new StepExecution(1L, "step", jobExecution);
++
++		// when
++		step.execute(stepExecution);
++
++		// then
++		assertEquals(itemCount, stepExecution.getFilterCount(), "Sequential mode should have accurate filter count");
++	}
++
++	@Test
++	void testProcessSkipCountAccuracyInConcurrentMode() throws Exception {
++		// given
++		int itemCount = 10;
++		AtomicInteger readCounter = new AtomicInteger(0);
++
++		ItemReader<Integer> reader = () -> {
++			int current = readCounter.incrementAndGet();
++			return current <= itemCount ? current : null;
++		};
++
++		ItemProcessor<Integer, Integer> failingProcessor = item -> {
++			throw new RuntimeException("Simulated processing failure");
++		};
++
++		ItemWriter<Integer> writer = chunk -> {
++		};
++
++		JobRepository jobRepository = new ResourcelessJobRepository();
++		ChunkOrientedStep<Integer, Integer> step = new ChunkOrientedStep<>("step", 100, reader, writer, jobRepository);
++		step.setItemProcessor(failingProcessor);
++		step.setTaskExecutor(new SimpleAsyncTaskExecutor());
++		step.setFaultTolerant(true);
++		step.setRetryPolicy(RetryPolicy.withMaxRetries(1));
++		step.setSkipPolicy((throwable, skipCount) -> throwable instanceof RuntimeException);
++
++		step.afterPropertiesSet();
++
++		JobInstance jobInstance = new JobInstance(1L, "job");
++		JobExecution jobExecution = new JobExecution(1L, jobInstance, new JobParameters());
++		StepExecution stepExecution = new StepExecution(1L, "step", jobExecution);
++
++		// when
++		step.execute(stepExecution);
++
++		// then
++		assertEquals(itemCount, stepExecution.getProcessSkipCount(), "Race condition detected! Expected " + itemCount
++				+ " process skips, but got " + stepExecution.getProcessSkipCount());
++	}
++
++	@Test
++	void testProcessSkipCountAccuracyInSequentialMode() throws Exception {
++		// given
++		int itemCount = 10;
++		AtomicInteger readCounter = new AtomicInteger(0);
++
++		ItemReader<Integer> reader = () -> {
++			int current = readCounter.incrementAndGet();
++			return current <= itemCount ? current : null;
++		};
++
++		ItemProcessor<Integer, Integer> failingProcessor = item -> {
++			throw new RuntimeException("Simulated processing failure");
++		};
++
++		ItemWriter<Integer> writer = chunk -> {
++		};
++
++		JobRepository jobRepository = new ResourcelessJobRepository();
++		ChunkOrientedStep<Integer, Integer> step = new ChunkOrientedStep<>("step", 100, reader, writer, jobRepository);
++		step.setItemProcessor(failingProcessor);
++		step.setFaultTolerant(true);
++		step.setRetryPolicy(RetryPolicy.withMaxRetries(1));
++		step.setSkipPolicy((throwable, skipCount) -> throwable instanceof RuntimeException);
++		step.afterPropertiesSet();
++
++		JobInstance jobInstance = new JobInstance(1L, "job");
++		JobExecution jobExecution = new JobExecution(1L, jobInstance, new JobParameters());
++		StepExecution stepExecution = new StepExecution(1L, "step", jobExecution);
++
++		// when
++		step.execute(stepExecution);
++
++		// then
++		assertEquals(itemCount, stepExecution.getProcessSkipCount(),
++				"Sequential mode should have accurate process skip count");
++	}
++
+ }

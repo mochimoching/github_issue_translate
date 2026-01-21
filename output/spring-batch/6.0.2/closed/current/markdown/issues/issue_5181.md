@@ -1,12 +1,6 @@
-# Spring Batch GitHub Issues
+# MetaDataInstanceFactory default values cause StepContext collision in StepScopeTestUtils when @SpringBatchTest is active
 
-取得日時: 2026年01月21日 16:00:04
-
-取得件数: 1件
-
----
-
-## Issue #5181: MetaDataInstanceFactory default values cause StepContext collision in StepScopeTestUtils when @SpringBatchTest is active
+**Issue番号**: #5181
 
 **状態**: closed | **作成者**: KILL9-NO-MERCY | **作成日**: 2025-12-23
 
@@ -18,7 +12,7 @@
 - Commits:
   - [4f8609b](https://github.com/spring-projects/spring-batch/commit/4f8609bf5c7e65a7cb4eccf70730b8c33072d185)
 
-### 内容
+## 内容
 
 ## Bug description: 
 There is a logical collision in StepSynchronizationManager when using StepScopeTestUtils in a test environment managed by @SpringBatchTest.
@@ -156,15 +150,15 @@ BUILD SUCCESSFUL in 3s
 
 Thanks for your time and for maintaining this great project!
 
-### コメント
+## コメント
 
-#### コメント 1 by injae-kim
+### コメント 1 by injae-kim
 
 **作成日**: 2026-01-11
 
 FYI) Fix PR: https://github.com/spring-projects/spring-batch/pull/5208 👍
 
-#### コメント 2 by fmbenhassine
+### コメント 2 by fmbenhassine
 
 **作成日**: 2026-01-13
 
@@ -283,7 +277,7 @@ public class IssueReproductionTest {
 
 Can you please check?
 
-#### コメント 3 by KILL9-NO-MERCY
+### コメント 3 by KILL9-NO-MERCY
 
 **作成日**: 2026-01-15
 
@@ -361,13 +355,11 @@ Environment: Spring Batch 6.0.1-SNAPSHOT (commit 9ae7775), JDK 22
 
 Please let me know if you need any additional information or clarification.
 
-#### コメント 4 by fmbenhassine
+### コメント 4 by fmbenhassine
 
 **作成日**: 2026-01-21
 
 Thank you for the detailed feedback! I see now, apologies for misunderstanding your initial description.
 
 #5208 LGTM, so I will plan the fix for the upcoming 6.0.2.
-
----
 

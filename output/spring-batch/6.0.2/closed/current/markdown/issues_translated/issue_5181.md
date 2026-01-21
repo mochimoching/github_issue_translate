@@ -1,12 +1,8 @@
-# Spring Batch GitHub Issues
+*（このドキュメントは生成AI(Claude Opus 4.5)によって2026年1月21日に生成されました）*
 
-取得日時: 2026年01月21日 16:00:04
+# @SpringBatchTest使用時にMetaDataInstanceFactoryのデフォルト値がStepScopeTestUtilsでStepContextの衝突を引き起こす
 
-取得件数: 1件
-
----
-
-## Issue #5181: MetaDataInstanceFactory default values cause StepContext collision in StepScopeTestUtils when @SpringBatchTest is active
+**Issue番号**: #5181
 
 **状態**: closed | **作成者**: KILL9-NO-MERCY | **作成日**: 2025-12-23
 
@@ -15,27 +11,25 @@
 **URL**: https://github.com/spring-projects/spring-batch/issues/5181
 
 **関連リンク**:
-- Commits:
+- コミット:
   - [4f8609b](https://github.com/spring-projects/spring-batch/commit/4f8609bf5c7e65a7cb4eccf70730b8c33072d185)
 
-### 内容
+## 内容
 
-## Bug description: 
-There is a logical collision in StepSynchronizationManager when using StepScopeTestUtils in a test environment managed by @SpringBatchTest.
+## バグの説明
+`@SpringBatchTest`で管理されたテスト環境で`StepScopeTestUtils`を使用すると、`StepSynchronizationManager`で論理的な衝突が発生します。
 
-StepExecution determines equality based on stepName, jobExecutionId, and id. Since MetaDataInstanceFactory provides static default values for all these fields, multiple instances created by the factory are treated as identical keys in the SynchronizationManagerSupport.contexts map.
+`StepExecution`の等価性は、`stepName`、`jobExecutionId`、および`id`に基づいて判定されます。`MetaDataInstanceFactory`はこれらすべてのフィールドに静的なデフォルト値を設定するため、このファクトリで作成された複数のインスタンスが`SynchronizationManagerSupport.contexts`マップ内で同一キーとして扱われてしまいます。
 
-This prevents StepScopeTestUtils from registering a new context with custom JobParameters, as the computeIfAbsent logic finds the existing context registered by StepScopeTestExecutionListener (which is part of @SpringBatchTest).
+その結果、`StepScopeTestUtils`でカスタム`JobParameters`を持つ新しいコンテキストを登録できなくなります。`computeIfAbsent`のロジックが、`StepScopeTestExecutionListener`（`@SpringBatchTest`の一部）によって既に登録されたコンテキストを検出してしまうためです。
 
-## Steps to reproduce:
-Annotate a test class with @SpringBatchTest.
+## 再現手順
+1. テストクラスに`@SpringBatchTest`アノテーションを付与します。
+2. テストメソッド内で、`MetaDataInstanceFactory.createStepExecution(jobParameters)`で作成した`StepExecution`を使って`StepScopeTestUtils.doInStepScope()`を呼び出します。
+3. スコープ内の`Tasklet`や`ItemStream`が`jobParameters`を参照できず失敗します。これはリスナーが登録した初期コンテキストにバインドされているためです。
 
-Inside a test method, use StepScopeTestUtils.doInStepScope() with a StepExecution created via MetaDataInstanceFactory.createStepExecution(jobParameters).
-
-The Tasklet or ItemStream inside the scope will fail to see the jobParameters because it is bound to the listener's initial context.
-
-## Failing Example: 
-example job
+## 失敗する例
+サンプルジョブ
 ```java
 @Slf4j
 @Configuration
@@ -69,7 +63,7 @@ public class IssueReproductionJobConfiguration {
 }
 ```
 
-test class
+テストクラス
 ```java
 @SpringBatchTest
 @SpringBootTest
@@ -84,7 +78,7 @@ public class IssueReproductionTest {
     }
 
     @Test
-    @DisplayName("MetadataInstanceFactory ID collision causes JobParameter injection failure")
+    @DisplayName("MetadataInstanceFactoryのID衝突によりJobParameterインジェクションが失敗する")
     void reproduceIdCollisionBug() throws Exception {
         // Given
         String expectedValue = "HelloBatch";
@@ -92,7 +86,7 @@ public class IssueReproductionTest {
                 .addString("testParam", expectedValue)
                 .toJobParameters();
 
-        // MetadataInstanceFactory in 6.x / maybe after 5.2.3?? creates StepExecution with fixed ID 1234L
+        // 6.x（おそらく5.2.3以降も）のMetadataInstanceFactoryは固定ID 1234LでStepExecutionを作成する
         StepExecution stepExecution = MetaDataInstanceFactory.createStepExecution(jobParameters);
 
         // When
@@ -103,9 +97,9 @@ public class IssueReproductionTest {
         // Then
         String actualValue = stepExecution.getExecutionContext().getString("result");
 
-        // This will FAIL because 'actualValue' will be null.
-        // The Tasklet retrieved the listener's context (which has no JobParameters)
-        // instead of the one passed via StepScopeTestUtils due to ID collision (1234L).
+        // この検証は失敗する。'actualValue'がnullになるため。
+        // ID衝突（1234L）により、StepScopeTestUtilsで渡したコンテキストではなく、
+        // リスナーのコンテキスト（JobParametersなし）をTaskletが取得してしまう。
         assertEquals(expectedValue, actualValue);
     }
 }
@@ -122,55 +116,54 @@ spring:
     job:
       enabled: false
 ```
-test result:
+テスト結果:
 ```bash
 Value for key=[result] is not of type: [class java.lang.String], it is [null]
 java.lang.ClassCastException: Value for key=[result] is not of type: [class java.lang.String], it is [null]
 ```
 
-## Expected behavior:
-The StepExecution and its corresponding StepContext created within StepScopeTestUtils.doInStepScope() should be correctly registered and accessible through the StepSynchronizationManager, even when @SpringBatchTest is active.
+## 期待される動作
+`StepScopeTestUtils.doInStepScope()`内で作成された`StepExecution`とそれに対応する`StepContext`は、`@SpringBatchTest`が有効な場合でも、`StepSynchronizationManager`に正しく登録されてアクセスできるべきです。
 
-(Note: Deciding on the best fix seems non-trivial to me, as it could involve changing the ID generation strategy in MetaDataInstanceFactory or adjusting how StepSynchronizationManager handles overlapping registrations in a test environment.)
-Workaround: Users must manually provide a unique name or ID to bypass the equals/hashCode collision:
+（注: 最適な修正方法の決定は簡単ではないと思います。`MetaDataInstanceFactory`でのID生成戦略の変更、またはテスト環境で重複した登録を`StepSynchronizationManager`がどう処理するかの調整が考えられます。）
 
-## Workaround: 
-To bypass the current collision, users can explicitly define a getStepExecution() method within their test class. By returning a StepExecution with a unique name or a different ID (e.g., -1L), you can prevent the StepScopeTestExecutionListener from occupying the default ID (1234L), thus allowing StepScopeTestUtils to work as intended:
+## 回避策
+現在の衝突を回避するには、テストクラス内で`getStepExecution()`メソッドを明示的に定義します。一意の名前または異なるID（例: -1L）を持つ`StepExecution`を返すことで、`StepScopeTestExecutionListener`がデフォルトID（1234L）を占有することを防ぎ、`StepScopeTestUtils`が意図通りに動作するようになります:
 
 ```java
 /**
- * Workaround: Define getStepExecution() in the test class to avoid ID collision.
- * By providing a non-default ID or name, we ensure that the listener-registered 
- * context does not conflict with the one created in StepScopeTestUtils.
+ * 回避策: テストクラスでgetStepExecution()を定義してID衝突を回避する。
+ * デフォルト以外のIDまたは名前を指定することで、リスナーが登録したコンテキストと
+ * StepScopeTestUtilsで作成したコンテキストが衝突しないようにする。
  */
 public StepExecution getStepExecution() {
     return MetaDataInstanceFactory.createStepExecution("uniqueStep", -1L);
 }
 ```
 
-test result:
+テスト結果:
 ```bash
 > Task :test
 BUILD SUCCESSFUL in 3s
 ```
 
-Thanks for your time and for maintaining this great project!
+この素晴らしいプロジェクトをメンテナンスしていただき、お時間をいただきありがとうございます！
 
-### コメント
+## コメント
 
-#### コメント 1 by injae-kim
+### コメント 1 by injae-kim
 
 **作成日**: 2026-01-11
 
-FYI) Fix PR: https://github.com/spring-projects/spring-batch/pull/5208 👍
+参考情報）修正PR: https://github.com/spring-projects/spring-batch/pull/5208 👍
 
-#### コメント 2 by fmbenhassine
+### コメント 2 by fmbenhassine
 
 **作成日**: 2026-01-13
 
-I am trying to reproduce this issue but I am not able to. The test you shared uses Spring Boot, but I want to make sure this is a valid issue by only using Spring Batch first.
+この課題を再現しようとしていますが、再現できていません。共有いただいたテストはSpring Bootを使用していますが、まずSpring Batchのみを使用して、これが有効な課題であることを確認したいと考えています。
 
-At 9ae777572a0978572e25f04d4cb93c0ad02b9a0f, when I add the following classes (the same you shared but without Spring Boot) in the `org.springframework.batch.test` package, the test you mentioned passes:
+9ae777572a0978572e25f04d4cb93c0ad02b9a0fの時点で、以下のクラス（共有いただいたものからSpring Bootを除いたもの）を`org.springframework.batch.test`パッケージに追加すると、ご指摘のテストは成功します:
 
 ```java
 package org.springframework.batch.test;
@@ -281,33 +274,33 @@ public class IssueReproductionTest {
 }
 ```
 
-Can you please check?
+ご確認いただけますか？
 
-#### コメント 3 by KILL9-NO-MERCY
+### コメント 3 by KILL9-NO-MERCY
 
 **作成日**: 2026-01-15
 
-Hi @fmbenhassine 
-Thank you for taking the time to investigate this issue!
+@fmbenhassine さん、こんにちは。
+この課題を調査していただき、ありがとうございます！
 
-I apologize for the confusion in my initial report. It appears you tested with the workaround applied, which is why the test passed in your environment.
+最初の報告が紛らわしかったことをお詫びします。回避策を適用した状態でテストされたため、お手元の環境ではテストが成功したようです。
 
-### The Issue
-The code you tested includes a getStepExecution() method that uses -1L as the ID:
+### 課題について
+テストされたコードには、IDとして-1Lを使用する`getStepExecution()`メソッドが含まれています:
 ```java
 public StepExecution getStepExecution() throws IOException {
     return MetaDataInstanceFactory.createStepExecution("dummy", -1L);
 }
 ```
-This is actually the workaround I mentioned to avoid the ID collision. When using -1L, the listener-registered context (ID: 1234L) and the test-created context (ID: -1L) don't collide, so the test works correctly.
+これは実際、ID衝突を回避するために私が言及した回避策です。-1Lを使用すると、リスナーが登録したコンテキスト（ID: 1234L）とテストで作成したコンテキスト（ID: -1L）が衝突しないため、テストが正しく動作します。
 
-#### To Reproduce the Bug
-To reproduce the actual bug, you need to either:
+#### バグを再現するには
+実際のバグを再現するには、以下のいずれかを行う必要があります:
 
-Remove the getStepExecution() method entirely, OR
-Use the default ID (1234L) instead of -1L
+`getStepExecution()`メソッドを完全に削除する、または
+-1Lの代わりにデフォルトID（1234L）を使用する
 
-Here's a test case that clearly demonstrates the ID collision:
+以下は、ID衝突を明確に示すテストケースです:
 ```java
 @SpringBatchTest
 @ContextConfiguration(classes = IssueReproductionJobConfiguration.class)
@@ -339,35 +332,32 @@ public class IssueReproductionTest {
             () -> issueReproductionTasklet.execute(stepExecution.createStepContribution(), null));
 
         String actualValue = stepExecution.getExecutionContext().getString("result");
-        // This assertion will PASS, but it proves the bug!
-        // The tasklet receives "HelloBatch2" (from listener's context)
-        // instead of "HelloBatch1" (from the test's StepExecution)
+        // このアサーションは成功するが、バグの証明になる！
+        // Taskletは"HelloBatch1"（テストのStepExecutionから）ではなく、
+        // "HelloBatch2"（リスナーのコンテキストから）を受け取る
         assertEquals("HelloBatch2", actualValue);
     }
 }
 ```
-In this test:
-The listener creates a StepExecution with testParam="HelloBatch2" (ID: 1234L)
-The test tries to create a StepExecution with testParam="HelloBatch1" (ID: 1234L)
-Due to ID collision, the listener's context is used, so the tasklet receives "HelloBatch2" instead of "HelloBatch1"
-The test passes with assertEquals("HelloBatch2", actualValue), but this proves the wrong context is being used!
+このテストでは:
+リスナーが`testParam="HelloBatch2"`（ID: 1234L）で`StepExecution`を作成
+テストが`testParam="HelloBatch1"`（ID: 1234L）で`StepExecution`を作成しようとする
+ID衝突により、リスナーのコンテキストが使用され、Taskletは"HelloBatch1"ではなく"HelloBatch2"を受け取る
+`assertEquals("HelloBatch2", actualValue)`で成功するが、これは間違ったコンテキストが使用されていることを証明している！
 
-#### Root Cause
-Both StepScopeTestExecutionListener (activated by @SpringBatchTest) and MetaDataInstanceFactory.createStepExecution(jobParameters) use the same default ID (1234L). Since StepExecution.equals() only compares IDs, StepSynchronizationManager treats them as the same key, causing a context collision.
+#### 根本原因
+`StepScopeTestExecutionListener`（`@SpringBatchTest`で有効化される）と`MetaDataInstanceFactory.createStepExecution(jobParameters)`の両方が同じデフォルトID（1234L）を使用しています。`StepExecution.equals()`はIDのみを比較するため、`StepSynchronizationManager`はこれらを同じキーとして扱い、コンテキストの衝突が発生します。
 
-#### Reproduction Confirmed
-I've successfully reproduced this bug in the Spring Batch codebase:
-Environment: Spring Batch 6.0.1-SNAPSHOT (commit 9ae7775), JDK 22
+#### 再現を確認
+Spring Batchコードベースでこのバグを正常に再現しました:
+環境: Spring Batch 6.0.1-SNAPSHOT（コミット 9ae7775）、JDK 22
 
-Please let me know if you need any additional information or clarification.
+追加情報や説明が必要な場合はお知らせください。
 
-#### コメント 4 by fmbenhassine
+### コメント 4 by fmbenhassine
 
 **作成日**: 2026-01-21
 
-Thank you for the detailed feedback! I see now, apologies for misunderstanding your initial description.
+詳細なフィードバックをありがとうございます！理解できました。最初の説明を誤解していて申し訳ありません。
 
-#5208 LGTM, so I will plan the fix for the upcoming 6.0.2.
-
----
-
+[#5208](https://github.com/spring-projects/spring-batch/pull/5208) は問題なさそうなので、次回の6.0.2で修正を予定します。
