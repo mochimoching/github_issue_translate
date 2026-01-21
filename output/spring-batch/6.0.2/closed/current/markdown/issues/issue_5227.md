@@ -1,12 +1,6 @@
-# Spring Batch GitHub Issues
+# Compatibility issues between v5 and v6 when Migrating from `CommandLineJobRunner` to `CommandLineJobOperator`
 
-取得日時: 2026年01月21日 19:33:27
-
-取得件数: 1件
-
----
-
-## Issue #5227: Compatibility issues between v5 and v6 when Migrating from `CommandLineJobRunner` to `CommandLineJobOperator`
+**Issue番号**: #5227
 
 **状態**: closed | **作成者**: fmbenhassine | **作成日**: 2026-01-21
 
@@ -18,7 +12,7 @@
 - Commits:
   - [e6da29c](https://github.com/spring-projects/spring-batch/commit/e6da29c65c5654309a6625e862c8c1ca5e89ee21)
 
-### 内容
+## 内容
 
 
 ### Discussed in https://github.com/spring-projects/spring-batch/discussions/5213
@@ -215,9 +209,9 @@ What is the recommended way to get `jobExecutionId` from the command line?
 **Request:** please support stopping and restarting by `jobName` with `CommandLineJobOperator` as well.
 </div>
 
-### コメント
+## コメント
 
-#### コメント 1 by fmbenhassine
+### コメント 1 by fmbenhassine
 
 **作成日**: 2026-01-21
 
@@ -249,6 +243,4 @@ I will plan that for the next release and update the migration guide accordingly
 > 4) Different parameters needed to stop or restart a job
 
 Stopping or restarting a job by name was confusing. What if the job has two (or more) different instances running in parallel and you want to stop only one of them? Similarly, what if the job has two failed job instances and you only want to restart a single one? By specifying the execution you want to restart, this ambiguity is not possible. Getting the id of the failed execution is possible with a the `JobRepository` API. That said, you can still restart a job by name by using `JobRepository#getLastJobInstance(jobName)` and restarting the failed execution.
-
----
 
