@@ -1,0 +1,16 @@
+Issue #5166: Wrong database migration to spring-batch 6.x for DB2LUW
+Reference: Commit b9a96a6 (2026-01-21T17:00:32Z)
+URL: https://github.com/spring-projects/spring-batch/commit/b9a96a64386139f433881ffffe1895a616bdcce0
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/resources/org/springframework/batch/core/migration/6.0/migration-db2.sql b/spring-batch-core/src/main/resources/org/springframework/batch/core/migration/6.0/migration-db2.sql
+index 4da92778cc..e4c758d09a 100644
+--- a/spring-batch-core/src/main/resources/org/springframework/batch/core/migration/6.0/migration-db2.sql
++++ b/spring-batch-core/src/main/resources/org/springframework/batch/core/migration/6.0/migration-db2.sql
+@@ -1,2 +1,5 @@
+--- IBM DB2 LUW (10.1+)
++-- The following is only applicable to Informix servers.
++-- IBM DB2 LUW (10.1+) does not support sequence renaming: https://www.ibm.com/docs/en/db2/12.1.x?topic=statements-rename
++-- To address this limitation, use a stored procedure or a Java-based program that retrieves
++-- the last sequence number and creates a new sequence starting from that value.
+ RENAME SEQUENCE BATCH_JOB_SEQ TO BATCH_JOB_INSTANCE_SEQ;

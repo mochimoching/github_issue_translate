@@ -1,12 +1,6 @@
-# Spring Batch GitHub Issues
+# ClosedChannelException when using StaxEventItemWriter in combination with MultiResourceItemWriter
 
-取得日時: 2026年01月22日 14:39:48
-
-取得件数: 1件
-
----
-
-## Issue #5098: ClosedChannelException when using StaxEventItemWriter in combination with MultiResourceItemWriter
+**Issue番号**: #5098
 
 **状態**: closed | **作成者**: g00glen00b | **作成日**: 2025-11-21
 
@@ -18,7 +12,7 @@
 - Commits:
   - [5dc40a6](https://github.com/spring-projects/spring-batch/commit/5dc40a6b97dfb2dd3f556913d5ec60f0ba94acfb)
 
-### 内容
+## 内容
 
 **Bug description**
 When using a `StaxEventItemWriter` in combination with a `MultiResourceItemWriter`, a `ClosedChannelException` is thrown with following stacktrace:
@@ -82,9 +76,9 @@ Relevant Stack Overflow thread I created: [link](https://stackoverflow.com/q/798
 In this Stack Overflow thread it was discussed that this might be intentional behavior. If that's the case, I could send a PR to mention this in the documentation somewhere.
 
 
-### コメント
+## コメント
 
-#### コメント 1 by banseok1216
+### コメント 1 by banseok1216
 
 **作成日**: 2025-12-20
 
@@ -93,7 +87,7 @@ Hello,
 Since the explanation was too long to fit into a comment, I opened a separate issue with a more complete repro and detailed notes, and submitted a PR with the fix.
 - https://github.com/spring-projects/spring-batch/issues/5176
 
-#### コメント 2 by fmbenhassine
+### コメント 2 by fmbenhassine
 
 **作成日**: 2026-01-21
 
@@ -106,6 +100,4 @@ I am reviewing #5177 which goes in the right direction to fix this issue, and I 
 > Since the explanation was too long to fit into a comment
 
 Since that was just an explanation for the same issue, I will close it as a duplicate of this one.
-
----
 

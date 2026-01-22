@@ -1,0 +1,87 @@
+Issue #5226: Clarify ChunkListener changes in v6
+Reference: Commit 20eaa7b (2026-01-21T16:52:43Z)
+URL: https://github.com/spring-projects/spring-batch/commit/20eaa7b696c94a1432feb94e6d452cd959ad571f
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/listener/ChunkListener.java b/spring-batch-core/src/main/java/org/springframework/batch/core/listener/ChunkListener.java
+index 716c7ddd5e..66faeb51b3 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/listener/ChunkListener.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/listener/ChunkListener.java
+@@ -81,16 +81,16 @@ default void afterChunkError(ChunkContext context) {
+ 	}
+ 
+ 	/**
+-	 * Callback before the chunk is processed, inside the transaction. This method is not
+-	 * called in concurrent steps.
++	 * Callback after a chunk is read but before it is processed, inside the transaction.
++	 * <strong>This method is not called in concurrent steps.</strong>
+ 	 * @since 6.0
+ 	 */
+ 	default void beforeChunk(Chunk<I> chunk) {
+ 	}
+ 
+ 	/**
+-	 * Callback after the chunk is written, inside the transaction. This method is not
+-	 * called in concurrent steps.
++	 * Callback after the chunk is written, inside the transaction. <strong>This method is
++	 * not called in concurrent steps.</strong>
+ 	 * @since 6.0
+ 	 */
+ 	default void afterChunk(Chunk<O> chunk) {
+@@ -100,7 +100,7 @@ default void afterChunk(Chunk<O> chunk) {
+ 	 * Callback if an exception occurs while processing or writing a chunk, inside the
+ 	 * transaction, which is about to be rolled back. <em>As a result, you should use
+ 	 * {@code PROPAGATION_REQUIRES_NEW} for any transactional operation that is called
+-	 * here</em>. This method is not called in concurrent steps.
++	 * here</em>. <strong>This method is not called in concurrent steps.</strong>
+ 	 * @param exception the exception that caused the underlying rollback.
+ 	 * @param chunk the processed chunk
+ 	 * @since 6.0
+diff --git a/spring-batch-docs/modules/ROOT/pages/step/chunk-oriented-processing/intercepting-execution.adoc b/spring-batch-docs/modules/ROOT/pages/step/chunk-oriented-processing/intercepting-execution.adoc
+index 3bb0748bc2..c9c473102a 100644
+--- a/spring-batch-docs/modules/ROOT/pages/step/chunk-oriented-processing/intercepting-execution.adoc
++++ b/spring-batch-docs/modules/ROOT/pages/step/chunk-oriented-processing/intercepting-execution.adoc
+@@ -103,22 +103,24 @@ The annotations corresponding to this interface are:
+ A "`chunk`" is defined as the items processed within the scope of a transaction. Committing a
+ transaction, at each commit interval, commits a chunk. You can use a `ChunkListener` to
+ perform logic before a chunk begins processing or after a chunk has completed
+-successfully, as the following interface definition shows:
++successfully or in failure, as the following interface definition shows:
+ 
+ [source, java]
+ ----
+-public interface ChunkListener extends StepListener {
++public interface ChunkListener<I, O> extends StepListener {
+ 
+-    void beforeChunk(ChunkContext context);
+-    void afterChunk(ChunkContext context);
+-    void afterChunkError(ChunkContext context);
++    void beforeChunk(Chunk<I> chunk);
++    void afterChunk(Chunk<O> chunk);
++    void afterChunkError(Exception exception, Chunk<O> chunk);
+ 
+ }
+ ----
+ 
+-The beforeChunk method is called after the transaction is started but before reading begins
+-on the `ItemReader`. Conversely, `afterChunk` is called after the chunk has been
+-committed (or not at all if there is a rollback).
++The `beforeChunk` method is called after the transaction is started after reading a chunk
++of items but before processing start. Conversely, `afterChunk` is called after the chunk
++is written but before the transaction is committed or rolled back.
++
++NOTE: The `ChunkListener` listener interface is not called in concurrent steps
+ 
+ The annotations corresponding to this interface are:
+ 
+@@ -126,10 +128,6 @@ The annotations corresponding to this interface are:
+ * `@AfterChunk`
+ * `@AfterChunkError`
+ 
+-You can apply a `ChunkListener` when there is no chunk declaration. The `TaskletStep` is
+-responsible for calling the `ChunkListener`, so it applies to a non-item-oriented tasklet
+-as well (it is called before and after the tasklet).
+-
+ A `ChunkListener` is not designed to throw checked exceptions. Errors must be handled in the
+ implementation or the step will terminate.
+ 
