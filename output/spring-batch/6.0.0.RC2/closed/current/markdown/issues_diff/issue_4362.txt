@@ -1,0 +1,19 @@
+Issue #4362: Incorrect Step status in StepExecutionListener#afterStep
+Reference: Commit 36068b5 (2025-11-03T16:04:27Z)
+URL: https://github.com/spring-projects/spring-batch/commit/36068b5db84ff242032e9b00515454a84e0745d2
+
+--- Diff ---
+diff --git a/spring-batch-core/src/main/java/org/springframework/batch/core/job/AbstractJob.java b/spring-batch-core/src/main/java/org/springframework/batch/core/job/AbstractJob.java
+index 9ead003704..df502181a4 100644
+--- a/spring-batch-core/src/main/java/org/springframework/batch/core/job/AbstractJob.java
++++ b/spring-batch-core/src/main/java/org/springframework/batch/core/job/AbstractJob.java
+@@ -346,6 +346,9 @@ public final void execute(JobExecution execution) throws JobInterruptedException
+ 				jobExecutionEvent.commit();
+ 				execution.setEndTime(LocalDateTime.now());
+ 
++				// save status in job repository before calling listeners
++				jobRepository.update(execution);
++
+ 				try {
+ 					listener.afterJob(execution);
+ 				}
